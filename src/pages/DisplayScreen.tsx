@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,6 @@ import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { gameSettings } from '@/utils/gameSettings';
 
-// Mock questions data - make sure we're using all of them
 const mockQuestions = [
   {
     id: '1',
@@ -80,16 +78,13 @@ const DisplayScreen = () => {
   console.log('Question counter:', questionCounter);
   console.log('Game settings:', gameSettings);
   
-  // Initialize game code - ONLY ONCE
   useEffect(() => {
-    // Check if a game code is already stored for this session
     const storedGameCode = localStorage.getItem('persistentGameCode');
     
     if (storedGameCode) {
       console.log('Using existing game code:', storedGameCode);
       setGameCode(storedGameCode);
     } else {
-      // Generate a new code only if one doesn't exist
       const generateGameCode = () => {
         const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
         let result = '';
@@ -101,17 +96,14 @@ const DisplayScreen = () => {
       
       const newCode = generateGameCode();
       setGameCode(newCode);
-      // Store in localStorage for persistence across refreshes
       localStorage.setItem('persistentGameCode', newCode);
       console.log('Generated new game code:', newCode);
     }
     
-    // Store game session info
     const sessionCode = storedGameCode || localStorage.getItem('persistentGameCode');
     sessionStorage.setItem('activeGameCode', sessionCode);
     localStorage.setItem('activeGameCode', sessionCode);
     
-    // Remove any test players
     const playerKeys = Object.keys(localStorage).filter(key => key.startsWith('playerScore_'));
     playerKeys.forEach(key => localStorage.removeItem(key));
     if (localStorage.getItem('playerJoined')) {
@@ -119,24 +111,20 @@ const DisplayScreen = () => {
     }
     
     return () => {
-      // Clean up when component unmounts
       if (process.env.NODE_ENV === 'development') {
         console.log('Cleaning up development test data');
       }
     };
-  }, []); // Empty dependency array ensures this only runs once
+  }, []);
   
-  // Function to check for player joins - separate to avoid dependency issues
   useEffect(() => {
     const checkForPlayerJoins = () => {
-      // Check for new player joins via localStorage
       const playerJoinData = localStorage.getItem('playerJoined');
       if (playerJoinData) {
         try {
           const playerData = JSON.parse(playerJoinData);
           console.log('Detected player join via localStorage:', playerData);
           
-          // Check if this player is already in our list to avoid duplicates
           const playerExists = players.some(p => p.name === playerData.name);
           
           if (!playerExists && playerData.gameId === gameCode) {
@@ -155,7 +143,6 @@ const DisplayScreen = () => {
               description: `${playerData.name} has joined the game.`,
             });
             
-            // Clear the notification to avoid duplicate processing
             localStorage.removeItem('playerJoined');
           }
         } catch (error) {
@@ -163,7 +150,6 @@ const DisplayScreen = () => {
         }
       }
       
-      // Update player scores from localStorage
       players.forEach(player => {
         const playerScoreData = localStorage.getItem(`playerScore_${player.name}`);
         if (playerScoreData) {
@@ -189,26 +175,23 @@ const DisplayScreen = () => {
     };
   }, [players, toast, gameCode]);
   
-  // Function to update game state in localStorage
   const updateGameState = useCallback((state: 'question' | 'answer' | 'intermission', questionIndex: number, time: number, qCounter: number) => {
     const gameState = {
       state: state,
       questionIndex: questionIndex,
       timeLeft: time,
       questionCounter: qCounter,
-      timestamp: Date.now() // Add timestamp to ensure updates are detected
+      timestamp: Date.now()
     };
     
     console.log('Updating game state:', gameState);
     localStorage.setItem('gameState', JSON.stringify(gameState));
   }, []);
   
-  // Initialize the game when the join screen has been shown for a bit
   useEffect(() => {
     let timerId: number | undefined;
     
     if (currentState === 'join' && !hasGameStarted) {
-      // The join screen will show for 10 seconds before transitioning to the first question
       timerId = window.setTimeout(() => {
         setCurrentState('question');
         setTimeLeft(gameSettings.questionDuration);
@@ -216,7 +199,6 @@ const DisplayScreen = () => {
         setLastStateChange(Date.now());
         console.log('Starting game with first question');
         
-        // Store initial game state
         updateGameState('question', currentQuestionIndex, gameSettings.questionDuration, questionCounter);
       }, 10000);
       
@@ -230,7 +212,6 @@ const DisplayScreen = () => {
     };
   }, [currentState, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted]);
   
-  // Game state management (timer, question progression)
   useEffect(() => {
     let timerId: number | undefined;
     
@@ -242,13 +223,11 @@ const DisplayScreen = () => {
     }
     
     if (currentState === 'question' && hasGameStarted) {
-      // Set up the timer to count down
       if (timeLeft > 0) {
         timerId = window.setTimeout(() => {
           const newTimeLeft = timeLeft - 1;
           setTimeLeft(newTimeLeft);
           
-          // Update game state with new time
           updateGameState('question', currentQuestionIndex, newTimeLeft, questionCounter);
         }, 1000);
         
@@ -256,15 +235,12 @@ const DisplayScreen = () => {
           if (timerId) clearTimeout(timerId);
         };
       } else {
-        // When time runs out, show the answer state
         console.log('Time out, revealing answer');
         setCurrentState('answer');
         setLastStateChange(Date.now());
         
-        // Update game state for answer reveal
         updateGameState('answer', currentQuestionIndex, 0, questionCounter);
         
-        // After the answer reveal duration, move to the next question or show intermission/leaderboard
         timerId = window.setTimeout(() => {
           const shouldShowIntermission = questionCounter > 0 && questionCounter % gameSettings.intermissionFrequency === 0;
           const shouldShowLeaderboard = questionCounter > 0 && questionCounter % gameSettings.leaderboardFrequency === 0 && !shouldShowIntermission;
@@ -277,10 +253,8 @@ const DisplayScreen = () => {
             setCurrentState('intermission');
             setLastStateChange(Date.now());
             
-            // Update game state for intermission
             updateGameState('intermission', currentQuestionIndex, 0, questionCounter);
             
-            // After intermission, move to the next question
             timerId = window.setTimeout(() => {
               moveToNextQuestion();
             }, gameSettings.intermissionDuration * 1000);
@@ -303,10 +277,23 @@ const DisplayScreen = () => {
       }
     }
     
-    if (currentState === 'intermission' || currentState === 'leaderboard') {
-      // These states' timers are handled above in the answer state callback
+    if (currentState === 'intermission' && gameSettings.autoProgress) {
+      const timeoutId = window.setTimeout(() => {
+        moveToNextQuestion();
+      }, gameSettings.intermissionDuration * 1000);
+      
       return () => {
-        if (timerId) clearTimeout(timerId);
+        clearTimeout(timeoutId);
+      };
+    }
+    
+    if (currentState === 'leaderboard' && gameSettings.autoProgress) {
+      const timeoutId = window.setTimeout(() => {
+        moveToNextQuestion();
+      }, 10000);
+      
+      return () => {
+        clearTimeout(timeoutId);
       };
     }
     
@@ -316,22 +303,18 @@ const DisplayScreen = () => {
   }, [currentState, timeLeft, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted, forcePause]);
   
   const moveToNextQuestion = useCallback(() => {
-    // Calculate the next question index
     const nextQuestionIndex = (currentQuestionIndex + 1) % mockQuestions.length;
     console.log(`Moving to next question: ${nextQuestionIndex} from ${currentQuestionIndex}`);
     
-    // Update state for the next question
     setCurrentQuestionIndex(nextQuestionIndex);
     setQuestionCounter(prev => prev + 1);
     setTimeLeft(gameSettings.questionDuration);
     setCurrentState('question');
     setLastStateChange(Date.now());
     
-    // Update game state for the next question
     updateGameState('question', nextQuestionIndex, gameSettings.questionDuration, questionCounter + 1);
   }, [currentQuestionIndex, questionCounter, updateGameState]);
   
-  // Manual controls for testing
   const handleStartGameNow = () => {
     setCurrentState('question');
     setTimeLeft(gameSettings.questionDuration);
@@ -358,23 +341,16 @@ const DisplayScreen = () => {
     return 'bg-red-500';
   };
   
-  // Sort players by score for leaderboard
   const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
   
-  // Get unique players based on name to avoid counting duplicates
   const uniquePlayers = players.filter((player, index, self) => 
     index === self.findIndex(p => p.name === player.name)
   );
   
   const handleLaunchDisplay = () => {
-    // Create full URL using origin and path
     const displayUrl = `${window.location.origin}/display/${id}`;
-    
-    // Open the display in a new tab
     window.open(displayUrl, '_blank', 'noopener,noreferrer');
-    
     console.log('Launching display at:', displayUrl);
-    
     toast({
       title: "Display Launched",
       description: "The display has been opened in a new tab.",
@@ -673,6 +649,9 @@ const DisplayScreen = () => {
             </div>
             <div className="bg-green-500/20 text-green-500 px-3 py-1 rounded-full">
               Players: {uniquePlayers.length}
+            </div>
+            <div className="bg-blue-500/20 text-blue-500 px-3 py-1 rounded-full">
+              Auto Progress: {gameSettings.autoProgress ? 'On' : 'Off'}
             </div>
           </div>
         </div>

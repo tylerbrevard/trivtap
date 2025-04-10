@@ -5,14 +5,16 @@
 export const gameSettings = {
   questionDuration: 20, // seconds
   answerRevealDuration: 5, // seconds
-  intermissionFrequency: 10, // show intermission after every 10 questions (default)
+  intermissionFrequency: 10, // show intermission after every 10 questions
   intermissionDuration: 8, // seconds
   leaderboardFrequency: 10, // show leaderboard after every 10 questions
+  autoProgress: true, // automatically progress through questions (new setting)
 };
 
 // Helper function to update a specific setting
-export const updateGameSetting = (key: keyof typeof gameSettings, value: number) => {
+export const updateGameSetting = (key: keyof typeof gameSettings, value: number | boolean) => {
   if (key in gameSettings) {
+    // @ts-ignore - We're using a union type for the value
     gameSettings[key] = value;
     // Store in localStorage for persistence
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
@@ -28,6 +30,7 @@ const initializeSettings = () => {
       const parsedSettings = JSON.parse(storedSettings);
       Object.keys(parsedSettings).forEach(key => {
         if (key in gameSettings) {
+          // @ts-ignore - We're handling different types
           gameSettings[key as keyof typeof gameSettings] = parsedSettings[key];
         }
       });

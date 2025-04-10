@@ -35,7 +35,7 @@ import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 const displays = [
   {
     id: 'default',
-    name: 'Main Bar Display',
+    name: 'Main Display', // Changed from "Main Bar Display" to "Main Display"
     status: 'active',
     totalQuestions: 248,
     activePlayers: 32,
@@ -113,6 +113,35 @@ const Displays = () => {
       });
     }
   };
+
+  // Handler for toggling auto progression
+  const handleAutoProgressChange = (checked: boolean) => {
+    updateGameSetting('autoProgress', checked);
+    toast({
+      title: "Setting Updated",
+      description: checked 
+        ? "Questions will now progress automatically." 
+        : "Automatic progression turned off. Use manual controls.",
+    });
+  };
+  
+  // Handler for deleting a display
+  const handleDeleteDisplay = (displayId: string, isDefault: boolean) => {
+    if (isDefault) {
+      toast({
+        title: "Cannot Delete Default Display",
+        description: "The default display cannot be deleted.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // In a real app, this would delete the display from the database
+    toast({
+      title: "Display Deleted",
+      description: `The display "${displayId}" has been deleted.`,
+    });
+  };
   
   return (
     <div className="space-y-6">
@@ -134,9 +163,9 @@ const Displays = () => {
                   <CardDescription>
                     ID: {display.id}
                     {display.isDefault && (
-                      <span className="ml-2">
+                      <div className="mt-1">
                         <Badge variant="outline">Default</Badge>
-                      </span>
+                      </div>
                     )}
                   </CardDescription>
                 </div>
@@ -167,7 +196,10 @@ const Displays = () => {
                       </DropdownMenuItem>
                     )}
                     {!display.isDefault && (
-                      <DropdownMenuItem className="text-destructive">
+                      <DropdownMenuItem 
+                        className="text-destructive"
+                        onClick={() => handleDeleteDisplay(display.id, display.isDefault)}
+                      >
                         <Trash className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
@@ -307,6 +339,23 @@ const Displays = () => {
                 onChange={(e) => handleIntermissionFrequencyChange(e.target.value)}
               />
               <span>questions</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center justify-between space-x-2">
+            <div className="flex flex-col space-y-1">
+              <span className="font-medium">Auto Progress Questions</span>
+              <span className="text-sm text-muted-foreground">
+                Automatically move to the next question when timer ends
+              </span>
+            </div>
+            <div className="flex items-center">
+              <input
+                type="checkbox"
+                className="toggle"
+                checked={gameSettings.autoProgress}
+                onChange={(e) => handleAutoProgressChange(e.target.checked)}
+              />
             </div>
           </div>
         </CardContent>
