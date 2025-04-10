@@ -1,19 +1,26 @@
+
 <!DOCTYPE html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>trivia-pulse-play</title>
-    <meta name="description" content="Lovable Generated Project" />
-    <meta name="author" content="Lovable" />
-
-    <meta property="og:title" content="trivia-pulse-play" />
-    <meta property="og:description" content="Lovable Generated Project" />
+    <title>TriviaPulse - Interactive Trivia Games</title>
+    <meta name="description" content="Host engaging trivia games for your venue with real-time player interaction" />
+    <meta name="author" content="TriviaPulse" />
+    
+    <!-- PWA support -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#8B5CF6" />
+    <link rel="apple-touch-icon" href="/trivia-icon-192.png">
+    
+    <!-- Open Graph / Social Media -->
+    <meta property="og:title" content="TriviaPulse - Interactive Trivia Games" />
+    <meta property="og:description" content="Host engaging trivia games for your venue with real-time player interaction" />
     <meta property="og:type" content="website" />
     <meta property="og:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
 
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
+    <meta name="twitter:site" content="@triviapulse" />
     <meta name="twitter:image" content="https://lovable.dev/opengraph-image-p98pqg.png" />
   </head>
 
@@ -22,5 +29,20 @@
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     <script type="module" src="/src/main.tsx"></script>
+    
+    <!-- PWA Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+              console.log('ServiceWorker registered: ', registration);
+            })
+            .catch(error => {
+              console.log('ServiceWorker registration failed: ', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

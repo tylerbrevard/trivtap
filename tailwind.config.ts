@@ -1,3 +1,4 @@
+
 import type { Config } from "tailwindcss";
 
 export default {
@@ -61,6 +62,15 @@ export default {
 					'accent-foreground': 'hsl(var(--sidebar-accent-foreground))',
 					border: 'hsl(var(--sidebar-border))',
 					ring: 'hsl(var(--sidebar-ring))'
+				},
+				trivia: {
+					primary: '#8B5CF6',
+					secondary: '#7E69AB',
+					accent: '#D946EF',
+					orange: '#F97316',
+					background: '#1A1F2C',
+					card: '#2A2F3C',
+					text: '#F1F1F1'
 				}
 			},
 			borderRadius: {
@@ -84,11 +94,21 @@ export default {
 					to: {
 						height: '0'
 					}
+				},
+				'pulse-scale': {
+					'0%, 100%': { transform: 'scale(1)' },
+					'50%': { transform: 'scale(1.05)' }
+				},
+				'countdown': {
+					'0%': { width: '100%' },
+					'100%': { width: '0%' }
 				}
 			},
 			animation: {
 				'accordion-down': 'accordion-down 0.2s ease-out',
-				'accordion-up': 'accordion-up 0.2s ease-out'
+				'accordion-up': 'accordion-up 0.2s ease-out',
+				'pulse-scale': 'pulse-scale 2s infinite',
+				'countdown': 'countdown var(--duration, 30s) linear forwards'
 			}
 		}
 	},
