@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -168,11 +169,16 @@ const ImportPage = () => {
           if (error) {
             console.error('Error inserting question:', error);
             errorCount++;
-          } else {
-            console.log(`Question inserted successfully with ID: ${data.id}`);
-            successCount++;
-            newQuestionIds.push(data.id);
+            continue;
+          } else if (!data) {
+            console.error('No data returned from question insert');
+            errorCount++;
+            continue;
           }
+          
+          console.log(`Question inserted successfully with ID: ${data.id}`);
+          successCount++;
+          newQuestionIds.push(data.id);
         } catch (itemError) {
           console.error('Error processing question:', itemError);
           errorCount++;
@@ -191,6 +197,7 @@ const ImportPage = () => {
           console.log('Questions associated with default bucket successfully');
         } else {
           console.warn('Default bucket not found or could not be created');
+          // Still count as success since questions were imported, just not associated
         }
       }
       
@@ -259,17 +266,29 @@ const ImportPage = () => {
       // Import questions to database
       const result = await importQuestionsToDB(questions);
       
-      const successMessage = `Successfully imported ${result.successCount} questions to the Default Bucket. ${result.errorCount > 0 ? `${result.errorCount} questions failed to import.` : ''}`;
+      // Only consider it a success if at least one question was imported
+      const wasSuccessful = result.successCount > 0;
+      let statusMessage = '';
       
-      console.log(successMessage);
+      if (wasSuccessful) {
+        statusMessage = `Successfully imported ${result.successCount} questions to the Default Bucket.`;
+        if (result.errorCount > 0) {
+          statusMessage += ` ${result.errorCount} questions failed to import.`;
+        }
+      } else {
+        statusMessage = `Import failed. All ${result.errorCount} questions failed to import. Please check the console for details.`;
+      }
+      
+      console.log(statusMessage);
       setImportResults({
-        success: true,
-        message: successMessage
+        success: wasSuccessful,
+        message: statusMessage
       });
       
       toast({
-        title: "Import Successful",
-        description: `${result.successCount} questions imported to the Default Bucket.`,
+        title: wasSuccessful ? "Import Successful" : "Import Failed",
+        description: statusMessage,
+        variant: wasSuccessful ? "default" : "destructive",
       });
       
       // Refresh categories list

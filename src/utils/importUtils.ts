@@ -12,6 +12,7 @@ export interface ImportQuestion {
 
 // Function to fetch categories from database
 export const fetchCategories = async () => {
+  console.log('Fetching categories from database');
   const { data, error } = await supabase
     .from('categories')
     .select('id, name');
@@ -21,18 +22,25 @@ export const fetchCategories = async () => {
     throw new Error(`Failed to fetch categories: ${error.message}`);
   }
   
+  console.log(`Successfully fetched ${data?.length || 0} categories`);
   return data || [];
 };
 
 // Function to get or create a category
 export const getOrCreateCategory = async (categoryName: string) => {
-  console.log(`Looking for category: ${categoryName}`);
+  if (!categoryName || categoryName.trim() === '') {
+    console.error('Invalid category name provided');
+    throw new Error('Category name cannot be empty');
+  }
+  
+  const trimmedCategoryName = categoryName.trim();
+  console.log(`Looking for category: "${trimmedCategoryName}"`);
   
   // Check if category already exists
   const { data: existingCategories, error: fetchError } = await supabase
     .from('categories')
     .select('id')
-    .ilike('name', categoryName)
+    .ilike('name', trimmedCategoryName)
     .limit(1);
     
   if (fetchError) {
@@ -41,15 +49,15 @@ export const getOrCreateCategory = async (categoryName: string) => {
   }
   
   if (existingCategories && existingCategories.length > 0) {
-    console.log(`Found existing category: ${categoryName} with id: ${existingCategories[0].id}`);
+    console.log(`Found existing category: "${trimmedCategoryName}" with id: ${existingCategories[0].id}`);
     return existingCategories[0].id;
   }
   
   // Create new category
-  console.log(`Creating new category: ${categoryName}`);
+  console.log(`Creating new category: "${trimmedCategoryName}"`);
   const { data, error } = await supabase
     .from('categories')
-    .insert({ name: categoryName })
+    .insert({ name: trimmedCategoryName })
     .select('id')
     .single();
     
@@ -58,7 +66,12 @@ export const getOrCreateCategory = async (categoryName: string) => {
     throw new Error(`Failed to create category: ${error.message}`);
   }
   
-  console.log(`Created new category: ${categoryName} with id: ${data.id}`);
+  if (!data || !data.id) {
+    console.error('No data returned from category creation');
+    throw new Error('Failed to create category: No data returned');
+  }
+  
+  console.log(`Created new category: "${trimmedCategoryName}" with id: ${data.id}`);
   return data.id;
 };
 
@@ -100,13 +113,21 @@ export const getDefaultBucket = async () => {
     throw new Error(`Failed to create default bucket: ${createError.message}`);
   }
   
+  if (!newBucket || !newBucket.id) {
+    console.error('No data returned from bucket creation');
+    throw new Error('Failed to create default bucket: No data returned');
+  }
+  
   console.log(`Created default bucket with id: ${newBucket.id}`);
   return newBucket;
 };
 
 // Function to associate questions with a bucket
 export const associateQuestionsWithBucket = async (questionIds: string[], bucketId: string) => {
-  if (!questionIds.length || !bucketId) return;
+  if (!questionIds.length || !bucketId) {
+    console.log('No questions or bucket ID provided for association');
+    return;
+  }
   
   console.log(`Associating ${questionIds.length} questions with bucket ${bucketId}`);
   
