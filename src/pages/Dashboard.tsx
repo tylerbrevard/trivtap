@@ -1,4 +1,3 @@
-
 import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -182,57 +181,10 @@ const Dashboard = () => {
     };
   }, [toast]);
 
-  // Function to handle game launch
-  const handleLaunchGame = async () => {
-    try {
-      // Create a new game in the database
-      const { data, error } = await supabase
-        .from('games')
-        .insert([{ status: 'waiting' }])
-        .select()
-        .single();
-      
-      if (error) throw error;
-      
-      toast({
-        title: "Game Created",
-        description: "New game has been created successfully.",
-      });
-      
-      // Auto-progress to the game display
-      if (data) {
-        // Trigger game state update to move to first question
-        const gameStateData = {
-          state: 'question',
-          questionIndex: 0,
-          timeLeft: 20,
-          questionCounter: 1,
-          timestamp: Date.now()
-        };
-        
-        localStorage.setItem('gameState', JSON.stringify(gameStateData));
-        
-        // Navigate to the display screen with the new game id
-        navigate(`/display/${data.id}`);
-      }
-    } catch (error) {
-      console.error('Error creating game:', error);
-      toast({
-        title: "Error",
-        description: "Failed to create a new game.",
-        variant: "destructive",
-      });
-    }
-  };
-  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <Button className="btn-trivia" onClick={handleLaunchGame}>
-          <PlayCircle className="mr-2 h-4 w-4" />
-          Launch New Game
-        </Button>
       </div>
       
       {/* Stats Cards */}

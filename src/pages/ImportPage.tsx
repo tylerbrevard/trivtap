@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,15 +8,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Upload, AlertCircle, CheckCircle2, Download } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-
-// Define question type
-interface ImportQuestion {
-  question: string;
-  category: string;
-  options: string[];
-  correctAnswer: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-}
+import { fetchCategories, getOrCreateCategory, getDefaultBucket, associateQuestionsWithBucket, ImportQuestion } from "@/utils/importUtils";
 
 const ImportPage = () => {
   const [selectedOption, setSelectedOption] = useState('csv');
@@ -31,61 +22,30 @@ const ImportPage = () => {
   
   // Fetch categories on component mount
   useEffect(() => {
-    fetchCategories();
-  }, []);
-  
-  const fetchCategories = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('categories')
-        .select('id, name');
-        
-      if (error) {
-        console.error('Error fetching categories:', error);
-        return;
+    const loadCategories = async () => {
+      try {
+        const categoriesData = await fetchCategories();
+        setCategories(categoriesData);
+        console.log("Loaded categories:", categoriesData);
+      } catch (err) {
+        console.error('Failed to fetch categories:', err);
+        toast({
+          title: "Error",
+          description: "Failed to load categories.",
+          variant: "destructive",
+        });
       }
-      
-      if (data) {
-        setCategories(data);
-      }
-    } catch (err) {
-      console.error('Failed to fetch categories:', err);
-    }
-  };
-  
-  // Function to get or create a category
-  const getOrCreateCategory = async (categoryName: string) => {
-    // Check if category already exists
-    const existingCategory = categories.find(
-      c => c.name.toLowerCase() === categoryName.toLowerCase()
-    );
+    };
     
-    if (existingCategory) {
-      return existingCategory.id;
-    }
-    
-    // Create new category
-    const { data, error } = await supabase
-      .from('categories')
-      .insert({ name: categoryName })
-      .select('id')
-      .single();
-      
-    if (error) {
-      console.error('Error creating category:', error);
-      throw new Error(`Failed to create category: ${error.message}`);
-    }
-    
-    // Refresh categories list
-    fetchCategories();
-    
-    return data.id;
-  };
+    loadCategories();
+  }, [toast]);
   
   // Function to parse CSV data
   const parseCSVData = (csvContent: string): ImportQuestion[] => {
     const lines = csvContent.trim().split('\n');
     const questions: ImportQuestion[] = [];
+    
+    console.log(`Parsing ${lines.length} lines of CSV data`);
     
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i].trim();
@@ -117,15 +77,20 @@ const ImportPage = () => {
         continue;
       }
       
+      const validatedDifficulty = ['easy', 'medium', 'hard'].includes(difficulty.toLowerCase()) 
+        ? difficulty.toLowerCase() as 'easy' | 'medium' | 'hard'
+        : 'medium';
+      
       questions.push({
         question,
         category,
         options,
         correctAnswer,
-        difficulty: (difficulty.toLowerCase() as 'easy' | 'medium' | 'hard') || 'medium'
+        difficulty: validatedDifficulty
       });
     }
     
+    console.log(`Successfully parsed ${questions.length} questions from CSV`);
     return questions;
   };
   
@@ -138,7 +103,9 @@ const ImportPage = () => {
         throw new Error('JSON data must be an array');
       }
       
-      return parsedData.filter(item => {
+      console.log(`Parsing ${parsedData.length} items from JSON data`);
+      
+      const validQuestions = parsedData.filter(item => {
         if (!item.question || !item.category || !item.correctAnswer) {
           console.warn('Skipping question with missing required fields');
           return false;
@@ -158,6 +125,9 @@ const ImportPage = () => {
         
         return true;
       });
+      
+      console.log(`Successfully parsed ${validQuestions.length} questions from JSON`);
+      return validQuestions;
     } catch (error) {
       console.error('Error parsing JSON:', error);
       throw new Error('Failed to parse JSON data. Please check the format.');
@@ -168,101 +138,68 @@ const ImportPage = () => {
   const importQuestionsToDB = async (questions: ImportQuestion[]) => {
     let successCount = 0;
     let errorCount = 0;
+    let newQuestionIds: string[] = [];
     
     try {
+      console.log(`Starting import of ${questions.length} questions`);
+      
       for (const question of questions) {
-        // Get or create category
-        const categoryId = await getOrCreateCategory(question.category);
-        
-        // Insert question
-        const { error } = await supabase
-          .from('questions')
-          .insert({
-            text: question.question,
-            category_id: categoryId,
-            options: question.options,
-            correct_answer: question.correctAnswer,
-            difficulty: question.difficulty
-          });
+        try {
+          // Get or create category
+          console.log(`Processing question: ${question.question.substring(0, 30)}...`);
+          console.log(`Getting category ID for: ${question.category}`);
+          const categoryId = await getOrCreateCategory(question.category);
+          console.log(`Using category ID: ${categoryId}`);
           
-        if (error) {
-          console.error('Error inserting question:', error);
-          errorCount++;
-        } else {
-          successCount++;
-        }
-      }
-      
-      // Insert default bucket association if this is the first import
-      const defaultBucket = await getDefaultBucket();
-      
-      if (defaultBucket) {
-        // Get the IDs of the newly inserted questions
-        const { data: newQuestions } = await supabase
-          .from('questions')
-          .select('id')
-          .order('created_at', { ascending: false })
-          .limit(successCount);
-          
-        if (newQuestions && newQuestions.length > 0) {
-          // Create bucket_questions associations
-          const bucketQuestions = newQuestions.map(q => ({
-            bucket_id: defaultBucket.id,
-            question_id: q.id
-          }));
-          
-          const { error } = await supabase
-            .from('bucket_questions')
-            .insert(bucketQuestions);
+          // Insert question
+          console.log(`Inserting question with category ID: ${categoryId}`);
+          const { data, error } = await supabase
+            .from('questions')
+            .insert({
+              text: question.question,
+              category_id: categoryId,
+              options: question.options,
+              correct_answer: question.correctAnswer,
+              difficulty: question.difficulty
+            })
+            .select('id')
+            .single();
             
           if (error) {
-            console.error('Error associating questions with default bucket:', error);
+            console.error('Error inserting question:', error);
+            errorCount++;
+          } else {
+            console.log(`Question inserted successfully with ID: ${data.id}`);
+            successCount++;
+            newQuestionIds.push(data.id);
           }
+        } catch (itemError) {
+          console.error('Error processing question:', itemError);
+          errorCount++;
         }
       }
       
-      return { successCount, errorCount };
+      if (newQuestionIds.length > 0) {
+        // Get default bucket
+        console.log('Getting default bucket');
+        const defaultBucket = await getDefaultBucket();
+        
+        if (defaultBucket) {
+          // Associate questions with the default bucket
+          console.log(`Associating ${newQuestionIds.length} questions with default bucket`);
+          await associateQuestionsWithBucket(newQuestionIds, defaultBucket.id);
+          console.log('Questions associated with default bucket successfully');
+        } else {
+          console.warn('Default bucket not found or could not be created');
+        }
+      }
+      
+      console.log(`Import completed. Success: ${successCount}, Errors: ${errorCount}`);
+      return { successCount, errorCount, newQuestionIds };
     } catch (error) {
       console.error('Import process failed:', error);
       throw error;
     }
-  };
-  
-  // Get or create default bucket
-  const getDefaultBucket = async () => {
-    // Check if default bucket exists
-    const { data, error } = await supabase
-      .from('buckets')
-      .select('id, name')
-      .eq('is_default', true)
-      .maybeSingle();
-      
-    if (error) {
-      console.error('Error checking for default bucket:', error);
-      return null;
-    }
-    
-    if (data) {
-      return data;
-    }
-    
-    // Create default bucket if it doesn't exist
-    const { data: newBucket, error: createError } = await supabase
-      .from('buckets')
-      .insert({
-        name: 'Default Bucket',
-        is_default: true,
-        description: 'Default bucket for imported questions'
-      })
-      .select('id, name')
-      .single();
-      
-    if (createError) {
-      console.error('Error creating default bucket:', createError);
-      return null;
-    }
-    
-    return newBucket;
   };
   
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -306,8 +243,10 @@ const ImportPage = () => {
       
       // Parse data based on selected format
       if (selectedOption === 'csv' && csvData) {
+        console.log('Parsing CSV data');
         questions = parseCSVData(csvData);
       } else if (selectedOption === 'json' && jsonData) {
+        console.log('Parsing JSON data');
         questions = parseJSONData(jsonData);
       }
       
@@ -315,18 +254,27 @@ const ImportPage = () => {
         throw new Error('No valid questions to import. Please check your data format.');
       }
       
+      console.log(`Starting import of ${questions.length} questions`);
+      
       // Import questions to database
       const result = await importQuestionsToDB(questions);
       
+      const successMessage = `Successfully imported ${result.successCount} questions to the Default Bucket. ${result.errorCount > 0 ? `${result.errorCount} questions failed to import.` : ''}`;
+      
+      console.log(successMessage);
       setImportResults({
         success: true,
-        message: `Successfully imported ${result.successCount} questions to the Default Bucket. ${result.errorCount > 0 ? `${result.errorCount} questions failed to import.` : ''}`
+        message: successMessage
       });
       
       toast({
         title: "Import Successful",
         description: `${result.successCount} questions imported to the Default Bucket.`,
       });
+      
+      // Refresh categories list
+      const categoriesData = await fetchCategories();
+      setCategories(categoriesData);
       
     } catch (error) {
       console.error('Import failed:', error);
