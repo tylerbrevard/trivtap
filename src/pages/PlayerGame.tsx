@@ -39,7 +39,6 @@ const PlayerGame = () => {
   const [score, setScore] = useState(0);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
-  const [gameState, setGameState] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -66,23 +65,36 @@ const PlayerGame = () => {
     const checkGameState = () => {
       const storedGameState = localStorage.getItem('gameState');
       if (storedGameState) {
-        const parsedState = JSON.parse(storedGameState);
-        if (parsedState.questionIndex !== questionIndex) {
-          // Synchronize with the display's current question
-          setQuestionIndex(parsedState.questionIndex);
-          setCurrentQuestion(sampleQuestions[parsedState.questionIndex]);
-          setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
-          setSelectedAnswer(null);
-          setIsAnswerRevealed(parsedState.state === 'answer');
-          setAnsweredCorrectly(null);
+        try {
+          const parsedState = JSON.parse(storedGameState);
+          // Check if we need to update the question index or state
+          if (
+            parsedState.questionIndex !== questionIndex || 
+            (parsedState.state === 'answer' && !isAnswerRevealed) ||
+            (parsedState.state === 'question' && isAnswerRevealed)
+          ) {
+            console.log('Syncing with display screen', parsedState);
+            // Synchronize with the display's current question
+            setQuestionIndex(parsedState.questionIndex);
+            setCurrentQuestion(sampleQuestions[parsedState.questionIndex]);
+            setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
+            setSelectedAnswer(null);
+            setIsAnswerRevealed(parsedState.state === 'answer');
+            setAnsweredCorrectly(null);
+          } else if (parsedState.state === 'question' && !isAnswerRevealed) {
+            // Just sync the timer
+            setTimeLeft(parsedState.timeLeft);
+          }
+        } catch (error) {
+          console.error('Error parsing game state', error);
         }
       }
     };
     
     // Check every second for game state updates
-    const intervalId = setInterval(checkGameState, 1000);
+    const intervalId = setInterval(checkGameState, 500);
     return () => clearInterval(intervalId);
-  }, [questionIndex]);
+  }, [questionIndex, isAnswerRevealed]);
   
   useEffect(() => {
     setCurrentQuestion(sampleQuestions[questionIndex]);
@@ -93,23 +105,9 @@ const PlayerGame = () => {
   }, [questionIndex]);
   
   useEffect(() => {
-    if (timeLeft <= 0 || selectedAnswer !== null) {
-      return;
-    }
-    
-    const timerId = setTimeout(() => {
-      setTimeLeft(timeLeft - 1);
-    }, 1000);
-    
-    return () => clearTimeout(timerId);
-  }, [timeLeft, selectedAnswer]);
-  
-  useEffect(() => {
-    if (timeLeft <= 0 || selectedAnswer !== null) {
+    if (selectedAnswer !== null && !isAnswerRevealed) {
       const timerId = setTimeout(() => {
-        setIsAnswerRevealed(true);
-        
-        if (selectedAnswer === currentQuestion.correctAnswer && timeLeft > 0) {
+        if (selectedAnswer === currentQuestion.correctAnswer) {
           const pointsEarned = 100 + (timeLeft * 10);
           setScore(prevScore => prevScore + pointsEarned);
           setAnsweredCorrectly(true);
@@ -119,28 +117,21 @@ const PlayerGame = () => {
             description: `+${pointsEarned} points`,
             variant: "default",
           });
-        } else if (selectedAnswer !== null) {
+        } else {
           setAnsweredCorrectly(false);
           toast({
             title: "Incorrect",
             description: "Better luck on the next question!",
             variant: "default",
           });
-        } else {
-          toast({
-            title: "Time's up!",
-            description: "You didn't answer in time.",
-            variant: "default",
-          });
         }
         
-        // Don't automatically move to next question - wait for the display screen
-        // The checkGameState interval will detect when the display changes questions
+        // Wait for the display screen to change the question
       }, 500);
       
       return () => clearTimeout(timerId);
     }
-  }, [timeLeft, selectedAnswer, currentQuestion, toast]);
+  }, [selectedAnswer, currentQuestion, toast, timeLeft]);
   
   const handleSelectAnswer = (answer: string) => {
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {

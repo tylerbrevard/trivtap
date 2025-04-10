@@ -2,9 +2,10 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { QrCode } from 'lucide-react';
+import { QrCode, Clock } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
+import { Progress } from "@/components/ui/progress";
 
 const mockQuestions = [
   {
@@ -99,16 +100,23 @@ const DisplayScreen = () => {
       timerId = window.setTimeout(() => {
         setCurrentState('question');
         setTimeLeft(mockSettings.questionDuration);
+        // Store initial game state
+        updateGameState('question', currentQuestionIndex, mockSettings.questionDuration, questionCounter);
       }, 10000);
     } 
     else if (currentState === 'question') {
       if (timeLeft > 0) {
         timerId = window.setTimeout(() => {
           setTimeLeft(timeLeft - 1);
+          // Update game state with new time
+          updateGameState('question', currentQuestionIndex, timeLeft - 1, questionCounter);
         }, 1000);
       } else {
         // When time runs out, show the answer state
         setCurrentState('answer');
+        // Update game state for answer reveal
+        updateGameState('answer', currentQuestionIndex, 0, questionCounter);
+        
         // After the answer reveal duration, move to the next question or leaderboard
         timerId = window.setTimeout(() => {
           if (questionCounter % 10 === 0) {
@@ -128,28 +136,36 @@ const DisplayScreen = () => {
         clearTimeout(timerId);
       }
     };
-  }, [currentState, timeLeft, questionCounter]);
+  }, [currentState, timeLeft, questionCounter, currentQuestionIndex]);
+  
+  // Function to update game state in localStorage
+  const updateGameState = (state: 'question' | 'answer', questionIndex: number, time: number, qCounter: number) => {
+    localStorage.setItem('gameState', JSON.stringify({
+      state: state,
+      questionIndex: questionIndex,
+      timeLeft: time,
+      questionCounter: qCounter
+    }));
+  };
   
   const moveToNextQuestion = () => {
+    const nextQuestionIndex = (currentQuestionIndex + 1) % mockQuestions.length;
+    setCurrentQuestionIndex(nextQuestionIndex);
     setQuestionCounter(prev => prev + 1);
-    setCurrentQuestionIndex((currentQuestionIndex + 1) % mockQuestions.length);
     setTimeLeft(mockSettings.questionDuration);
     setCurrentState('question');
+    
+    // Update game state for the next question
+    updateGameState('question', nextQuestionIndex, mockSettings.questionDuration, questionCounter + 1);
   };
   
   const currentQuestion = mockQuestions[currentQuestionIndex];
   
-  // Add this function to synchronize game state with local storage
-  useEffect(() => {
-    if (currentState === 'question' || currentState === 'answer') {
-      localStorage.setItem('gameState', JSON.stringify({
-        state: currentState,
-        questionIndex: currentQuestionIndex,
-        timeLeft: timeLeft,
-        questionCounter: questionCounter
-      }));
-    }
-  }, [currentState, currentQuestionIndex, timeLeft, questionCounter]);
+  const getTimerColor = () => {
+    if (timeLeft > mockSettings.questionDuration * 0.6) return 'bg-green-500';
+    if (timeLeft > mockSettings.questionDuration * 0.3) return 'bg-yellow-500';
+    return 'bg-red-500';
+  };
   
   const renderContent = () => {
     switch (currentState) {
@@ -191,13 +207,14 @@ const DisplayScreen = () => {
                 <div className="text-xl font-medium">
                   Question {questionCounter}
                 </div>
-                <div className="text-xl font-medium">
+                <div className="flex items-center gap-2 text-xl font-medium">
+                  <Clock className="h-5 w-5" />
                   {timeLeft}s
                 </div>
               </div>
               <div className="w-full bg-muted h-3 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-primary transition-all duration-1000"
+                  className={`h-full ${getTimerColor()} transition-all duration-1000`}
                   style={{ width: `${(timeLeft / mockSettings.questionDuration) * 100}%` }}
                 />
               </div>
