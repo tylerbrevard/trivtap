@@ -29,6 +29,7 @@ import {
 import { useToast } from "@/components/ui/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 
 // Mock display data
 const displays = [
@@ -100,6 +101,18 @@ const Displays = () => {
       description: "The display has been opened in a new tab.",
     });
   };
+
+  // Handler for updating intermission frequency
+  const handleIntermissionFrequencyChange = (value: string) => {
+    const frequency = parseInt(value, 10);
+    if (!isNaN(frequency) && frequency > 0) {
+      updateGameSetting('intermissionFrequency', frequency);
+      toast({
+        title: "Setting Updated",
+        description: `Intermission will now appear after every ${frequency} questions.`,
+      });
+    }
+  };
   
   return (
     <div className="space-y-6">
@@ -122,7 +135,7 @@ const Displays = () => {
                     ID: {display.id}
                     {display.isDefault && (
                       <span className="ml-2">
-                        <Badge variant="outline" className="ml-2">Default</Badge>
+                        <Badge variant="outline">Default</Badge>
                       </span>
                     )}
                   </CardDescription>
@@ -269,6 +282,34 @@ const Displays = () => {
         <CardFooter>
           <Button className="w-full btn-trivia">Create Display</Button>
         </CardFooter>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Display Settings</CardTitle>
+          <CardDescription>Configure how your trivia game behaves</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between space-x-2">
+            <div className="flex flex-col space-y-1">
+              <span className="font-medium">Show Intermission After Every</span>
+              <span className="text-sm text-muted-foreground">
+                Display intermission slides periodically
+              </span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Input 
+                type="number" 
+                defaultValue={gameSettings.intermissionFrequency.toString()} 
+                min="1" 
+                max="50" 
+                className="w-20"
+                onChange={(e) => handleIntermissionFrequencyChange(e.target.value)}
+              />
+              <span>questions</span>
+            </div>
+          </div>
+        </CardContent>
       </Card>
     </div>
   );

@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Trophy, Clock, AlertTriangle } from 'lucide-react';
+import { gameSettings } from '@/utils/gameSettings';
 
 // Make sure we have the same questions as DisplayScreen
 const sampleQuestions = [
@@ -12,49 +13,49 @@ const sampleQuestions = [
     text: 'Which planet is known as the Red Planet?',
     options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
     correctAnswer: 'Mars',
-    timeLimit: 20, // seconds
+    timeLimit: gameSettings.questionDuration, // Use common settings
   },
   {
     id: '2',
     text: 'Who painted the Mona Lisa?',
     options: ['Vincent van Gogh', 'Leonardo da Vinci', 'Pablo Picasso', 'Michelangelo'],
     correctAnswer: 'Leonardo da Vinci',
-    timeLimit: 20, // seconds
+    timeLimit: gameSettings.questionDuration,
   },
   {
     id: '3',
     text: 'In which year did World War II end?',
     options: ['1943', '1944', '1945', '1946'],
     correctAnswer: '1945',
-    timeLimit: 20, // seconds
+    timeLimit: gameSettings.questionDuration,
   },
   {
     id: '4',
     text: 'Which of these elements has the chemical symbol \'Au\'?',
     options: ['Silver', 'Gold', 'Aluminum', 'Argon'],
     correctAnswer: 'Gold',
-    timeLimit: 20, // seconds
+    timeLimit: gameSettings.questionDuration,
   },
   {
     id: '5',
     text: 'What is the capital city of Australia?',
     options: ['Sydney', 'Melbourne', 'Canberra', 'Perth'],
     correctAnswer: 'Canberra',
-    timeLimit: 20, // seconds
+    timeLimit: gameSettings.questionDuration,
   },
   {
     id: '6',
     text: 'Who wrote the novel \'Pride and Prejudice\'?',
     options: ['Jane Austen', 'Charles Dickens', 'Emily Brontë', 'F. Scott Fitzgerald'],
     correctAnswer: 'Jane Austen',
-    timeLimit: 20, // seconds
+    timeLimit: gameSettings.questionDuration,
   },
   {
     id: '7',
     text: 'Which of these is NOT a programming language?',
     options: ['Python', 'Java', 'Cougar', 'Ruby'],
     correctAnswer: 'Cougar',
-    timeLimit: 20, // seconds
+    timeLimit: gameSettings.questionDuration,
   }
 ];
 
@@ -70,6 +71,7 @@ const PlayerGame = () => {
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
   const [lastGameStateTimestamp, setLastGameStateTimestamp] = useState<number>(0);
   const [currentGameState, setCurrentGameState] = useState<string>('question');
+  const [failedSyncAttempts, setFailedSyncAttempts] = useState(0);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -119,8 +121,19 @@ const PlayerGame = () => {
           // Only process if this is a newer state update (check timestamp)
           if (!parsedState.timestamp || parsedState.timestamp <= lastGameStateTimestamp) {
             console.log('Game state is not newer, ignoring');
+            setFailedSyncAttempts(prev => prev + 1);
+            
+            // If we've failed to sync many times, force a refresh of the timestamp
+            if (failedSyncAttempts > 20) {
+              console.log('Forcing state sync after multiple failed attempts');
+              setLastGameStateTimestamp(0); // Reset to force sync on next check
+              setFailedSyncAttempts(0);
+            }
             return;
           }
+          
+          // Reset failed sync counter on successful sync
+          setFailedSyncAttempts(0);
           
           // Update the last processed timestamp
           setLastGameStateTimestamp(parsedState.timestamp);
@@ -166,13 +179,16 @@ const PlayerGame = () => {
         } catch (error) {
           console.error('Error parsing game state', error);
         }
+      } else {
+        console.log('No game state found in localStorage');
+        setFailedSyncAttempts(prev => prev + 1);
       }
     };
     
     // Check more frequently for better synchronization
     const intervalId = setInterval(checkGameState, 300);
     return () => clearInterval(intervalId);
-  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp]);
+  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts]);
   
   // Handle answer selection
   useEffect(() => {
@@ -226,6 +242,15 @@ const PlayerGame = () => {
     return 'bg-red-500';
   };
   
+  // Force sync with game state button (for development)
+  const handleForceSync = () => {
+    setLastGameStateTimestamp(0);
+    toast({
+      title: "Syncing",
+      description: "Forced sync with game state",
+    });
+  };
+  
   // Show intermission content when display is in intermission state
   if (currentGameState === 'intermission') {
     return (
@@ -237,6 +262,12 @@ const PlayerGame = () => {
             <p className="text-md font-medium">Your Score</p>
             <p className="text-2xl font-bold text-primary">{score}</p>
           </div>
+          
+          {process.env.NODE_ENV === 'development' && (
+            <Button variant="outline" size="sm" onClick={handleForceSync} className="mt-4">
+              Force Sync
+            </Button>
+          )}
         </div>
       </div>
     );
@@ -314,6 +345,20 @@ const PlayerGame = () => {
       {isAnswerRevealed && answeredCorrectly === false && (
         <div className="text-center mt-4 text-red-500 font-bold">
           Incorrect. The correct answer is {currentQuestion.correctAnswer}.
+        </div>
+      )}
+      
+      {process.env.NODE_ENV === 'development' && (
+        <div className="mt-4 p-3 border border-dashed border-gray-300 rounded-md">
+          <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+          <Button variant="outline" size="sm" onClick={handleForceSync}>
+            Force Sync
+          </Button>
+          <div className="mt-2 text-xs text-muted-foreground">
+            <p>Game State: {currentGameState}</p>
+            <p>Question Index: {questionIndex}</p>
+            <p>Last Sync: {new Date(lastGameStateTimestamp).toLocaleTimeString()}</p>
+          </div>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { QrCode, Clock } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
+import { gameSettings } from '@/utils/gameSettings';
 
 // Mock questions data - make sure we're using all of them
 const mockQuestions = [
@@ -60,28 +61,24 @@ const mockQuestions = [
   }
 ];
 
-const mockSettings = {
-  questionDuration: 20, // seconds
-  answerRevealDuration: 5, // seconds
-  intermissionFrequency: 3, // show intermission after every 3 questions
-  intermissionDuration: 8, // seconds
-};
-
 const DisplayScreen = () => {
   const { id } = useParams();
   const [currentState, setCurrentState] = useState<'question' | 'answer' | 'leaderboard' | 'join' | 'intermission'>('join');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(mockSettings.questionDuration);
+  const [timeLeft, setTimeLeft] = useState(gameSettings.questionDuration);
   const [players, setPlayers] = useState<any[]>([]);
   const [gameCode, setGameCode] = useState('');
   const [questionCounter, setQuestionCounter] = useState(1);
   const [hasGameStarted, setHasGameStarted] = useState(false);
+  const [lastStateChange, setLastStateChange] = useState<number>(Date.now());
+  const [forcePause, setForcePause] = useState(false);
   const { toast } = useToast();
   
   console.log('Current state:', currentState);
   console.log('Current question index:', currentQuestionIndex);
   console.log('Available questions:', mockQuestions.length);
   console.log('Question counter:', questionCounter);
+  console.log('Game settings:', gameSettings);
   
   // Initialize game code - ONLY ONCE
   useEffect(() => {
@@ -114,17 +111,15 @@ const DisplayScreen = () => {
     sessionStorage.setItem('activeGameCode', sessionCode);
     localStorage.setItem('activeGameCode', sessionCode);
     
-    // Remove any test players that might have been added in development mode
-    if (localStorage.getItem('testPlayerAdded')) {
-      localStorage.removeItem('testPlayerAdded');
-    }
-    
-    // Clear all player scores initially to avoid stale data
+    // Remove any test players
     const playerKeys = Object.keys(localStorage).filter(key => key.startsWith('playerScore_'));
     playerKeys.forEach(key => localStorage.removeItem(key));
+    if (localStorage.getItem('playerJoined')) {
+      localStorage.removeItem('playerJoined');
+    }
     
     return () => {
-      // Clear up when component unmounts
+      // Clean up when component unmounts
       if (process.env.NODE_ENV === 'development') {
         console.log('Cleaning up development test data');
       }
@@ -216,12 +211,13 @@ const DisplayScreen = () => {
       // The join screen will show for 10 seconds before transitioning to the first question
       timerId = window.setTimeout(() => {
         setCurrentState('question');
-        setTimeLeft(mockSettings.questionDuration);
+        setTimeLeft(gameSettings.questionDuration);
         setHasGameStarted(true);
+        setLastStateChange(Date.now());
         console.log('Starting game with first question');
         
         // Store initial game state
-        updateGameState('question', currentQuestionIndex, mockSettings.questionDuration, questionCounter);
+        updateGameState('question', currentQuestionIndex, gameSettings.questionDuration, questionCounter);
       }, 10000);
       
       return () => {
@@ -237,6 +233,13 @@ const DisplayScreen = () => {
   // Game state management (timer, question progression)
   useEffect(() => {
     let timerId: number | undefined;
+    
+    if (forcePause) {
+      console.log('Game is paused. Skipping timer update.');
+      return () => {
+        if (timerId) clearTimeout(timerId);
+      };
+    }
     
     if (currentState === 'question' && hasGameStarted) {
       // Set up the timer to count down
@@ -256,16 +259,23 @@ const DisplayScreen = () => {
         // When time runs out, show the answer state
         console.log('Time out, revealing answer');
         setCurrentState('answer');
+        setLastStateChange(Date.now());
         
         // Update game state for answer reveal
         updateGameState('answer', currentQuestionIndex, 0, questionCounter);
         
-        // After the answer reveal duration, move to the next question or leaderboard
+        // After the answer reveal duration, move to the next question or show intermission/leaderboard
         timerId = window.setTimeout(() => {
-          // Check if we should show intermission
-          if (questionCounter % mockSettings.intermissionFrequency === 0) {
+          const shouldShowIntermission = questionCounter > 0 && questionCounter % gameSettings.intermissionFrequency === 0;
+          const shouldShowLeaderboard = questionCounter > 0 && questionCounter % gameSettings.leaderboardFrequency === 0 && !shouldShowIntermission;
+          
+          console.log(`Question counter: ${questionCounter}, Intermission frequency: ${gameSettings.intermissionFrequency}`);
+          console.log(`Should show intermission: ${shouldShowIntermission}, Should show leaderboard: ${shouldShowLeaderboard}`);
+          
+          if (shouldShowIntermission) {
             console.log('Showing intermission');
             setCurrentState('intermission');
+            setLastStateChange(Date.now());
             
             // Update game state for intermission
             updateGameState('intermission', currentQuestionIndex, 0, questionCounter);
@@ -273,9 +283,10 @@ const DisplayScreen = () => {
             // After intermission, move to the next question
             timerId = window.setTimeout(() => {
               moveToNextQuestion();
-            }, mockSettings.intermissionDuration * 1000);
-          } else if (questionCounter % 10 === 0) {
+            }, gameSettings.intermissionDuration * 1000);
+          } else if (shouldShowLeaderboard) {
             setCurrentState('leaderboard');
+            setLastStateChange(Date.now());
             console.log('Showing leaderboard');
             
             timerId = window.setTimeout(() => {
@@ -284,7 +295,7 @@ const DisplayScreen = () => {
           } else {
             moveToNextQuestion();
           }
-        }, mockSettings.answerRevealDuration * 1000);
+        }, gameSettings.answerRevealDuration * 1000);
         
         return () => {
           if (timerId) clearTimeout(timerId);
@@ -292,8 +303,8 @@ const DisplayScreen = () => {
       }
     }
     
-    if (currentState === 'intermission') {
-      // Intermission timer is handled above in the answer state callback
+    if (currentState === 'intermission' || currentState === 'leaderboard') {
+      // These states' timers are handled above in the answer state callback
       return () => {
         if (timerId) clearTimeout(timerId);
       };
@@ -302,7 +313,7 @@ const DisplayScreen = () => {
     return () => {
       if (timerId) clearTimeout(timerId);
     };
-  }, [currentState, timeLeft, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted]);
+  }, [currentState, timeLeft, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted, forcePause]);
   
   const moveToNextQuestion = useCallback(() => {
     // Calculate the next question index
@@ -312,18 +323,38 @@ const DisplayScreen = () => {
     // Update state for the next question
     setCurrentQuestionIndex(nextQuestionIndex);
     setQuestionCounter(prev => prev + 1);
-    setTimeLeft(mockSettings.questionDuration);
+    setTimeLeft(gameSettings.questionDuration);
     setCurrentState('question');
+    setLastStateChange(Date.now());
     
     // Update game state for the next question
-    updateGameState('question', nextQuestionIndex, mockSettings.questionDuration, questionCounter + 1);
+    updateGameState('question', nextQuestionIndex, gameSettings.questionDuration, questionCounter + 1);
   }, [currentQuestionIndex, questionCounter, updateGameState]);
+  
+  // Manual controls for testing
+  const handleStartGameNow = () => {
+    setCurrentState('question');
+    setTimeLeft(gameSettings.questionDuration);
+    setHasGameStarted(true);
+    setLastStateChange(Date.now());
+    updateGameState('question', currentQuestionIndex, gameSettings.questionDuration, questionCounter);
+  };
+  
+  const handleManualNextQuestion = () => {
+    if (hasGameStarted) {
+      moveToNextQuestion();
+    }
+  };
+  
+  const togglePauseGame = () => {
+    setForcePause(prev => !prev);
+  };
   
   const currentQuestion = mockQuestions[currentQuestionIndex];
   
   const getTimerColor = () => {
-    if (timeLeft > mockSettings.questionDuration * 0.6) return 'bg-green-500';
-    if (timeLeft > mockSettings.questionDuration * 0.3) return 'bg-yellow-500';
+    if (timeLeft > gameSettings.questionDuration * 0.6) return 'bg-green-500';
+    if (timeLeft > gameSettings.questionDuration * 0.3) return 'bg-yellow-500';
     return 'bg-red-500';
   };
   
@@ -377,17 +408,25 @@ const DisplayScreen = () => {
               </div>
             </div>
             
-            <Button 
-              className="mt-8"
-              onClick={() => {
-                setCurrentState('question');
-                setTimeLeft(mockSettings.questionDuration);
-                setHasGameStarted(true);
-                updateGameState('question', currentQuestionIndex, mockSettings.questionDuration, questionCounter);
-              }}
-            >
-              Start Game Now
-            </Button>
+            <div className="mt-8 space-y-4">
+              <Button onClick={handleStartGameNow}>
+                Start Game Now
+              </Button>
+              
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+                  <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+                  <div className="flex gap-2">
+                    <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
+                      Force Next Question
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={togglePauseGame}>
+                      {forcePause ? 'Resume Game' : 'Pause Game'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         );
         
@@ -410,7 +449,7 @@ const DisplayScreen = () => {
               <div className="w-full bg-muted h-3 rounded-full overflow-hidden">
                 <div 
                   className={`h-full ${getTimerColor()} transition-all duration-300`}
-                  style={{ width: `${(timeLeft / mockSettings.questionDuration) * 100}%` }}
+                  style={{ width: `${(timeLeft / gameSettings.questionDuration) * 100}%` }}
                 />
               </div>
             </div>
@@ -431,6 +470,20 @@ const DisplayScreen = () => {
                 ))}
               </div>
             </div>
+            
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+                <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+                <div className="flex gap-2">
+                  <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
+                    Force Next Question
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={togglePauseGame}>
+                    {forcePause ? 'Resume Game' : 'Pause Game'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </div>
         );
         
@@ -472,6 +525,15 @@ const DisplayScreen = () => {
             <div className="mt-6 text-center">
               <h3 className="text-3xl font-bold text-primary">Correct Answer: {currentQuestion.correctAnswer}</h3>
             </div>
+            
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+                <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+                <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
+                  Force Next Question
+                </Button>
+              </div>
+            )}
           </div>
         );
         
@@ -496,6 +558,15 @@ const DisplayScreen = () => {
                 </div>
               </div>
             </div>
+            
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+                <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+                <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
+                  Force Next Question
+                </Button>
+              </div>
+            )}
           </div>
         );
         
@@ -575,6 +646,15 @@ const DisplayScreen = () => {
             ) : (
               <div className="text-center text-muted-foreground">
                 <p>No players have joined yet.</p>
+              </div>
+            )}
+            
+            {process.env.NODE_ENV === 'development' && (
+              <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+                <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+                <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
+                  Force Next Question
+                </Button>
               </div>
             )}
           </div>

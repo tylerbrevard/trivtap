@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -22,13 +22,39 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { useToast } from "@/components/ui/use-toast";
+import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 
 const Settings = () => {
+  const [settings, setSettings] = useState({ ...gameSettings });
+  const { toast } = useToast();
+
+  // Load settings on component mount
+  useEffect(() => {
+    setSettings({ ...gameSettings });
+  }, []);
+
+  const handleSettingChange = (key: keyof typeof gameSettings, value: number) => {
+    setSettings(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSaveChanges = () => {
+    // Update all settings
+    Object.keys(settings).forEach(key => {
+      updateGameSetting(key as keyof typeof gameSettings, settings[key as keyof typeof gameSettings]);
+    });
+
+    toast({
+      title: "Settings Saved",
+      description: "Your game settings have been updated successfully.",
+    });
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Settings</h1>
-        <Button className="btn-trivia">
+        <Button className="btn-trivia" onClick={handleSaveChanges}>
           <Save className="mr-2 h-4 w-4" />
           Save Changes
         </Button>
@@ -49,9 +75,15 @@ const Settings = () => {
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <Label>Question Duration</Label>
-                  <span className="text-primary font-medium">20 seconds</span>
+                  <span className="text-primary font-medium">{settings.questionDuration} seconds</span>
                 </div>
-                <Slider defaultValue={[20]} min={5} max={60} step={1} />
+                <Slider 
+                  value={[settings.questionDuration]} 
+                  min={5} 
+                  max={60} 
+                  step={1} 
+                  onValueChange={(val) => handleSettingChange('questionDuration', val[0])}
+                />
                 <p className="text-sm text-muted-foreground mt-1">
                   How long players have to answer each question
                 </p>
@@ -62,11 +94,55 @@ const Settings = () => {
               <div>
                 <div className="flex justify-between items-center mb-2">
                   <Label>Answer Reveal Duration</Label>
-                  <span className="text-primary font-medium">5 seconds</span>
+                  <span className="text-primary font-medium">{settings.answerRevealDuration} seconds</span>
                 </div>
-                <Slider defaultValue={[5]} min={2} max={15} step={1} />
+                <Slider 
+                  value={[settings.answerRevealDuration]} 
+                  min={2} 
+                  max={15} 
+                  step={1} 
+                  onValueChange={(val) => handleSettingChange('answerRevealDuration', val[0])}
+                />
                 <p className="text-sm text-muted-foreground mt-1">
                   How long to show the correct answer before moving to the next question
+                </p>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label>Intermission Frequency</Label>
+                  <span className="text-primary font-medium">Every {settings.intermissionFrequency} questions</span>
+                </div>
+                <Slider 
+                  value={[settings.intermissionFrequency]} 
+                  min={1} 
+                  max={20} 
+                  step={1} 
+                  onValueChange={(val) => handleSettingChange('intermissionFrequency', val[0])}
+                />
+                <p className="text-sm text-muted-foreground mt-1">
+                  How often to show intermission slides
+                </p>
+              </div>
+              
+              <Separator />
+              
+              <div>
+                <div className="flex justify-between items-center mb-2">
+                  <Label>Intermission Duration</Label>
+                  <span className="text-primary font-medium">{settings.intermissionDuration} seconds</span>
+                </div>
+                <Slider 
+                  value={[settings.intermissionDuration]} 
+                  min={3} 
+                  max={30} 
+                  step={1} 
+                  onValueChange={(val) => handleSettingChange('intermissionDuration', val[0])}
+                />
+                <p className="text-sm text-muted-foreground mt-1">
+                  How long to show intermission slides
                 </p>
               </div>
               
@@ -329,7 +405,7 @@ const Settings = () => {
           </Accordion>
         </CardContent>
         <CardFooter>
-          <Button className="w-full">Save Advanced Settings</Button>
+          <Button className="w-full" onClick={handleSaveChanges}>Save Advanced Settings</Button>
         </CardFooter>
       </Card>
     </div>
