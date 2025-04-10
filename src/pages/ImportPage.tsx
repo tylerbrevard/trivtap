@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -185,19 +184,31 @@ const ImportPage = () => {
         }
       }
       
+      // Only try to associate with bucket if we have successfully imported questions
       if (newQuestionIds.length > 0) {
-        // Get default bucket
-        console.log('Getting default bucket');
-        const defaultBucket = await getDefaultBucket();
-        
-        if (defaultBucket) {
-          // Associate questions with the default bucket
-          console.log(`Associating ${newQuestionIds.length} questions with default bucket`);
-          await associateQuestionsWithBucket(newQuestionIds, defaultBucket.id);
-          console.log('Questions associated with default bucket successfully');
-        } else {
-          console.warn('Default bucket not found or could not be created');
-          // Still count as success since questions were imported, just not associated
+        try {
+          // Get default bucket
+          console.log('Getting default bucket');
+          const defaultBucket = await getDefaultBucket();
+          
+          if (defaultBucket) {
+            // Associate questions with the default bucket
+            console.log(`Associating ${newQuestionIds.length} questions with default bucket`);
+            await associateQuestionsWithBucket(newQuestionIds, defaultBucket.id);
+            console.log('Questions associated with default bucket successfully');
+          } else {
+            console.warn('Default bucket not found or could not be created');
+            // Still count as success since questions were imported, just not associated
+          }
+        } catch (bucketError) {
+          console.error('Error with bucket operations:', bucketError);
+          // Don't fail the whole import if only the bucket association fails
+          return { 
+            successCount, 
+            errorCount, 
+            newQuestionIds,
+            bucketError: bucketError instanceof Error ? bucketError.message : 'Unknown bucket error'
+          };
         }
       }
       
@@ -271,9 +282,16 @@ const ImportPage = () => {
       let statusMessage = '';
       
       if (wasSuccessful) {
-        statusMessage = `Successfully imported ${result.successCount} questions to the Default Bucket.`;
+        statusMessage = `Successfully imported ${result.successCount} questions`;
+        
+        if (result.bucketError) {
+          statusMessage += ` but failed to add to Default Bucket: ${result.bucketError}`;
+        } else {
+          statusMessage += ` to the Default Bucket`;
+        }
+        
         if (result.errorCount > 0) {
-          statusMessage += ` ${result.errorCount} questions failed to import.`;
+          statusMessage += `. ${result.errorCount} questions failed to import.`;
         }
       } else {
         statusMessage = `Import failed. All ${result.errorCount} questions failed to import. Please check the console for details.`;

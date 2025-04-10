@@ -79,47 +79,52 @@ export const getOrCreateCategory = async (categoryName: string) => {
 export const getDefaultBucket = async () => {
   console.log("Looking for default bucket");
   
-  // Check if default bucket exists
-  const { data, error } = await supabase
-    .from('buckets')
-    .select('id, name')
-    .eq('is_default', true)
-    .maybeSingle();
+  try {
+    // Check if default bucket exists
+    const { data, error } = await supabase
+      .from('buckets')
+      .select('id, name')
+      .eq('is_default', true)
+      .maybeSingle();
+      
+    if (error) {
+      console.error('Error checking for default bucket:', error);
+      throw new Error(`Failed to check for default bucket: ${error.message}`);
+    }
     
-  if (error) {
-    console.error('Error checking for default bucket:', error);
-    throw new Error(`Failed to check for default bucket: ${error.message}`);
-  }
-  
-  if (data) {
-    console.log(`Found default bucket: ${data.name} with id: ${data.id}`);
-    return data;
-  }
-  
-  // Create default bucket if it doesn't exist
-  console.log("Creating default bucket");
-  const { data: newBucket, error: createError } = await supabase
-    .from('buckets')
-    .insert({
-      name: 'Default Bucket',
-      is_default: true,
-      description: 'Default bucket for imported questions'
-    })
-    .select('id, name')
-    .single();
+    if (data) {
+      console.log(`Found default bucket: ${data.name} with id: ${data.id}`);
+      return data;
+    }
     
-  if (createError) {
-    console.error('Error creating default bucket:', createError);
-    throw new Error(`Failed to create default bucket: ${createError.message}`);
+    // Create default bucket if it doesn't exist
+    console.log("Creating default bucket");
+    const { data: newBucket, error: createError } = await supabase
+      .from('buckets')
+      .insert({
+        name: 'Default Bucket',
+        is_default: true,
+        description: 'Default bucket for imported questions'
+      })
+      .select('id, name')
+      .single();
+      
+    if (createError) {
+      console.error('Error creating default bucket:', createError);
+      throw new Error(`Failed to create default bucket: ${createError.message}`);
+    }
+    
+    if (!newBucket || !newBucket.id) {
+      console.error('No data returned from bucket creation');
+      throw new Error('Failed to create default bucket: No data returned');
+    }
+    
+    console.log(`Created default bucket with id: ${newBucket.id}`);
+    return newBucket;
+  } catch (error) {
+    console.error('Error in getDefaultBucket:', error);
+    throw error;
   }
-  
-  if (!newBucket || !newBucket.id) {
-    console.error('No data returned from bucket creation');
-    throw new Error('Failed to create default bucket: No data returned');
-  }
-  
-  console.log(`Created default bucket with id: ${newBucket.id}`);
-  return newBucket;
 };
 
 // Function to associate questions with a bucket
@@ -131,19 +136,24 @@ export const associateQuestionsWithBucket = async (questionIds: string[], bucket
   
   console.log(`Associating ${questionIds.length} questions with bucket ${bucketId}`);
   
-  const bucketQuestions = questionIds.map(questionId => ({
-    bucket_id: bucketId,
-    question_id: questionId
-  }));
-  
-  const { error } = await supabase
-    .from('bucket_questions')
-    .insert(bucketQuestions);
+  try {
+    const bucketQuestions = questionIds.map(questionId => ({
+      bucket_id: bucketId,
+      question_id: questionId
+    }));
     
-  if (error) {
-    console.error('Error associating questions with bucket:', error);
-    throw new Error(`Failed to associate questions with bucket: ${error.message}`);
+    const { error } = await supabase
+      .from('bucket_questions')
+      .insert(bucketQuestions);
+      
+    if (error) {
+      console.error('Error associating questions with bucket:', error);
+      throw new Error(`Failed to associate questions with bucket: ${error.message}`);
+    }
+    
+    console.log(`Successfully associated ${questionIds.length} questions with bucket ${bucketId}`);
+  } catch (error) {
+    console.error('Error in associateQuestionsWithBucket:', error);
+    throw error;
   }
-  
-  console.log(`Successfully associated ${questionIds.length} questions with bucket ${bucketId}`);
 };
