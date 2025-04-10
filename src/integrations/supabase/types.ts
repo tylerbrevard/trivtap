@@ -9,16 +9,443 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      bucket_questions: {
+        Row: {
+          bucket_id: string
+          question_id: string
+        }
+        Insert: {
+          bucket_id: string
+          question_id: string
+        }
+        Update: {
+          bucket_id?: string
+          question_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "bucket_questions_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "bucket_questions_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      buckets: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          owner_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      categories: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+        }
+        Relationships: []
+      }
+      display_buckets: {
+        Row: {
+          bucket_id: string
+          display_id: string
+        }
+        Insert: {
+          bucket_id: string
+          display_id: string
+        }
+        Update: {
+          bucket_id?: string
+          display_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "display_buckets_bucket_id_fkey"
+            columns: ["bucket_id"]
+            isOneToOne: false
+            referencedRelation: "buckets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "display_buckets_display_id_fkey"
+            columns: ["display_id"]
+            isOneToOne: false
+            referencedRelation: "displays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      displays: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          join_code: string
+          name: string
+          owner_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          join_code: string
+          name: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          join_code?: string
+          name?: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      games: {
+        Row: {
+          created_at: string
+          current_question_id: string | null
+          display_id: string | null
+          ended_at: string | null
+          id: string
+          started_at: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          current_question_id?: string | null
+          display_id?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          current_question_id?: string | null
+          display_id?: string | null
+          ended_at?: string | null
+          id?: string
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "games_current_question_id_fkey"
+            columns: ["current_question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "games_display_id_fkey"
+            columns: ["display_id"]
+            isOneToOne: false
+            referencedRelation: "displays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      player_answers: {
+        Row: {
+          answer: string
+          created_at: string
+          game_id: string | null
+          id: string
+          is_correct: boolean | null
+          player_id: string | null
+          points_earned: number | null
+          question_id: string | null
+          time_taken: number | null
+        }
+        Insert: {
+          answer: string
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          is_correct?: boolean | null
+          player_id?: string | null
+          points_earned?: number | null
+          question_id?: string | null
+          time_taken?: number | null
+        }
+        Update: {
+          answer?: string
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          is_correct?: boolean | null
+          player_id?: string | null
+          points_earned?: number | null
+          question_id?: string | null
+          time_taken?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_answers_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_answers_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_answers_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          created_at: string
+          display_id: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          score: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          display_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          score?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          display_id?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          score?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "players_display_id_fkey"
+            columns: ["display_id"]
+            isOneToOne: false
+            referencedRelation: "displays"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          business_name: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          business_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          business_name?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      questions: {
+        Row: {
+          category_id: string | null
+          correct_answer: string
+          created_at: string
+          difficulty: Database["public"]["Enums"]["difficulty_level"] | null
+          id: string
+          options: Json
+          text: string
+          updated_at: string
+        }
+        Insert: {
+          category_id?: string | null
+          correct_answer: string
+          created_at?: string
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          id?: string
+          options: Json
+          text: string
+          updated_at?: string
+        }
+        Update: {
+          category_id?: string | null
+          correct_answer?: string
+          created_at?: string
+          difficulty?: Database["public"]["Enums"]["difficulty_level"] | null
+          id?: string
+          options?: Json
+          text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "questions_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      settings: {
+        Row: {
+          created_at: string
+          id: string
+          intermission_duration: number | null
+          leaderboard_frequency: number | null
+          owner_id: string | null
+          question_duration: number | null
+          reveal_duration: number | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          intermission_duration?: number | null
+          leaderboard_frequency?: number | null
+          owner_id?: string | null
+          question_duration?: number | null
+          reveal_duration?: number | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          intermission_duration?: number | null
+          leaderboard_frequency?: number | null
+          owner_id?: string | null
+          question_duration?: number | null
+          reveal_duration?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      slides: {
+        Row: {
+          content: string | null
+          created_at: string
+          display_order: number | null
+          enabled: boolean | null
+          id: string
+          image_url: string | null
+          owner_id: string | null
+          title: string
+          type: string
+          updated_at: string
+        }
+        Insert: {
+          content?: string | null
+          created_at?: string
+          display_order?: number | null
+          enabled?: boolean | null
+          id?: string
+          image_url?: string | null
+          owner_id?: string | null
+          title: string
+          type?: string
+          updated_at?: string
+        }
+        Update: {
+          content?: string | null
+          created_at?: string
+          display_order?: number | null
+          enabled?: boolean | null
+          id?: string
+          image_url?: string | null
+          owner_id?: string | null
+          title?: string
+          type?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      generate_join_code: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
     }
     Enums: {
-      [_ in never]: never
+      difficulty_level: "easy" | "medium" | "hard"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -133,6 +560,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      difficulty_level: ["easy", "medium", "hard"],
+    },
   },
 } as const
