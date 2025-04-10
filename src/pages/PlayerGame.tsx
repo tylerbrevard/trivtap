@@ -1,23 +1,38 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 
-// Mock question data - in a real app this would come from the server
-const sampleQuestion = {
-  id: '1',
-  text: 'Which planet is known as the Red Planet?',
-  options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
-  correctAnswer: 'Mars',
-  timeLimit: 20, // seconds
-};
+const sampleQuestions = [
+  {
+    id: '1',
+    text: 'Which planet is known as the Red Planet?',
+    options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
+    correctAnswer: 'Mars',
+    timeLimit: 20, // seconds
+  },
+  {
+    id: '2',
+    text: 'Who painted the Mona Lisa?',
+    options: ['Vincent van Gogh', 'Leonardo da Vinci', 'Pablo Picasso', 'Michelangelo'],
+    correctAnswer: 'Leonardo da Vinci',
+    timeLimit: 20, // seconds
+  },
+  {
+    id: '3',
+    text: 'In which year did World War II end?',
+    options: ['1943', '1944', '1945', '1946'],
+    correctAnswer: '1945',
+    timeLimit: 20, // seconds
+  }
+];
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
-  const [currentQuestion, setCurrentQuestion] = useState(sampleQuestion);
+  const [questionIndex, setQuestionIndex] = useState(0);
+  const [currentQuestion, setCurrentQuestion] = useState(sampleQuestions[0]);
   const [timeLeft, setTimeLeft] = useState(currentQuestion.timeLimit);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [score, setScore] = useState(0);
@@ -26,7 +41,6 @@ const PlayerGame = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  // Check if player has joined with valid information
   useEffect(() => {
     const storedName = sessionStorage.getItem('playerName');
     const storedGameId = sessionStorage.getItem('gameId');
@@ -45,10 +59,16 @@ const PlayerGame = () => {
     setGameId(storedGameId);
   }, [navigate, toast]);
   
-  // Timer countdown effect
+  useEffect(() => {
+    setCurrentQuestion(sampleQuestions[questionIndex]);
+    setTimeLeft(sampleQuestions[questionIndex].timeLimit);
+    setSelectedAnswer(null);
+    setIsAnswerRevealed(false);
+    setAnsweredCorrectly(null);
+  }, [questionIndex]);
+  
   useEffect(() => {
     if (timeLeft <= 0 || selectedAnswer !== null) {
-      // Time's up or already answered
       return;
     }
     
@@ -59,15 +79,12 @@ const PlayerGame = () => {
     return () => clearTimeout(timerId);
   }, [timeLeft, selectedAnswer]);
   
-  // Reveal answer after time's up or player selects an answer
   useEffect(() => {
     if (timeLeft <= 0 || selectedAnswer !== null) {
       const timerId = setTimeout(() => {
         setIsAnswerRevealed(true);
         
-        // Only award points if answer was correct and selected before time ran out
         if (selectedAnswer === currentQuestion.correctAnswer && timeLeft > 0) {
-          // Calculate points based on time left (faster answers = more points)
           const pointsEarned = 100 + (timeLeft * 10);
           setScore(prevScore => prevScore + pointsEarned);
           setAnsweredCorrectly(true);
@@ -92,22 +109,13 @@ const PlayerGame = () => {
           });
         }
         
-        // Move to next question after 3 seconds
-        setTimeout(() => {
-          // Reset for next question
-          setIsAnswerRevealed(false);
-          setSelectedAnswer(null);
-          setAnsweredCorrectly(null);
-          
-          // In a real app, we would fetch the next question from the server
-          // For this demo, we'll just reset the timer
-          setTimeLeft(currentQuestion.timeLimit);
-        }, 3000);
+        const nextQuestionIndex = (questionIndex + 1) % sampleQuestions.length;
+        setQuestionIndex(nextQuestionIndex);
       }, 500);
       
       return () => clearTimeout(timerId);
     }
-  }, [timeLeft, selectedAnswer, currentQuestion, toast]);
+  }, [timeLeft, selectedAnswer, currentQuestion, toast, questionIndex]);
   
   const handleSelectAnswer = (answer: string) => {
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
@@ -123,7 +131,6 @@ const PlayerGame = () => {
   
   return (
     <div className="min-h-screen flex flex-col bg-background p-4">
-      {/* Header */}
       <header className="mb-4">
         <div className="flex justify-between items-center">
           <div>
@@ -137,7 +144,6 @@ const PlayerGame = () => {
         </div>
       </header>
       
-      {/* Timer */}
       <div className="mb-6">
         <div className="flex items-center gap-2 mb-1">
           <Clock className="h-4 w-4 text-muted-foreground" />
@@ -151,13 +157,11 @@ const PlayerGame = () => {
         </div>
       </div>
       
-      {/* Question */}
       <div className="card-trivia p-6 mb-6">
         <h3 className="text-xl font-semibold mb-2">Question:</h3>
         <p className="text-lg mb-0">{currentQuestion.text}</p>
       </div>
       
-      {/* Answer Options */}
       <div className="grid grid-cols-1 gap-3 mb-6">
         {currentQuestion.options.map((option, index) => (
           <Button
@@ -181,7 +185,6 @@ const PlayerGame = () => {
         ))}
       </div>
       
-      {/* Status Indicators */}
       {timeLeft === 0 && !isAnswerRevealed && (
         <div className="flex items-center gap-3 justify-center mt-4 text-muted-foreground">
           <AlertTriangle className="h-5 w-5" />

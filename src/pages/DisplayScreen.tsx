@@ -1,10 +1,10 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { QrCode } from 'lucide-react';
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
-// Mock data
 const mockQuestions = [
   {
     id: '1',
@@ -29,17 +29,6 @@ const mockQuestions = [
   }
 ];
 
-// Mock players
-const mockPlayers = [
-  { id: '1', name: 'Sarah', score: 650 },
-  { id: '2', name: 'Mike', score: 590 },
-  { id: '3', name: 'Jessica', score: 520 },
-  { id: '4', name: 'David', score: 480 },
-  { id: '5', name: 'Emily', score: 450 },
-  { id: '6', name: 'Alex', score: 320 },
-];
-
-// Mock settings
 const mockSettings = {
   questionDuration: 20, // seconds
   answerRevealDuration: 5, // seconds
@@ -50,32 +39,69 @@ const DisplayScreen = () => {
   const [currentState, setCurrentState] = useState<'question' | 'answer' | 'leaderboard' | 'join'>('join');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(mockSettings.questionDuration);
-  const [players, setPlayers] = useState(mockPlayers);
-  const [gameCode, setGameCode] = useState('ABCD'); // In a real app, this would be generated or pulled from the server
+  const [players, setPlayers] = useState<any[]>([]);
+  const [gameCode, setGameCode] = useState('');
   const [questionCounter, setQuestionCounter] = useState(1);
+  const { toast } = useToast();
   
-  // State transitions
+  useEffect(() => {
+    const generateGameCode = () => {
+      const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+      let result = '';
+      for (let i = 0; i < 4; i++) {
+        result += characters.charAt(Math.floor(Math.random() * characters.length));
+      }
+      return result;
+    };
+    
+    setGameCode(generateGameCode());
+    
+    const setupPlayerSubscription = async () => {
+      const channel = supabase
+        .channel('public:players')
+        .on(
+          'postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'players' },
+          (payload) => {
+            setPlayers((current) => [...current, payload.new]);
+            toast({
+              title: "New player joined!",
+              description: `${payload.new.name} has joined the game.`,
+            });
+          }
+        )
+        .subscribe();
+        
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    };
+    
+    const cleanup = setupPlayerSubscription();
+    return () => {
+      if (cleanup && typeof cleanup === 'function') {
+        cleanup();
+      }
+    };
+  }, [toast]);
+  
   useEffect(() => {
     let timerId: number | undefined;
     
     if (currentState === 'join') {
-      // Auto transition to first question after 10 seconds
       timerId = window.setTimeout(() => {
         setCurrentState('question');
         setTimeLeft(mockSettings.questionDuration);
       }, 10000);
     } 
     else if (currentState === 'question') {
-      // Count down timer for question
       if (timeLeft > 0) {
         timerId = window.setTimeout(() => {
           setTimeLeft(timeLeft - 1);
         }, 1000);
       } else {
-        // Time's up, show answer
         setCurrentState('answer');
         timerId = window.setTimeout(() => {
-          // After revealing answer, go to next question or leaderboard
           if (questionCounter % 10 === 0) {
             setCurrentState('leaderboard');
             timerId = window.setTimeout(() => {
@@ -96,7 +122,6 @@ const DisplayScreen = () => {
   }, [currentState, timeLeft, questionCounter]);
   
   const moveToNextQuestion = () => {
-    // Update question counter and move to next question
     setQuestionCounter(prev => prev + 1);
     setCurrentQuestionIndex((currentQuestionIndex + 1) % mockQuestions.length);
     setTimeLeft(mockSettings.questionDuration);
@@ -105,7 +130,6 @@ const DisplayScreen = () => {
   
   const currentQuestion = mockQuestions[currentQuestionIndex];
   
-  // Render different screens based on current state
   const renderContent = () => {
     switch (currentState) {
       case 'join':
@@ -150,7 +174,6 @@ const DisplayScreen = () => {
                   {timeLeft}s
                 </div>
               </div>
-              {/* Timer bar */}
               <div className="w-full bg-muted h-3 rounded-full overflow-hidden">
                 <div 
                   className="h-full bg-primary transition-all duration-1000"
@@ -224,76 +247,79 @@ const DisplayScreen = () => {
           <div className="flex flex-col items-center justify-center h-full">
             <h1 className="text-4xl font-bold mb-8 text-primary">Leaderboard</h1>
             
-            <div className="w-full max-w-2xl">
-              {/* Top 3 Winners */}
-              <div className="flex justify-center items-end gap-4 mb-8">
-                {/* 2nd place */}
-                {players[1] && (
-                  <div className="flex flex-col items-center">
-                    <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-gray-400">
-                      <span className="text-3xl font-bold text-gray-400">2</span>
-                    </div>
-                    <div className="text-center">
-                      <div className="h-40 bg-gradient-to-t from-gray-600 to-gray-400 w-24 rounded-t-lg flex items-end justify-center pb-4">
-                        <span className="text-white font-bold">{players[1].score}</span>
+            {players.length > 0 ? (
+              <div className="w-full max-w-2xl">
+                <div className="flex justify-center items-end gap-4 mb-8">
+                  {players.length > 1 && (
+                    <div className="flex flex-col items-center">
+                      <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-gray-400">
+                        <span className="text-3xl font-bold text-gray-400">2</span>
                       </div>
-                      <div className="bg-gray-200 text-gray-800 py-2 px-4 rounded-b-lg">
-                        <span className="font-medium">{players[1].name}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-                
-                {/* 1st place */}
-                {players[0] && (
-                  <div className="flex flex-col items-center -mt-8">
-                    <div className="w-24 h-24 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-yellow-400">
-                      <span className="text-4xl font-bold text-yellow-400">1</span>
-                    </div>
-                    <div className="text-center">
-                      <div className="h-52 bg-gradient-to-t from-yellow-600 to-yellow-400 w-32 rounded-t-lg flex items-end justify-center pb-4">
-                        <span className="text-white font-bold">{players[0].score}</span>
-                      </div>
-                      <div className="bg-yellow-100 text-yellow-800 py-2 px-4 rounded-b-lg">
-                        <span className="font-medium">{players[0].name}</span>
+                      <div className="text-center">
+                        <div className="h-40 bg-gradient-to-t from-gray-600 to-gray-400 w-24 rounded-t-lg flex items-end justify-center pb-4">
+                          <span className="text-white font-bold">{players[1].score || 0}</span>
+                        </div>
+                        <div className="bg-gray-200 text-gray-800 py-2 px-4 rounded-b-lg">
+                          <span className="font-medium">{players[1].name}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-                
-                {/* 3rd place */}
-                {players[2] && (
-                  <div className="flex flex-col items-center">
-                    <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-amber-700">
-                      <span className="text-3xl font-bold text-amber-700">3</span>
-                    </div>
-                    <div className="text-center">
-                      <div className="h-32 bg-gradient-to-t from-amber-800 to-amber-500 w-24 rounded-t-lg flex items-end justify-center pb-4">
-                        <span className="text-white font-bold">{players[2].score}</span>
+                  )}
+                  
+                  {players.length > 0 && (
+                    <div className="flex flex-col items-center -mt-8">
+                      <div className="w-24 h-24 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-yellow-400">
+                        <span className="text-4xl font-bold text-yellow-400">1</span>
                       </div>
-                      <div className="bg-amber-100 text-amber-800 py-2 px-4 rounded-b-lg">
-                        <span className="font-medium">{players[2].name}</span>
+                      <div className="text-center">
+                        <div className="h-52 bg-gradient-to-t from-yellow-600 to-yellow-400 w-32 rounded-t-lg flex items-end justify-center pb-4">
+                          <span className="text-white font-bold">{players[0].score || 0}</span>
+                        </div>
+                        <div className="bg-yellow-100 text-yellow-800 py-2 px-4 rounded-b-lg">
+                          <span className="font-medium">{players[0].name}</span>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                )}
-              </div>
-              
-              {/* Rest of players */}
-              <div className="card-trivia p-4">
-                <div className="divide-y divide-border">
-                  {players.slice(3, 10).map((player, index) => (
-                    <div key={player.id} className="flex justify-between items-center py-3">
-                      <div className="flex items-center">
-                        <span className="text-muted-foreground font-medium mr-4">{index + 4}</span>
-                        <span className="font-medium">{player.name}</span>
+                  )}
+                  
+                  {players.length > 2 && (
+                    <div className="flex flex-col items-center">
+                      <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-amber-700">
+                        <span className="text-3xl font-bold text-amber-700">3</span>
                       </div>
-                      <span className="font-bold">{player.score}</span>
+                      <div className="text-center">
+                        <div className="h-32 bg-gradient-to-t from-amber-800 to-amber-500 w-24 rounded-t-lg flex items-end justify-center pb-4">
+                          <span className="text-white font-bold">{players[2].score || 0}</span>
+                        </div>
+                        <div className="bg-amber-100 text-amber-800 py-2 px-4 rounded-b-lg">
+                          <span className="font-medium">{players[2].name}</span>
+                        </div>
+                      </div>
                     </div>
-                  ))}
+                  )}
                 </div>
+                
+                {players.length > 3 && (
+                  <div className="card-trivia p-4">
+                    <div className="divide-y divide-border">
+                      {players.slice(3, 10).map((player, index) => (
+                        <div key={player.id} className="flex justify-between items-center py-3">
+                          <div className="flex items-center">
+                            <span className="text-muted-foreground font-medium mr-4">{index + 4}</span>
+                            <span className="font-medium">{player.name}</span>
+                          </div>
+                          <span className="font-bold">{player.score || 0}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            ) : (
+              <div className="text-center text-muted-foreground">
+                <p>No players have joined yet.</p>
+              </div>
+            )}
           </div>
         );
     }
@@ -301,7 +327,6 @@ const DisplayScreen = () => {
   
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      {/* Header */}
       <header className="p-4 border-b border-border">
         <div className="flex justify-between items-center">
           <h1 className="text-2xl font-bold text-primary">TriviaPulse</h1>
@@ -316,12 +341,10 @@ const DisplayScreen = () => {
         </div>
       </header>
       
-      {/* Main content */}
       <main className="flex-1 p-6">
         {renderContent()}
       </main>
       
-      {/* Footer */}
       <footer className="p-4 border-t border-border text-center text-sm text-muted-foreground">
         {currentState !== 'join' && (
           <div className="flex justify-center mb-2">

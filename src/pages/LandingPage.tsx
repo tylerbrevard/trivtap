@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -11,6 +10,7 @@ import {
   Github,
   Menu,
   X,
+  LogIn,
 } from 'lucide-react';
 
 const LandingPage = () => {
@@ -33,6 +33,12 @@ const LandingPage = () => {
               <a href="#how-it-works" className="text-foreground/80 hover:text-primary transition-colors">How It Works</a>
               <a href="#testimonials" className="text-foreground/80 hover:text-primary transition-colors">Testimonials</a>
               <Link to="/login" className="text-primary hover:text-primary/80 transition-colors">Login</Link>
+              <Link to="/join">
+                <Button variant="outline" className="flex items-center gap-2 border-primary text-primary hover:bg-primary/10">
+                  <LogIn size={18} />
+                  Join Game
+                </Button>
+              </Link>
               <Link to="/register">
                 <Button className="btn-trivia">Get Started</Button>
               </Link>
@@ -84,6 +90,16 @@ const LandingPage = () => {
               Login
             </Link>
             <Link 
+              to="/join" 
+              className="block pt-2"
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              <Button variant="outline" className="w-full flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary/10">
+                <LogIn size={18} />
+                Join Game
+              </Button>
+            </Link>
+            <Link 
               to="/register" 
               className="block pt-2"
               onClick={() => setMobileMenuOpen(false)}
@@ -108,7 +124,8 @@ const LandingPage = () => {
               <Button className="btn-trivia text-lg py-6 px-8">Start Hosting Trivia</Button>
             </Link>
             <Link to="/join">
-              <Button variant="outline" className="text-lg py-6 px-8 border-primary text-primary hover:bg-primary/10">
+              <Button variant="outline" className="text-lg py-6 px-8 border-primary text-primary hover:bg-primary/10 flex items-center gap-2">
+                <LogIn size={24} />
                 Join a Game
               </Button>
             </Link>
