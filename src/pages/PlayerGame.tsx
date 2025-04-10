@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -6,14 +5,13 @@ import { useToast } from "@/components/ui/use-toast";
 import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 
-// Make sure we have the same questions as DisplayScreen
 const sampleQuestions = [
   {
     id: '1',
     text: 'Which planet is known as the Red Planet?',
     options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
     correctAnswer: 'Mars',
-    timeLimit: gameSettings.questionDuration, // Use common settings
+    timeLimit: gameSettings.questionDuration,
   },
   {
     id: '2',
@@ -72,6 +70,7 @@ const PlayerGame = () => {
   const [lastGameStateTimestamp, setLastGameStateTimestamp] = useState<number>(0);
   const [currentGameState, setCurrentGameState] = useState<string>('question');
   const [failedSyncAttempts, setFailedSyncAttempts] = useState(0);
+  const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -80,7 +79,6 @@ const PlayerGame = () => {
   console.log('Player screen - answer revealed:', isAnswerRevealed);
   console.log('Player screen - current game state:', currentGameState);
   
-  // Check if player has joined a game
   useEffect(() => {
     const storedName = sessionStorage.getItem('playerName');
     const storedGameId = sessionStorage.getItem('gameId');
@@ -99,7 +97,6 @@ const PlayerGame = () => {
     setPlayerName(storedName);
     setGameId(storedGameId);
     
-    // Notify the display about this player by updating localStorage
     localStorage.setItem('playerJoined', JSON.stringify({ 
       name: storedName, 
       gameId: storedGameId, 
@@ -109,7 +106,6 @@ const PlayerGame = () => {
     console.log('Notified display about player:', storedName);
   }, [navigate, toast]);
   
-  // Listen for game state changes from the display screen
   useEffect(() => {
     const checkGameState = () => {
       const storedGameState = localStorage.getItem('gameState');
@@ -118,30 +114,22 @@ const PlayerGame = () => {
           const parsedState = JSON.parse(storedGameState);
           console.log('Checking game state:', parsedState);
           
-          // Only process if this is a newer state update (check timestamp)
           if (!parsedState.timestamp || parsedState.timestamp <= lastGameStateTimestamp) {
             console.log('Game state is not newer, ignoring');
             setFailedSyncAttempts(prev => prev + 1);
             
-            // If we've failed to sync many times, force a refresh of the timestamp
             if (failedSyncAttempts > 20) {
               console.log('Forcing state sync after multiple failed attempts');
-              setLastGameStateTimestamp(0); // Reset to force sync on next check
+              setLastGameStateTimestamp(0);
               setFailedSyncAttempts(0);
             }
             return;
           }
           
-          // Reset failed sync counter on successful sync
           setFailedSyncAttempts(0);
-          
-          // Update the last processed timestamp
           setLastGameStateTimestamp(parsedState.timestamp);
-          
-          // Store the current game state
           setCurrentGameState(parsedState.state);
           
-          // Check if we need to update the question index or state
           if (parsedState.state === 'intermission') {
             console.log('Display is showing intermission, waiting...');
             setSelectedAnswer(null);
@@ -150,7 +138,6 @@ const PlayerGame = () => {
             return;
           }
           
-          // If the question index has changed, update to the new question
           if (parsedState.questionIndex !== questionIndex) {
             console.log('Question index changed:', parsedState.questionIndex);
             setQuestionIndex(parsedState.questionIndex);
@@ -160,7 +147,6 @@ const PlayerGame = () => {
             setAnsweredCorrectly(null);
             setIsAnswerRevealed(parsedState.state === 'answer');
           } else {
-            // If only the state has changed (e.g., from question to answer)
             if (parsedState.state === 'answer' && !isAnswerRevealed) {
               console.log('Changing to answer state');
               setIsAnswerRevealed(true);
@@ -172,7 +158,6 @@ const PlayerGame = () => {
               setSelectedAnswer(null);
               setAnsweredCorrectly(null);
             } else if (parsedState.state === 'question' && !isAnswerRevealed) {
-              // Just sync the timer if we're still in question state
               setTimeLeft(parsedState.timeLeft);
             }
           }
@@ -185,21 +170,18 @@ const PlayerGame = () => {
       }
     };
     
-    // Check more frequently for better synchronization
     const intervalId = setInterval(checkGameState, 300);
     return () => clearInterval(intervalId);
   }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts]);
   
-  // Handle answer selection
   useEffect(() => {
-    if (selectedAnswer !== null && !isAnswerRevealed) {
+    if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0) {
       const timerId = setTimeout(() => {
         if (selectedAnswer === currentQuestion.correctAnswer) {
           const pointsEarned = 100 + (timeLeft * 10);
           setScore(prevScore => prevScore + pointsEarned);
           setAnsweredCorrectly(true);
           
-          // Store score in localStorage for the display screen to pick up
           const playerScoreData = {
             name: playerName,
             score: score + pointsEarned,
@@ -242,7 +224,6 @@ const PlayerGame = () => {
     return 'bg-red-500';
   };
   
-  // Force sync with game state button (for development)
   const handleForceSync = () => {
     setLastGameStateTimestamp(0);
     toast({
@@ -251,7 +232,6 @@ const PlayerGame = () => {
     });
   };
   
-  // Show intermission content when display is in intermission state
   if (currentGameState === 'intermission') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">

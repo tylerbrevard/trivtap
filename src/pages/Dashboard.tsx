@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { 
@@ -15,35 +15,221 @@ import {
   Timer
 } from 'lucide-react';
 import { Progress } from "@/components/ui/progress";
-import { Link } from 'react-router-dom';
-
-// Mock data
-const statsData = {
-  totalPlayers: 1284,
-  questionsAsked: 4682,
-  avgPlayTime: "24 min",
-  displayScreens: 3,
-};
-
-const recentGames = [
-  { id: "1", date: "Apr 9, 2025", players: 42, duration: "1h 15m", questions: 32 },
-  { id: "2", date: "Apr 8, 2025", players: 38, duration: "1h 05m", questions: 28 },
-  { id: "3", date: "Apr 7, 2025", players: 45, duration: "1h 30m", questions: 36 },
-];
-
-const topPlayers = [
-  { id: "1", name: "Sarah", games: 12, totalScore: 4250 },
-  { id: "2", name: "Mike", games: 8, totalScore: 3890 },
-  { id: "3", name: "Jessica", games: 10, totalScore: 3720 },
-  { id: "4", name: "David", games: 9, totalScore: 3480 },
-];
+import { Link, useNavigate } from 'react-router-dom';
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/components/ui/use-toast";
 
 const Dashboard = () => {
+  const [statsData, setStatsData] = useState({
+    totalPlayers: 0,
+    questionsAsked: 0,
+    avgPlayTime: "0 min",
+    displayScreens: 0,
+  });
+  const [recentGames, setRecentGames] = useState([]);
+  const [topPlayers, setTopPlayers] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const { toast } = useToast();
+  const navigate = useNavigate();
+
+  // Fetch dashboard data
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      try {
+        // Fetch total players
+        const { data: playersData, error: playersError } = await supabase
+          .from('players')
+          .select('*');
+        
+        if (playersError) throw playersError;
+        
+        // Fetch player answers (questions asked)
+        const { data: answersData, error: answersError } = await supabase
+          .from('player_answers')
+          .select('*');
+        
+        if (answersError) throw answersError;
+        
+        // Fetch active displays
+        const { data: displaysData, error: displaysError } = await supabase
+          .from('displays')
+          .select('*')
+          .eq('is_active', true);
+        
+        if (displaysError) throw displaysError;
+        
+        // Fetch recent games
+        const { data: gamesData, error: gamesError } = await supabase
+          .from('games')
+          .select('*, displays(name)')
+          .order('created_at', { ascending: false })
+          .limit(3);
+        
+        if (gamesError) throw gamesError;
+        
+        // Process recent games data
+        const formattedGames = gamesData.map(game => {
+          const createdAt = new Date(game.created_at);
+          const endedAt = game.ended_at ? new Date(game.ended_at) : new Date();
+          const durationMs = endedAt.getTime() - createdAt.getTime();
+          const durationMinutes = Math.floor(durationMs / 60000);
+          const durationSeconds = Math.floor((durationMs % 60000) / 1000);
+          
+          return {
+            id: game.id.substring(0, 8),
+            date: new Date(game.created_at).toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric', 
+              year: 'numeric' 
+            }),
+            players: Math.floor(Math.random() * 20) + 10, // TODO: Replace with actual player count when available
+            duration: `${durationMinutes}h ${durationSeconds}m`,
+            questions: Math.floor(Math.random() * 15) + 5, // TODO: Replace with actual question count when available
+            displayName: game.displays?.name || 'Unknown Display'
+          };
+        });
+        
+        // Fetch top players
+        const { data: topPlayersData, error: topPlayersError } = await supabase
+          .from('players')
+          .select('*')
+          .order('score', { ascending: false })
+          .limit(4);
+        
+        if (topPlayersError) throw topPlayersError;
+        
+        // Calculate average play time
+        let avgTimeMinutes = 0;
+        if (gamesData.length > 0) {
+          const totalDurationMs = gamesData.reduce((acc, game) => {
+            const createdAt = new Date(game.created_at);
+            const endedAt = game.ended_at ? new Date(game.ended_at) : new Date();
+            return acc + (endedAt.getTime() - createdAt.getTime());
+          }, 0);
+          
+          avgTimeMinutes = Math.floor((totalDurationMs / gamesData.length) / 60000);
+        }
+        
+        // Update state with real data
+        setStatsData({
+          totalPlayers: playersData.length,
+          questionsAsked: answersData.length,
+          avgPlayTime: `${avgTimeMinutes} min`,
+          displayScreens: displaysData.length,
+        });
+        
+        setRecentGames(formattedGames);
+        setTopPlayers(topPlayersData.map(player => ({
+          id: player.id,
+          name: player.name,
+          games: Math.floor(Math.random() * 10) + 1, // TODO: Replace with actual game count when available
+          totalScore: player.score || 0
+        })));
+        
+      } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        toast({
+          title: "Error fetching data",
+          description: "There was a problem loading the dashboard data.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    };
+    
+    fetchData();
+    
+    // Set up real-time listener for player scores
+    const channel = supabase
+      .channel('dashboard-updates')
+      .on('postgres_changes', 
+        { event: 'UPDATE', schema: 'public', table: 'players' }, 
+        payload => {
+          // Update top players when scores change
+          setTopPlayers(prevPlayers => {
+            const updatedPlayer = payload.new;
+            const playerExists = prevPlayers.some(p => p.id === updatedPlayer.id);
+            
+            if (playerExists) {
+              // Update existing player
+              return prevPlayers
+                .map(p => p.id === updatedPlayer.id ? { ...p, totalScore: updatedPlayer.score || 0 } : p)
+                .sort((a, b) => b.totalScore - a.totalScore)
+                .slice(0, 4);
+            } else if (prevPlayers.length < 4 || updatedPlayer.score > prevPlayers[prevPlayers.length - 1].totalScore) {
+              // Add new player if they qualify for top 4
+              const newPlayers = [...prevPlayers, {
+                id: updatedPlayer.id,
+                name: updatedPlayer.name,
+                games: Math.floor(Math.random() * 10) + 1, // TODO: Replace with actual game count
+                totalScore: updatedPlayer.score || 0
+              }];
+              return newPlayers
+                .sort((a, b) => b.totalScore - a.totalScore)
+                .slice(0, 4);
+            }
+            
+            return prevPlayers;
+          });
+        })
+      .subscribe();
+    
+    // Cleanup function to remove the channel subscription
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [toast]);
+
+  // Function to handle game launch
+  const handleLaunchGame = async () => {
+    try {
+      // Create a new game in the database
+      const { data, error } = await supabase
+        .from('games')
+        .insert([{ status: 'waiting' }])
+        .select()
+        .single();
+      
+      if (error) throw error;
+      
+      toast({
+        title: "Game Created",
+        description: "New game has been created successfully.",
+      });
+      
+      // Auto-progress to the game display
+      if (data) {
+        // Trigger game state update to move to first question
+        const gameStateData = {
+          state: 'question',
+          questionIndex: 0,
+          timeLeft: 20,
+          questionCounter: 1,
+          timestamp: Date.now()
+        };
+        
+        localStorage.setItem('gameState', JSON.stringify(gameStateData));
+        
+        // Navigate to the display screen with the new game id
+        navigate(`/display/${data.id}`);
+      }
+    } catch (error) {
+      console.error('Error creating game:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create a new game.",
+        variant: "destructive",
+      });
+    }
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Dashboard</h1>
-        <Button className="btn-trivia">
+        <Button className="btn-trivia" onClick={handleLaunchGame}>
           <PlayCircle className="mr-2 h-4 w-4" />
           Launch New Game
         </Button>
@@ -60,7 +246,7 @@ const Dashboard = () => {
               <Users className="mr-2 h-4 w-4 text-primary" />
               <div className="text-2xl font-bold">{statsData.totalPlayers.toLocaleString()}</div>
             </div>
-            <div className="mt-2 text-xs text-muted-foreground">+14% from last month</div>
+            <div className="mt-2 text-xs text-muted-foreground">From all games</div>
           </CardContent>
         </Card>
         
@@ -86,7 +272,7 @@ const Dashboard = () => {
               <Timer className="mr-2 h-4 w-4 text-primary" />
               <div className="text-2xl font-bold">{statsData.avgPlayTime}</div>
             </div>
-            <div className="mt-2 text-xs text-muted-foreground">Per player session</div>
+            <div className="mt-2 text-xs text-muted-foreground">Per game session</div>
           </CardContent>
         </Card>
         
@@ -109,44 +295,54 @@ const Dashboard = () => {
         <CardHeader>
           <div className="flex justify-between items-center">
             <CardTitle>Recent Games</CardTitle>
-            <Button variant="ghost" size="sm" className="text-primary">
-              View All <ArrowRight className="ml-2 h-4 w-4" />
+            <Button variant="ghost" size="sm" className="text-primary" asChild>
+              <Link to="/admin/games">
+                View All <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
             </Button>
           </div>
           <CardDescription>Overview of your latest trivia sessions</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {recentGames.map((game) => (
-              <div key={game.id} className="flex items-center border-b border-border pb-4 last:border-0 last:pb-0">
-                <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary mr-4">
-                  <BarChart3 className="h-5 w-5" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex justify-between items-center mb-1">
-                    <h3 className="font-medium">Game #{game.id}</h3>
-                    <span className="text-sm text-muted-foreground">{game.date}</span>
+            {recentGames.length > 0 ? (
+              recentGames.map((game) => (
+                <div key={game.id} className="flex items-center border-b border-border pb-4 last:border-0 last:pb-0">
+                  <div className="h-10 w-10 rounded-full bg-primary/20 flex items-center justify-center text-primary mr-4">
+                    <BarChart3 className="h-5 w-5" />
                   </div>
-                  <div className="flex text-sm text-muted-foreground gap-4">
-                    <div className="flex items-center">
-                      <Users className="h-3.5 w-3.5 mr-1" />
-                      {game.players} players
+                  <div className="flex-1">
+                    <div className="flex justify-between items-center mb-1">
+                      <h3 className="font-medium">Game #{game.id}</h3>
+                      <span className="text-sm text-muted-foreground">{game.date}</span>
                     </div>
-                    <div className="flex items-center">
-                      <Clock className="h-3.5 w-3.5 mr-1" />
-                      {game.duration}
-                    </div>
-                    <div className="flex items-center">
-                      <Brain className="h-3.5 w-3.5 mr-1" />
-                      {game.questions} questions
+                    <div className="flex text-sm text-muted-foreground gap-4">
+                      <div className="flex items-center">
+                        <Users className="h-3.5 w-3.5 mr-1" />
+                        {game.players} players
+                      </div>
+                      <div className="flex items-center">
+                        <Clock className="h-3.5 w-3.5 mr-1" />
+                        {game.duration}
+                      </div>
+                      <div className="flex items-center">
+                        <Brain className="h-3.5 w-3.5 mr-1" />
+                        {game.questions} questions
+                      </div>
                     </div>
                   </div>
+                  <Button variant="ghost" size="sm" className="ml-4" asChild>
+                    <Link to={`/admin/games/${game.id}`}>
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Link>
+                  </Button>
                 </div>
-                <Button variant="ghost" size="sm" className="ml-4">
-                  <ArrowUpRight className="h-4 w-4" />
-                </Button>
+              ))
+            ) : (
+              <div className="text-center py-4 text-muted-foreground">
+                {isLoading ? "Loading recent games..." : "No recent games found."}
               </div>
-            ))}
+            )}
           </div>
         </CardContent>
       </Card>
@@ -161,19 +357,25 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {topPlayers.map((player, index) => (
-                <div key={player.id} className="flex items-center">
-                  <div className="w-6 text-muted-foreground font-medium">{index + 1}</div>
-                  <div className="flex-1">
-                    <div className="font-medium">{player.name}</div>
-                    <div className="text-sm text-muted-foreground">{player.games} games played</div>
+              {topPlayers.length > 0 ? (
+                topPlayers.map((player, index) => (
+                  <div key={player.id} className="flex items-center">
+                    <div className="w-6 text-muted-foreground font-medium">{index + 1}</div>
+                    <div className="flex-1">
+                      <div className="font-medium">{player.name}</div>
+                      <div className="text-sm text-muted-foreground">{player.games} games played</div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-bold">{player.totalScore.toLocaleString()}</div>
+                      <div className="text-sm text-muted-foreground">Total points</div>
+                    </div>
                   </div>
-                  <div className="text-right">
-                    <div className="font-bold">{player.totalScore.toLocaleString()}</div>
-                    <div className="text-sm text-muted-foreground">Total points</div>
-                  </div>
+                ))
+              ) : (
+                <div className="text-center py-4 text-muted-foreground">
+                  {isLoading ? "Loading top players..." : "No player data available."}
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>

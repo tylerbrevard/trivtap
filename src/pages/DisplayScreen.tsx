@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { gameSettings } from '@/utils/gameSettings';
+import { useGameSync } from '@/hooks/useGameSync';
 
 const mockQuestions = [
   {
@@ -61,23 +62,35 @@ const mockQuestions = [
 
 const DisplayScreen = () => {
   const { id } = useParams();
-  const [currentState, setCurrentState] = useState<'question' | 'answer' | 'leaderboard' | 'join' | 'intermission'>('join');
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [timeLeft, setTimeLeft] = useState(gameSettings.questionDuration);
   const [players, setPlayers] = useState<any[]>([]);
   const [gameCode, setGameCode] = useState('');
-  const [questionCounter, setQuestionCounter] = useState(1);
   const [hasGameStarted, setHasGameStarted] = useState(false);
-  const [lastStateChange, setLastStateChange] = useState<number>(Date.now());
-  const [forcePause, setForcePause] = useState(false);
   const { toast } = useToast();
   
+  const { 
+    currentState, 
+    questionIndex, 
+    questionCounter,
+    timeLeft,
+    forcePause,
+    updateGameState,
+    moveToNextQuestion,
+    togglePause,
+    setCurrentState,
+    setTimeLeft
+  } = useGameSync({
+    totalQuestions: mockQuestions.length,
+    initialQuestionIndex: 0,
+    initialQuestionCounter: 1,
+    autoSync: true
+  });
+  
   console.log('Current state:', currentState);
-  console.log('Current question index:', currentQuestionIndex);
+  console.log('Current question index:', questionIndex);
   console.log('Available questions:', mockQuestions.length);
   console.log('Question counter:', questionCounter);
   console.log('Game settings:', gameSettings);
-  
+
   useEffect(() => {
     const storedGameCode = localStorage.getItem('persistentGameCode');
     
@@ -175,19 +188,6 @@ const DisplayScreen = () => {
     };
   }, [players, toast, gameCode]);
   
-  const updateGameState = useCallback((state: 'question' | 'answer' | 'intermission', questionIndex: number, time: number, qCounter: number) => {
-    const gameState = {
-      state: state,
-      questionIndex: questionIndex,
-      timeLeft: time,
-      questionCounter: qCounter,
-      timestamp: Date.now()
-    };
-    
-    console.log('Updating game state:', gameState);
-    localStorage.setItem('gameState', JSON.stringify(gameState));
-  }, []);
-  
   useEffect(() => {
     let timerId: number | undefined;
     
@@ -196,10 +196,9 @@ const DisplayScreen = () => {
         setCurrentState('question');
         setTimeLeft(gameSettings.questionDuration);
         setHasGameStarted(true);
-        setLastStateChange(Date.now());
         console.log('Starting game with first question');
         
-        updateGameState('question', currentQuestionIndex, gameSettings.questionDuration, questionCounter);
+        updateGameState('question', questionIndex, gameSettings.questionDuration, questionCounter);
       }, 10000);
       
       return () => {
@@ -210,117 +209,13 @@ const DisplayScreen = () => {
     return () => {
       if (timerId) clearTimeout(timerId);
     };
-  }, [currentState, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted]);
-  
-  useEffect(() => {
-    let timerId: number | undefined;
-    
-    if (forcePause) {
-      console.log('Game is paused. Skipping timer update.');
-      return () => {
-        if (timerId) clearTimeout(timerId);
-      };
-    }
-    
-    if (currentState === 'question' && hasGameStarted) {
-      if (timeLeft > 0) {
-        timerId = window.setTimeout(() => {
-          const newTimeLeft = timeLeft - 1;
-          setTimeLeft(newTimeLeft);
-          
-          updateGameState('question', currentQuestionIndex, newTimeLeft, questionCounter);
-        }, 1000);
-        
-        return () => {
-          if (timerId) clearTimeout(timerId);
-        };
-      } else {
-        console.log('Time out, revealing answer');
-        setCurrentState('answer');
-        setLastStateChange(Date.now());
-        
-        updateGameState('answer', currentQuestionIndex, 0, questionCounter);
-        
-        timerId = window.setTimeout(() => {
-          const shouldShowIntermission = questionCounter > 0 && questionCounter % gameSettings.intermissionFrequency === 0;
-          const shouldShowLeaderboard = questionCounter > 0 && questionCounter % gameSettings.leaderboardFrequency === 0 && !shouldShowIntermission;
-          
-          console.log(`Question counter: ${questionCounter}, Intermission frequency: ${gameSettings.intermissionFrequency}`);
-          console.log(`Should show intermission: ${shouldShowIntermission}, Should show leaderboard: ${shouldShowLeaderboard}`);
-          
-          if (shouldShowIntermission) {
-            console.log('Showing intermission');
-            setCurrentState('intermission');
-            setLastStateChange(Date.now());
-            
-            updateGameState('intermission', currentQuestionIndex, 0, questionCounter);
-            
-            timerId = window.setTimeout(() => {
-              moveToNextQuestion();
-            }, gameSettings.intermissionDuration * 1000);
-          } else if (shouldShowLeaderboard) {
-            setCurrentState('leaderboard');
-            setLastStateChange(Date.now());
-            console.log('Showing leaderboard');
-            
-            timerId = window.setTimeout(() => {
-              moveToNextQuestion();
-            }, 10000);
-          } else {
-            moveToNextQuestion();
-          }
-        }, gameSettings.answerRevealDuration * 1000);
-        
-        return () => {
-          if (timerId) clearTimeout(timerId);
-        };
-      }
-    }
-    
-    if (currentState === 'intermission' && gameSettings.autoProgress) {
-      const timeoutId = window.setTimeout(() => {
-        moveToNextQuestion();
-      }, gameSettings.intermissionDuration * 1000);
-      
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    }
-    
-    if (currentState === 'leaderboard' && gameSettings.autoProgress) {
-      const timeoutId = window.setTimeout(() => {
-        moveToNextQuestion();
-      }, 10000);
-      
-      return () => {
-        clearTimeout(timeoutId);
-      };
-    }
-    
-    return () => {
-      if (timerId) clearTimeout(timerId);
-    };
-  }, [currentState, timeLeft, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted, forcePause]);
-  
-  const moveToNextQuestion = useCallback(() => {
-    const nextQuestionIndex = (currentQuestionIndex + 1) % mockQuestions.length;
-    console.log(`Moving to next question: ${nextQuestionIndex} from ${currentQuestionIndex}`);
-    
-    setCurrentQuestionIndex(nextQuestionIndex);
-    setQuestionCounter(prev => prev + 1);
-    setTimeLeft(gameSettings.questionDuration);
-    setCurrentState('question');
-    setLastStateChange(Date.now());
-    
-    updateGameState('question', nextQuestionIndex, gameSettings.questionDuration, questionCounter + 1);
-  }, [currentQuestionIndex, questionCounter, updateGameState]);
+  }, [currentState, questionIndex, questionCounter, updateGameState, hasGameStarted, setCurrentState, setTimeLeft]);
   
   const handleStartGameNow = () => {
     setCurrentState('question');
     setTimeLeft(gameSettings.questionDuration);
     setHasGameStarted(true);
-    setLastStateChange(Date.now());
-    updateGameState('question', currentQuestionIndex, gameSettings.questionDuration, questionCounter);
+    updateGameState('question', questionIndex, gameSettings.questionDuration, questionCounter);
   };
   
   const handleManualNextQuestion = () => {
@@ -329,11 +224,7 @@ const DisplayScreen = () => {
     }
   };
   
-  const togglePauseGame = () => {
-    setForcePause(prev => !prev);
-  };
-  
-  const currentQuestion = mockQuestions[currentQuestionIndex];
+  const currentQuestion = mockQuestions[questionIndex];
   
   const getTimerColor = () => {
     if (timeLeft > gameSettings.questionDuration * 0.6) return 'bg-green-500';
