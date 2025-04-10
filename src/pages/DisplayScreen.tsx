@@ -287,7 +287,7 @@ const DisplayScreen = () => {
                     <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
                       Force Next Question
                     </Button>
-                    <Button variant="outline" size="sm" onClick={togglePauseGame}>
+                    <Button variant="outline" size="sm" onClick={togglePause}>
                       {forcePause ? 'Resume Game' : 'Pause Game'}
                     </Button>
                   </div>
@@ -345,7 +345,7 @@ const DisplayScreen = () => {
                   <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
                     Force Next Question
                   </Button>
-                  <Button variant="outline" size="sm" onClick={togglePauseGame}>
+                  <Button variant="outline" size="sm" onClick={togglePause}>
                     {forcePause ? 'Resume Game' : 'Pause Game'}
                   </Button>
                 </div>
