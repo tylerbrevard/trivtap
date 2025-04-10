@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ const PlayerGame = () => {
   const [score, setScore] = useState(0);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
+  const [gameState, setGameState] = useState(null);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -58,6 +60,29 @@ const PlayerGame = () => {
     setPlayerName(storedName);
     setGameId(storedGameId);
   }, [navigate, toast]);
+  
+  // Check for game state changes from the display screen
+  useEffect(() => {
+    const checkGameState = () => {
+      const storedGameState = localStorage.getItem('gameState');
+      if (storedGameState) {
+        const parsedState = JSON.parse(storedGameState);
+        if (parsedState.questionIndex !== questionIndex) {
+          // Synchronize with the display's current question
+          setQuestionIndex(parsedState.questionIndex);
+          setCurrentQuestion(sampleQuestions[parsedState.questionIndex]);
+          setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
+          setSelectedAnswer(null);
+          setIsAnswerRevealed(parsedState.state === 'answer');
+          setAnsweredCorrectly(null);
+        }
+      }
+    };
+    
+    // Check every second for game state updates
+    const intervalId = setInterval(checkGameState, 1000);
+    return () => clearInterval(intervalId);
+  }, [questionIndex]);
   
   useEffect(() => {
     setCurrentQuestion(sampleQuestions[questionIndex]);
@@ -109,13 +134,13 @@ const PlayerGame = () => {
           });
         }
         
-        const nextQuestionIndex = (questionIndex + 1) % sampleQuestions.length;
-        setQuestionIndex(nextQuestionIndex);
+        // Don't automatically move to next question - wait for the display screen
+        // The checkGameState interval will detect when the display changes questions
       }, 500);
       
       return () => clearTimeout(timerId);
     }
-  }, [timeLeft, selectedAnswer, currentQuestion, toast, questionIndex]);
+  }, [timeLeft, selectedAnswer, currentQuestion, toast]);
   
   const handleSelectAnswer = (answer: string) => {
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {

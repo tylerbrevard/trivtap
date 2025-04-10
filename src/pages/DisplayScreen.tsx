@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -94,6 +95,7 @@ const DisplayScreen = () => {
     let timerId: number | undefined;
     
     if (currentState === 'join') {
+      // The join screen will show for 10 seconds before transitioning to the first question
       timerId = window.setTimeout(() => {
         setCurrentState('question');
         setTimeLeft(mockSettings.questionDuration);
@@ -105,7 +107,9 @@ const DisplayScreen = () => {
           setTimeLeft(timeLeft - 1);
         }, 1000);
       } else {
+        // When time runs out, show the answer state
         setCurrentState('answer');
+        // After the answer reveal duration, move to the next question or leaderboard
         timerId = window.setTimeout(() => {
           if (questionCounter % 10 === 0) {
             setCurrentState('leaderboard');
@@ -134,6 +138,18 @@ const DisplayScreen = () => {
   };
   
   const currentQuestion = mockQuestions[currentQuestionIndex];
+  
+  // Add this function to synchronize game state with local storage
+  useEffect(() => {
+    if (currentState === 'question' || currentState === 'answer') {
+      localStorage.setItem('gameState', JSON.stringify({
+        state: currentState,
+        questionIndex: currentQuestionIndex,
+        timeLeft: timeLeft,
+        questionCounter: questionCounter
+      }));
+    }
+  }, [currentState, currentQuestionIndex, timeLeft, questionCounter]);
   
   const renderContent = () => {
     switch (currentState) {
