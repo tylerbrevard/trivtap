@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
+import { gameSettings, updateGameSetting, GameSettings } from '@/utils/gameSettings';
 
 // Mock slides data
 const slides = [
