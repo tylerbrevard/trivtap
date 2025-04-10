@@ -22,20 +22,22 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 
 const Settings = () => {
   const [settings, setSettings] = useState({ ...gameSettings });
   const { toast } = useToast();
 
-  // Load settings on component mount
+  // Load settings on component mount and when gameSettings change
   useEffect(() => {
     setSettings({ ...gameSettings });
   }, []);
 
-  const handleSettingChange = (key: keyof typeof gameSettings, value: number) => {
+  const handleSettingChange = (key: keyof typeof gameSettings, value: number | boolean) => {
     setSettings(prev => ({ ...prev, [key]: value }));
+    // Immediately persist the setting
+    updateGameSetting(key, value);
   };
 
   const handleSaveChanges = () => {

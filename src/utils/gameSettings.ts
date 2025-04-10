@@ -8,7 +8,8 @@ export const gameSettings = {
   intermissionFrequency: 10, // show intermission after every 10 questions
   intermissionDuration: 8, // seconds
   leaderboardFrequency: 10, // show leaderboard after every 10 questions
-  autoProgress: true, // automatically progress through questions (new setting)
+  autoProgress: true, // automatically progress through questions
+  showIntermission: true, // show intermission slides (new setting)
 };
 
 // Helper function to update a specific setting

@@ -13,7 +13,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 
 // Mock slides data
@@ -49,10 +49,15 @@ const slides = [
   },
 ];
 
+// Add showIntermission setting to gameSettings if it doesn't exist
+if (!('showIntermission' in gameSettings)) {
+  gameSettings.showIntermission = true;
+}
+
 const Intermission = () => {
   const [localSlides, setLocalSlides] = useState(slides);
   const [settings, setSettings] = useState({
-    showIntermission: true,
+    showIntermission: gameSettings.showIntermission,
     showAfterEvery: gameSettings.intermissionFrequency,
     slideDuration: gameSettings.intermissionDuration
   });
@@ -61,7 +66,7 @@ const Intermission = () => {
   // Load settings on component mount
   useEffect(() => {
     setSettings({
-      showIntermission: true, // This would come from a database in a real app
+      showIntermission: gameSettings.showIntermission,
       showAfterEvery: gameSettings.intermissionFrequency,
       slideDuration: gameSettings.intermissionDuration
     });
@@ -84,6 +89,7 @@ const Intermission = () => {
   // Handle settings changes
   const handleToggleIntermission = (checked: boolean) => {
     setSettings(prev => ({ ...prev, showIntermission: checked }));
+    updateGameSetting('showIntermission', checked);
     
     toast({
       title: "Setting Updated",
@@ -120,7 +126,8 @@ const Intermission = () => {
   };
 
   const handleSaveSettings = () => {
-    // In a real app, this would save all settings to a database
+    // Save all settings to gameSettings and localStorage
+    updateGameSetting('showIntermission', settings.showIntermission);
     updateGameSetting('intermissionFrequency', settings.showAfterEvery);
     updateGameSetting('intermissionDuration', settings.slideDuration);
     
