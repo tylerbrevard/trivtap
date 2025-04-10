@@ -73,15 +73,20 @@ const DisplayScreen = () => {
         .subscribe();
         
       return () => {
-        supabase.removeChannel(channel);
+        channel.unsubscribe();
       };
     };
     
-    const cleanup = setupPlayerSubscription();
+    const setupSubscription = setupPlayerSubscription();
+    
     return () => {
-      if (cleanup && typeof cleanup === 'function') {
-        cleanup();
-      }
+      setupSubscription.then(cleanup => {
+        if (cleanup && typeof cleanup === 'function') {
+          cleanup();
+        }
+      }).catch(error => {
+        console.error("Error cleaning up subscription:", error);
+      });
     };
   }, [toast]);
   
