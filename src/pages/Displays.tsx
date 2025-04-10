@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -85,6 +84,16 @@ const Displays = () => {
     });
   };
   
+  const handleLaunchDisplay = (displayId: string) => {
+    // Open the display in a new tab
+    window.open(`${window.location.origin}/display/${displayId}`, '_blank');
+    
+    toast({
+      title: "Display Launched",
+      description: "The display has been opened in a new tab.",
+    });
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -105,7 +114,7 @@ const Displays = () => {
                   <CardDescription>
                     ID: {display.id}
                     {display.isDefault && (
-                      <Badge className="ml-2">Default</Badge>
+                      <span className="ml-2"><Badge>Default</Badge></span>
                     )}
                   </CardDescription>
                 </div>
@@ -204,6 +213,7 @@ const Displays = () => {
               <Button 
                 className="flex-1"
                 variant={display.status === 'active' ? 'default' : 'outline'}
+                onClick={() => handleLaunchDisplay(display.id)}
               >
                 <Tv className="mr-2 h-4 w-4" />
                 Launch

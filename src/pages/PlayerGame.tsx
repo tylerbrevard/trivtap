@@ -61,11 +61,15 @@ const PlayerGame = () => {
     setPlayerName(storedName);
     setGameId(storedGameId);
     
-    // Notify the display about this player
-    const activeGameCode = sessionStorage.getItem('activeGameCode');
-    if (activeGameCode && activeGameCode === storedGameId) {
-      console.log('Game codes match, player should appear on display');
-    }
+    // Notify the display about this player by updating sessionStorage
+    // This will help the display to recognize connected players
+    localStorage.setItem('playerJoined', JSON.stringify({ 
+      name: storedName, 
+      gameId: storedGameId, 
+      timestamp: Date.now() 
+    }));
+    
+    console.log('Notified display about player:', storedName);
   }, [navigate, toast]);
   
   // Listen for game state changes from the display screen
@@ -91,6 +95,11 @@ const PlayerGame = () => {
             setSelectedAnswer(null);
             setIsAnswerRevealed(parsedState.state === 'answer');
             setAnsweredCorrectly(null);
+            
+            // Force re-render for question navigation
+            if (parsedState.questionIndex !== questionIndex) {
+              console.log('Question index changed from display:', parsedState.questionIndex);
+            }
           } else if (parsedState.state === 'question' && !isAnswerRevealed) {
             // Just sync the timer
             setTimeLeft(parsedState.timeLeft);
@@ -106,16 +115,6 @@ const PlayerGame = () => {
     return () => clearInterval(intervalId);
   }, [questionIndex, isAnswerRevealed]);
   
-  // Update current question when question index changes
-  useEffect(() => {
-    console.log('Question index changed to:', questionIndex);
-    setCurrentQuestion(sampleQuestions[questionIndex]);
-    setTimeLeft(sampleQuestions[questionIndex].timeLimit);
-    setSelectedAnswer(null);
-    setIsAnswerRevealed(false);
-    setAnsweredCorrectly(null);
-  }, [questionIndex]);
-  
   // Handle answer selection
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed) {
@@ -125,7 +124,16 @@ const PlayerGame = () => {
           setScore(prevScore => prevScore + pointsEarned);
           setAnsweredCorrectly(true);
           
-          console.log('Correct answer!', 'Points earned:', pointsEarned);
+          // Store score in localStorage for the display screen to pick up
+          const playerScoreData = {
+            name: playerName,
+            score: score + pointsEarned,
+            gameId: gameId,
+            timestamp: Date.now()
+          };
+          localStorage.setItem(`playerScore_${playerName}`, JSON.stringify(playerScoreData));
+          
+          console.log('Correct answer!', 'Points earned:', pointsEarned, 'Updated player score data:', playerScoreData);
           toast({
             title: "Correct!",
             description: `+${pointsEarned} points`,
@@ -140,13 +148,11 @@ const PlayerGame = () => {
             variant: "default",
           });
         }
-        
-        // Wait for the display screen to change the question
       }, 500);
       
       return () => clearTimeout(timerId);
     }
-  }, [selectedAnswer, currentQuestion, toast, timeLeft]);
+  }, [selectedAnswer, currentQuestion, toast, timeLeft, playerName, gameId, score]);
   
   const handleSelectAnswer = (answer: string) => {
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
