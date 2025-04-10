@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 
+// Make sure we have the same questions as DisplayScreen
 const sampleQuestions = [
   {
     id: '1',
@@ -26,6 +27,34 @@ const sampleQuestions = [
     options: ['1943', '1944', '1945', '1946'],
     correctAnswer: '1945',
     timeLimit: 20, // seconds
+  },
+  {
+    id: '4',
+    text: 'Which of these elements has the chemical symbol \'Au\'?',
+    options: ['Silver', 'Gold', 'Aluminum', 'Argon'],
+    correctAnswer: 'Gold',
+    timeLimit: 20, // seconds
+  },
+  {
+    id: '5',
+    text: 'What is the capital city of Australia?',
+    options: ['Sydney', 'Melbourne', 'Canberra', 'Perth'],
+    correctAnswer: 'Canberra',
+    timeLimit: 20, // seconds
+  },
+  {
+    id: '6',
+    text: 'Who wrote the novel \'Pride and Prejudice\'?',
+    options: ['Jane Austen', 'Charles Dickens', 'Emily Brontë', 'F. Scott Fitzgerald'],
+    correctAnswer: 'Jane Austen',
+    timeLimit: 20, // seconds
+  },
+  {
+    id: '7',
+    text: 'Which of these is NOT a programming language?',
+    options: ['Python', 'Java', 'Cougar', 'Ruby'],
+    correctAnswer: 'Cougar',
+    timeLimit: 20, // seconds
   }
 ];
 
@@ -42,6 +71,10 @@ const PlayerGame = () => {
   const [lastGameStateTimestamp, setLastGameStateTimestamp] = useState<number>(0);
   const { toast } = useToast();
   const navigate = useNavigate();
+  
+  console.log('Player screen - current question index:', questionIndex);
+  console.log('Player screen - current question:', currentQuestion.text);
+  console.log('Player screen - answer revealed:', isAnswerRevealed);
   
   // Check if player has joined a game
   useEffect(() => {
@@ -95,10 +128,19 @@ const PlayerGame = () => {
           const needsUpdate = 
             parsedState.questionIndex !== questionIndex || 
             (parsedState.state === 'answer' && !isAnswerRevealed) ||
-            (parsedState.state === 'question' && isAnswerRevealed);
+            (parsedState.state === 'question' && isAnswerRevealed) ||
+            (parsedState.state === 'intermission');
           
           if (needsUpdate) {
             console.log('Syncing with display screen', parsedState);
+            
+            // If we're in intermission, just wait for the next question state
+            if (parsedState.state === 'intermission') {
+              console.log('Display is showing intermission, waiting...');
+              setSelectedAnswer(null);
+              setAnsweredCorrectly(null);
+              return;
+            }
             
             // Synchronize with the display's current question
             setQuestionIndex(parsedState.questionIndex);

@@ -7,6 +7,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
 
+// Mock questions data - make sure we're using all of them
 const mockQuestions = [
   {
     id: '1',
@@ -28,23 +29,58 @@ const mockQuestions = [
     options: ['1943', '1944', '1945', '1946'],
     correctAnswer: '1945',
     category: 'History',
+  },
+  {
+    id: '4',
+    text: 'Which of these elements has the chemical symbol \'Au\'?',
+    options: ['Silver', 'Gold', 'Aluminum', 'Argon'],
+    correctAnswer: 'Gold',
+    category: 'Science',
+  },
+  {
+    id: '5',
+    text: 'What is the capital city of Australia?',
+    options: ['Sydney', 'Melbourne', 'Canberra', 'Perth'],
+    correctAnswer: 'Canberra',
+    category: 'Geography',
+  },
+  {
+    id: '6',
+    text: 'Who wrote the novel \'Pride and Prejudice\'?',
+    options: ['Jane Austen', 'Charles Dickens', 'Emily Brontë', 'F. Scott Fitzgerald'],
+    correctAnswer: 'Jane Austen',
+    category: 'Entertainment',
+  },
+  {
+    id: '7',
+    text: 'Which of these is NOT a programming language?',
+    options: ['Python', 'Java', 'Cougar', 'Ruby'],
+    correctAnswer: 'Cougar',
+    category: 'Science',
   }
 ];
 
 const mockSettings = {
   questionDuration: 20, // seconds
   answerRevealDuration: 5, // seconds
+  intermissionFrequency: 3, // show intermission after every 3 questions
+  intermissionDuration: 8, // seconds
 };
 
 const DisplayScreen = () => {
   const { id } = useParams();
-  const [currentState, setCurrentState] = useState<'question' | 'answer' | 'leaderboard' | 'join'>('join');
+  const [currentState, setCurrentState] = useState<'question' | 'answer' | 'leaderboard' | 'join' | 'intermission'>('join');
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(mockSettings.questionDuration);
   const [players, setPlayers] = useState<any[]>([]);
   const [gameCode, setGameCode] = useState('');
   const [questionCounter, setQuestionCounter] = useState(1);
   const { toast } = useToast();
+  
+  console.log('Current state:', currentState);
+  console.log('Current question index:', currentQuestionIndex);
+  console.log('Available questions:', mockQuestions.length);
+  console.log('Question counter:', questionCounter);
   
   // Initialize game code and set up subscriptions - only once
   useEffect(() => {
@@ -219,7 +255,7 @@ const DisplayScreen = () => {
   }, [players, toast, gameCode]);
   
   // Function to update game state in localStorage
-  const updateGameState = useCallback((state: 'question' | 'answer', questionIndex: number, time: number, qCounter: number) => {
+  const updateGameState = useCallback((state: 'question' | 'answer' | 'intermission', questionIndex: number, time: number, qCounter: number) => {
     const gameState = {
       state: state,
       questionIndex: questionIndex,
@@ -275,7 +311,16 @@ const DisplayScreen = () => {
         
         // After the answer reveal duration, move to the next question or leaderboard
         timerId = window.setTimeout(() => {
-          if (questionCounter % 10 === 0) {
+          // Check if we should show intermission
+          if (questionCounter % mockSettings.intermissionFrequency === 0) {
+            console.log('Showing intermission');
+            setCurrentState('intermission');
+            
+            // After intermission, move to the next question
+            timerId = window.setTimeout(() => {
+              moveToNextQuestion();
+            }, mockSettings.intermissionDuration * 1000);
+          } else if (questionCounter % 10 === 0) {
             setCurrentState('leaderboard');
             console.log('Showing leaderboard');
             
@@ -291,6 +336,13 @@ const DisplayScreen = () => {
           if (timerId) clearTimeout(timerId);
         };
       }
+    }
+    
+    if (currentState === 'intermission') {
+      // Intermission timer is handled above in the answer state callback
+      return () => {
+        if (timerId) clearTimeout(timerId);
+      };
     }
     
     return () => {
@@ -440,6 +492,30 @@ const DisplayScreen = () => {
             
             <div className="mt-6 text-center">
               <h3 className="text-3xl font-bold text-primary">Correct Answer: {currentQuestion.correctAnswer}</h3>
+            </div>
+          </div>
+        );
+        
+      case 'intermission':
+        return (
+          <div className="flex flex-col items-center justify-center h-full text-center">
+            <h1 className="text-4xl font-bold mb-8 text-primary">Intermission</h1>
+            <div className="card-trivia p-8 max-w-2xl w-full">
+              <h2 className="text-3xl font-bold mb-4">Welcome to Trivia Night!</h2>
+              <p className="text-xl mb-6">Every Wednesday at 8pm. Prizes for top 3 winners!</p>
+              <div className="bg-muted p-4 rounded-md">
+                <p className="text-lg font-medium">WiFi Details</p>
+                <div className="flex justify-center gap-8 mt-2">
+                  <div>
+                    <p className="text-sm text-muted-foreground">WiFi Name</p>
+                    <p className="font-medium">VenueGuest</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Password</p>
+                    <p className="font-medium">trivia2025</p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         );

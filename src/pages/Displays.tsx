@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -86,8 +87,10 @@ const Displays = () => {
   };
   
   const handleLaunchDisplay = (displayId: string) => {
-    // Open the display in a new tab with proper URL
+    // Create full URL using origin and path
     const displayUrl = `${window.location.origin}/display/${displayId}`;
+    
+    // Open the display in a new tab
     window.open(displayUrl, '_blank', 'noopener,noreferrer');
     
     console.log('Launching display at:', displayUrl);
@@ -118,7 +121,9 @@ const Displays = () => {
                   <CardDescription>
                     ID: {display.id}
                     {display.isDefault && (
-                      <Badge variant="outline" className="ml-2">Default</Badge>
+                      <span className="ml-2">
+                        <Badge variant="outline">Default</Badge>
+                      </span>
                     )}
                   </CardDescription>
                 </div>
