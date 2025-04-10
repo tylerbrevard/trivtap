@@ -76,7 +76,8 @@ const Displays = () => {
   
   const handleCopyLink = (displayId: string) => {
     // In a real app, this would copy the actual URL
-    navigator.clipboard.writeText(`${window.location.origin}/display/${displayId}`);
+    const displayUrl = `${window.location.origin}/display/${displayId}`;
+    navigator.clipboard.writeText(displayUrl);
     
     toast({
       title: "Link Copied",
@@ -85,8 +86,11 @@ const Displays = () => {
   };
   
   const handleLaunchDisplay = (displayId: string) => {
-    // Open the display in a new tab
-    window.open(`${window.location.origin}/display/${displayId}`, '_blank');
+    // Open the display in a new tab with proper URL
+    const displayUrl = `${window.location.origin}/display/${displayId}`;
+    window.open(displayUrl, '_blank', 'noopener,noreferrer');
+    
+    console.log('Launching display at:', displayUrl);
     
     toast({
       title: "Display Launched",
@@ -114,7 +118,7 @@ const Displays = () => {
                   <CardDescription>
                     ID: {display.id}
                     {display.isDefault && (
-                      <span className="ml-2"><Badge>Default</Badge></span>
+                      <Badge variant="outline" className="ml-2">Default</Badge>
                     )}
                   </CardDescription>
                 </div>

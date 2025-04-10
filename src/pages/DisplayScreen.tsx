@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { QrCode, Clock } from 'lucide-react';
@@ -46,24 +46,36 @@ const DisplayScreen = () => {
   const [questionCounter, setQuestionCounter] = useState(1);
   const { toast } = useToast();
   
-  // Initialize game code and set up subscriptions
+  // Initialize game code and set up subscriptions - only once
   useEffect(() => {
-    const generateGameCode = () => {
-      const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-      let result = '';
-      for (let i = 0; i < 4; i++) {
-        result += characters.charAt(Math.floor(Math.random() * characters.length));
-      }
-      return result;
-    };
+    // Check if a game code is already stored for this session
+    const storedGameCode = localStorage.getItem('persistentGameCode');
     
-    const code = generateGameCode();
-    setGameCode(code);
-    console.log('Generated game code:', code);
+    if (storedGameCode) {
+      console.log('Using existing game code:', storedGameCode);
+      setGameCode(storedGameCode);
+    } else {
+      // Generate a new code only if one doesn't exist
+      const generateGameCode = () => {
+        const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let result = '';
+        for (let i = 0; i < 4; i++) {
+          result += characters.charAt(Math.floor(Math.random() * characters.length));
+        }
+        return result;
+      };
+      
+      const newCode = generateGameCode();
+      setGameCode(newCode);
+      // Store in localStorage for persistence across refreshes
+      localStorage.setItem('persistentGameCode', newCode);
+      console.log('Generated new game code:', newCode);
+    }
     
-    // Initially store game session info
-    sessionStorage.setItem('activeGameCode', code);
-    localStorage.setItem('activeGameCode', code);
+    // Store game session info - use the stored or newly generated code
+    const sessionCode = storedGameCode || localStorage.getItem('persistentGameCode');
+    sessionStorage.setItem('activeGameCode', sessionCode);
+    localStorage.setItem('activeGameCode', sessionCode);
     
     const setupPlayerSubscription = async () => {
       console.log('Setting up player subscription');
@@ -102,7 +114,25 @@ const DisplayScreen = () => {
       };
     };
     
-    // Check for player joins from localStorage/sessionStorage
+    const setupSubscription = setupPlayerSubscription();
+    
+    return () => {
+      setupSubscription.then(cleanup => {
+        if (cleanup && typeof cleanup === 'function') {
+          cleanup();
+        }
+      }).catch(error => {
+        console.error("Error cleaning up subscription:", error);
+      });
+    };
+  }, []); // Empty dependency array ensures this only runs once
+  
+  // Function to check for player joins - separated to avoid dependency issues
+  useEffect(() => {
+    // Clear all player scores initially to avoid stale data
+    const playerKeys = Object.keys(localStorage).filter(key => key.startsWith('playerScore_'));
+    playerKeys.forEach(key => localStorage.removeItem(key));
+    
     const checkForPlayerJoins = () => {
       // Check for new player joins via localStorage
       const playerJoinData = localStorage.getItem('playerJoined');
@@ -183,19 +213,24 @@ const DisplayScreen = () => {
     
     const playerCheckInterval = setInterval(checkForPlayerJoins, 1000);
     
-    const setupSubscription = setupPlayerSubscription();
-    
     return () => {
       clearInterval(playerCheckInterval);
-      setupSubscription.then(cleanup => {
-        if (cleanup && typeof cleanup === 'function') {
-          cleanup();
-        }
-      }).catch(error => {
-        console.error("Error cleaning up subscription:", error);
-      });
     };
-  }, [players, toast]);
+  }, [players, toast, gameCode]);
+  
+  // Function to update game state in localStorage
+  const updateGameState = useCallback((state: 'question' | 'answer', questionIndex: number, time: number, qCounter: number) => {
+    const gameState = {
+      state: state,
+      questionIndex: questionIndex,
+      timeLeft: time,
+      questionCounter: qCounter,
+      timestamp: Date.now() // Add timestamp to ensure updates are detected
+    };
+    
+    console.log('Updating game state:', gameState);
+    localStorage.setItem('gameState', JSON.stringify(gameState));
+  }, []);
   
   // Game state management (timer, question progression)
   useEffect(() => {
@@ -211,17 +246,25 @@ const DisplayScreen = () => {
         // Store initial game state
         updateGameState('question', currentQuestionIndex, mockSettings.questionDuration, questionCounter);
       }, 10000);
+      return () => {
+        if (timerId) clearTimeout(timerId);
+      };
     } 
-    else if (currentState === 'question') {
+    
+    if (currentState === 'question') {
+      // Set up the timer to count down
       if (timeLeft > 0) {
         timerId = window.setTimeout(() => {
           const newTimeLeft = timeLeft - 1;
           setTimeLeft(newTimeLeft);
-          console.log(`Question timer: ${newTimeLeft}s remaining`);
           
           // Update game state with new time
           updateGameState('question', currentQuestionIndex, newTimeLeft, questionCounter);
         }, 1000);
+        
+        return () => {
+          if (timerId) clearTimeout(timerId);
+        };
       } else {
         // When time runs out, show the answer state
         console.log('Time out, revealing answer');
@@ -243,48 +286,34 @@ const DisplayScreen = () => {
             moveToNextQuestion();
           }
         }, mockSettings.answerRevealDuration * 1000);
+        
+        return () => {
+          if (timerId) clearTimeout(timerId);
+        };
       }
     }
     
     return () => {
-      if (timerId) {
-        clearTimeout(timerId);
-      }
+      if (timerId) clearTimeout(timerId);
     };
-  }, [currentState, timeLeft, currentQuestionIndex, questionCounter]);
+  }, [currentState, timeLeft, currentQuestionIndex, questionCounter, updateGameState]);
   
-  // Function to update game state in localStorage
-  const updateGameState = (state: 'question' | 'answer', questionIndex: number, time: number, qCounter: number) => {
-    const gameState = {
-      state: state,
-      questionIndex: questionIndex,
-      timeLeft: time,
-      questionCounter: qCounter
-    };
-    
-    console.log('Updating game state:', gameState);
-    localStorage.setItem('gameState', JSON.stringify(gameState));
-  };
-  
-  const moveToNextQuestion = () => {
-    // Ensure we're properly calculating the next question index
+  const moveToNextQuestion = useCallback(() => {
+    // Calculate the next question index
     const nextQuestionIndex = (currentQuestionIndex + 1) % mockQuestions.length;
-    console.log(`Moving to next question: ${nextQuestionIndex}`);
+    console.log(`Moving to next question: ${nextQuestionIndex} from ${currentQuestionIndex}`);
     
+    // Update state for the next question
     setCurrentQuestionIndex(nextQuestionIndex);
     setQuestionCounter(prev => prev + 1);
     setTimeLeft(mockSettings.questionDuration);
     setCurrentState('question');
     
-    // Important: Update game state for the next question with CORRECT values
+    // Update game state for the next question
     setTimeout(() => {
-      console.log('Updating game state for next question', {
-        index: nextQuestionIndex,
-        counter: questionCounter + 1
-      });
       updateGameState('question', nextQuestionIndex, mockSettings.questionDuration, questionCounter + 1);
     }, 100);
-  };
+  }, [currentQuestionIndex, questionCounter, updateGameState]);
   
   const currentQuestion = mockQuestions[currentQuestionIndex];
   
@@ -296,6 +325,11 @@ const DisplayScreen = () => {
   
   // Sort players by score for leaderboard
   const sortedPlayers = [...players].sort((a, b) => (b.score || 0) - (a.score || 0));
+  
+  // Get unique players based on name to avoid counting duplicates
+  const uniquePlayers = players.filter((player, index, self) => 
+    index === self.findIndex(p => p.name === player.name)
+  );
   
   const renderContent = () => {
     switch (currentState) {
@@ -314,9 +348,9 @@ const DisplayScreen = () => {
               </div>
             </div>
             <div className="mt-4">
-              <p className="text-xl font-medium">Players joined: {players.length}</p>
+              <p className="text-xl font-medium">Players joined: {uniquePlayers.length}</p>
               <div className="flex flex-wrap justify-center gap-2 mt-2">
-                {players.map(player => (
+                {uniquePlayers.map(player => (
                   <div key={player.id} className="bg-primary/20 px-3 py-1 rounded-full text-primary">
                     {player.name}
                   </div>
@@ -503,7 +537,7 @@ const DisplayScreen = () => {
               Display #{id || 'Default'}
             </div>
             <div className="bg-green-500/20 text-green-500 px-3 py-1 rounded-full">
-              Players: {players.length}
+              Players: {uniquePlayers.length}
             </div>
           </div>
         </div>

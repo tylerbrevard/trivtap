@@ -39,6 +39,7 @@ const PlayerGame = () => {
   const [score, setScore] = useState(0);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
+  const [lastGameStateTimestamp, setLastGameStateTimestamp] = useState<number>(0);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -61,7 +62,7 @@ const PlayerGame = () => {
     setPlayerName(storedName);
     setGameId(storedGameId);
     
-    // Notify the display about this player by updating sessionStorage
+    // Notify the display about this player by updating localStorage
     // This will help the display to recognize connected players
     localStorage.setItem('playerJoined', JSON.stringify({ 
       name: storedName, 
@@ -79,15 +80,26 @@ const PlayerGame = () => {
       if (storedGameState) {
         try {
           const parsedState = JSON.parse(storedGameState);
-          console.log('Game state update detected:', parsedState);
+          console.log('Checking game state:', parsedState);
+          
+          // Only process if this is a newer state update (check timestamp)
+          if (!parsedState.timestamp || parsedState.timestamp <= lastGameStateTimestamp) {
+            console.log('Game state is not newer, ignoring');
+            return;
+          }
+          
+          // Update the last processed timestamp
+          setLastGameStateTimestamp(parsedState.timestamp);
           
           // Check if we need to update the question index or state
-          if (
+          const needsUpdate = 
             parsedState.questionIndex !== questionIndex || 
             (parsedState.state === 'answer' && !isAnswerRevealed) ||
-            (parsedState.state === 'question' && isAnswerRevealed)
-          ) {
+            (parsedState.state === 'question' && isAnswerRevealed);
+          
+          if (needsUpdate) {
             console.log('Syncing with display screen', parsedState);
+            
             // Synchronize with the display's current question
             setQuestionIndex(parsedState.questionIndex);
             setCurrentQuestion(sampleQuestions[parsedState.questionIndex]);
@@ -113,7 +125,7 @@ const PlayerGame = () => {
     // Check more frequently for better synchronization
     const intervalId = setInterval(checkGameState, 300);
     return () => clearInterval(intervalId);
-  }, [questionIndex, isAnswerRevealed]);
+  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp]);
   
   // Handle answer selection
   useEffect(() => {
