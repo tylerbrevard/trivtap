@@ -42,6 +42,7 @@ const PlayerGame = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
+  // Check if player has joined a game
   useEffect(() => {
     const storedName = sessionStorage.getItem('playerName');
     const storedGameId = sessionStorage.getItem('gameId');
@@ -56,17 +57,26 @@ const PlayerGame = () => {
       return;
     }
     
+    console.log('Player joined:', storedName, 'Game ID:', storedGameId);
     setPlayerName(storedName);
     setGameId(storedGameId);
+    
+    // Notify the display about this player
+    const activeGameCode = sessionStorage.getItem('activeGameCode');
+    if (activeGameCode && activeGameCode === storedGameId) {
+      console.log('Game codes match, player should appear on display');
+    }
   }, [navigate, toast]);
   
-  // Check for game state changes from the display screen
+  // Listen for game state changes from the display screen
   useEffect(() => {
     const checkGameState = () => {
       const storedGameState = localStorage.getItem('gameState');
       if (storedGameState) {
         try {
           const parsedState = JSON.parse(storedGameState);
+          console.log('Game state update detected:', parsedState);
+          
           // Check if we need to update the question index or state
           if (
             parsedState.questionIndex !== questionIndex || 
@@ -91,12 +101,14 @@ const PlayerGame = () => {
       }
     };
     
-    // Check every second for game state updates
-    const intervalId = setInterval(checkGameState, 500);
+    // Check more frequently for better synchronization
+    const intervalId = setInterval(checkGameState, 300);
     return () => clearInterval(intervalId);
   }, [questionIndex, isAnswerRevealed]);
   
+  // Update current question when question index changes
   useEffect(() => {
+    console.log('Question index changed to:', questionIndex);
     setCurrentQuestion(sampleQuestions[questionIndex]);
     setTimeLeft(sampleQuestions[questionIndex].timeLimit);
     setSelectedAnswer(null);
@@ -104,6 +116,7 @@ const PlayerGame = () => {
     setAnsweredCorrectly(null);
   }, [questionIndex]);
   
+  // Handle answer selection
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed) {
       const timerId = setTimeout(() => {
@@ -112,6 +125,7 @@ const PlayerGame = () => {
           setScore(prevScore => prevScore + pointsEarned);
           setAnsweredCorrectly(true);
           
+          console.log('Correct answer!', 'Points earned:', pointsEarned);
           toast({
             title: "Correct!",
             description: `+${pointsEarned} points`,
@@ -119,6 +133,7 @@ const PlayerGame = () => {
           });
         } else {
           setAnsweredCorrectly(false);
+          console.log('Incorrect answer');
           toast({
             title: "Incorrect",
             description: "Better luck on the next question!",
@@ -135,6 +150,7 @@ const PlayerGame = () => {
   
   const handleSelectAnswer = (answer: string) => {
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
+      console.log('Selected answer:', answer);
       setSelectedAnswer(answer);
     }
   };
@@ -167,7 +183,7 @@ const PlayerGame = () => {
         </div>
         <div className="w-full bg-card rounded-full h-2 overflow-hidden">
           <div 
-            className={`h-full transition-all duration-1000 ${getTimerColor()}`}
+            className={`h-full transition-all duration-300 ${getTimerColor()}`}
             style={{ width: `${(timeLeft / currentQuestion.timeLimit) * 100}%` }}
           />
         </div>

@@ -46,6 +46,7 @@ const DisplayScreen = () => {
   const [questionCounter, setQuestionCounter] = useState(1);
   const { toast } = useToast();
   
+  // Initialize game code and set up subscriptions
   useEffect(() => {
     const generateGameCode = () => {
       const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
@@ -56,16 +57,37 @@ const DisplayScreen = () => {
       return result;
     };
     
-    setGameCode(generateGameCode());
+    const code = generateGameCode();
+    setGameCode(code);
+    console.log('Generated game code:', code);
+    
+    // Initially store game session info
+    sessionStorage.setItem('activeGameCode', code);
     
     const setupPlayerSubscription = async () => {
+      console.log('Setting up player subscription');
+      
+      // Mock player for testing if needed
+      if (process.env.NODE_ENV === 'development') {
+        setTimeout(() => {
+          const mockPlayer = { id: 'mock-id', name: 'Test Player', score: 100 };
+          console.log('Adding mock player for testing');
+          setPlayers(prev => [...prev, mockPlayer]);
+        }, 2000);
+      }
+      
       const channel = supabase
         .channel('public:players')
         .on(
           'postgres_changes',
           { event: 'INSERT', schema: 'public', table: 'players' },
           (payload) => {
-            setPlayers((current) => [...current, payload.new]);
+            console.log('New player joined via Supabase:', payload.new);
+            setPlayers((current) => {
+              const newPlayers = [...current, payload.new];
+              console.log('Updated players list:', newPlayers);
+              return newPlayers;
+            });
             toast({
               title: "New player joined!",
               description: `${payload.new.name} has joined the game.`,
@@ -79,9 +101,38 @@ const DisplayScreen = () => {
       };
     };
     
+    // Monitor sessionStorage for player joins from the PlayerJoin component
+    const handlePlayerJoin = () => {
+      const playerName = sessionStorage.getItem('playerName');
+      const playerGameId = sessionStorage.getItem('gameId');
+      
+      if (playerName && playerGameId && playerGameId === gameCode) {
+        console.log('Player joined via sessionStorage:', playerName, playerGameId);
+        // Check if this player is already in our list to avoid duplicates
+        const playerExists = players.some(p => p.name === playerName);
+        
+        if (!playerExists) {
+          const newPlayer = { 
+            id: `local-${Date.now()}`, 
+            name: playerName,
+            score: 0
+          };
+          setPlayers(prev => [...prev, newPlayer]);
+          
+          toast({
+            title: "New player joined!",
+            description: `${playerName} has joined the game.`,
+          });
+        }
+      }
+    };
+    
+    const playerCheckInterval = setInterval(handlePlayerJoin, 2000);
+    
     const setupSubscription = setupPlayerSubscription();
     
     return () => {
+      clearInterval(playerCheckInterval);
       setupSubscription.then(cleanup => {
         if (cleanup && typeof cleanup === 'function') {
           cleanup();
@@ -92,6 +143,34 @@ const DisplayScreen = () => {
     };
   }, [toast]);
   
+  // Handle player joins from direct localStorage updates
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'playerName' || e.key === 'gameId') {
+        const playerName = sessionStorage.getItem('playerName');
+        const playerGameId = sessionStorage.getItem('gameId');
+        
+        if (playerName && playerGameId && playerGameId === gameCode) {
+          console.log('Storage event detected player join:', playerName);
+          const playerExists = players.some(p => p.name === playerName);
+          
+          if (!playerExists) {
+            const newPlayer = { 
+              id: `storage-${Date.now()}`, 
+              name: playerName,
+              score: 0 
+            };
+            setPlayers(prev => [...prev, newPlayer]);
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, [players, gameCode]);
+  
+  // Game state management (timer, question progression)
   useEffect(() => {
     let timerId: number | undefined;
     
@@ -100,6 +179,8 @@ const DisplayScreen = () => {
       timerId = window.setTimeout(() => {
         setCurrentState('question');
         setTimeLeft(mockSettings.questionDuration);
+        console.log('Starting game with first question');
+        
         // Store initial game state
         updateGameState('question', currentQuestionIndex, mockSettings.questionDuration, questionCounter);
       }, 10000);
@@ -107,13 +188,18 @@ const DisplayScreen = () => {
     else if (currentState === 'question') {
       if (timeLeft > 0) {
         timerId = window.setTimeout(() => {
-          setTimeLeft(timeLeft - 1);
+          const newTimeLeft = timeLeft - 1;
+          setTimeLeft(newTimeLeft);
+          console.log(`Question timer: ${newTimeLeft}s remaining`);
+          
           // Update game state with new time
-          updateGameState('question', currentQuestionIndex, timeLeft - 1, questionCounter);
+          updateGameState('question', currentQuestionIndex, newTimeLeft, questionCounter);
         }, 1000);
       } else {
         // When time runs out, show the answer state
+        console.log('Time out, revealing answer');
         setCurrentState('answer');
+        
         // Update game state for answer reveal
         updateGameState('answer', currentQuestionIndex, 0, questionCounter);
         
@@ -121,6 +207,8 @@ const DisplayScreen = () => {
         timerId = window.setTimeout(() => {
           if (questionCounter % 10 === 0) {
             setCurrentState('leaderboard');
+            console.log('Showing leaderboard');
+            
             timerId = window.setTimeout(() => {
               moveToNextQuestion();
             }, 10000);
@@ -136,20 +224,25 @@ const DisplayScreen = () => {
         clearTimeout(timerId);
       }
     };
-  }, [currentState, timeLeft, questionCounter, currentQuestionIndex]);
+  }, [currentState, timeLeft, currentQuestionIndex, questionCounter]);
   
   // Function to update game state in localStorage
   const updateGameState = (state: 'question' | 'answer', questionIndex: number, time: number, qCounter: number) => {
-    localStorage.setItem('gameState', JSON.stringify({
+    const gameState = {
       state: state,
       questionIndex: questionIndex,
       timeLeft: time,
       questionCounter: qCounter
-    }));
+    };
+    
+    console.log('Updating game state:', gameState);
+    localStorage.setItem('gameState', JSON.stringify(gameState));
   };
   
   const moveToNextQuestion = () => {
     const nextQuestionIndex = (currentQuestionIndex + 1) % mockQuestions.length;
+    console.log(`Moving to next question: ${nextQuestionIndex}`);
+    
     setCurrentQuestionIndex(nextQuestionIndex);
     setQuestionCounter(prev => prev + 1);
     setTimeLeft(mockSettings.questionDuration);
