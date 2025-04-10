@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -49,11 +48,6 @@ const slides = [
   },
 ];
 
-// Add showIntermission setting to gameSettings if it doesn't exist
-if (!('showIntermission' in gameSettings)) {
-  gameSettings.showIntermission = true;
-}
-
 const Intermission = () => {
   const [localSlides, setLocalSlides] = useState(slides);
   const [settings, setSettings] = useState({
@@ -85,7 +79,7 @@ const Intermission = () => {
       description: `Slide visibility has been ${localSlides.find(s => s.id === slideId)?.isActive ? 'disabled' : 'enabled'}.`,
     });
   };
-
+  
   // Handle settings changes
   const handleToggleIntermission = (checked: boolean) => {
     setSettings(prev => ({ ...prev, showIntermission: checked }));
