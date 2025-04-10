@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,16 +26,16 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 
 // Mock display data
-const displays = [
+const initialDisplays = [
   {
     id: 'default',
-    name: 'Main Display', // Changed from "Main Bar Display" to "Main Display"
+    name: 'Main Display',
     status: 'active',
     totalQuestions: 248,
     activePlayers: 32,
@@ -75,6 +75,7 @@ const buckets = [
 
 const Displays = () => {
   const { toast } = useToast();
+  const [displays, setDisplays] = useState(initialDisplays);
   
   const handleCopyLink = (displayId: string) => {
     // In a real app, this would copy the actual URL
@@ -136,10 +137,14 @@ const Displays = () => {
       return;
     }
     
-    // In a real app, this would delete the display from the database
+    // Filter out the display with the given ID
+    const updatedDisplays = displays.filter(display => display.id !== displayId);
+    setDisplays(updatedDisplays);
+    
+    // Show toast notification
     toast({
       title: "Display Deleted",
-      description: `The display "${displayId}" has been deleted.`,
+      description: `The display has been deleted.`,
     });
   };
   
