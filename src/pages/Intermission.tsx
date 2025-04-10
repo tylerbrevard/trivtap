@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,6 +13,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/components/ui/use-toast";
+import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 
 // Mock slides data
 const slides = [
@@ -48,6 +50,86 @@ const slides = [
 ];
 
 const Intermission = () => {
+  const [localSlides, setLocalSlides] = useState(slides);
+  const [settings, setSettings] = useState({
+    showIntermission: true,
+    showAfterEvery: gameSettings.intermissionFrequency,
+    slideDuration: gameSettings.intermissionDuration
+  });
+  const { toast } = useToast();
+
+  // Load settings on component mount
+  useEffect(() => {
+    setSettings({
+      showIntermission: true, // This would come from a database in a real app
+      showAfterEvery: gameSettings.intermissionFrequency,
+      slideDuration: gameSettings.intermissionDuration
+    });
+  }, []);
+
+  // Toggle slide active state
+  const toggleSlideActive = (slideId: string) => {
+    setLocalSlides(prevSlides => 
+      prevSlides.map(slide => 
+        slide.id === slideId ? { ...slide, isActive: !slide.isActive } : slide
+      )
+    );
+    
+    toast({
+      title: "Slide Updated",
+      description: `Slide visibility has been ${localSlides.find(s => s.id === slideId)?.isActive ? 'disabled' : 'enabled'}.`,
+    });
+  };
+
+  // Handle settings changes
+  const handleToggleIntermission = (checked: boolean) => {
+    setSettings(prev => ({ ...prev, showIntermission: checked }));
+    
+    toast({
+      title: "Setting Updated",
+      description: checked 
+        ? "Intermission slides are now enabled." 
+        : "Intermission slides are now disabled.",
+    });
+  };
+
+  const handleFrequencyChange = (value: string) => {
+    const frequency = parseInt(value, 10);
+    if (!isNaN(frequency) && frequency > 0) {
+      setSettings(prev => ({ ...prev, showAfterEvery: frequency }));
+      updateGameSetting('intermissionFrequency', frequency);
+      
+      toast({
+        title: "Setting Updated",
+        description: `Intermission will now appear after every ${frequency} questions.`,
+      });
+    }
+  };
+
+  const handleDurationChange = (value: string) => {
+    const duration = parseInt(value, 10);
+    if (!isNaN(duration) && duration > 0) {
+      setSettings(prev => ({ ...prev, slideDuration: duration }));
+      updateGameSetting('intermissionDuration', duration);
+      
+      toast({
+        title: "Setting Updated",
+        description: `Each slide will now display for ${duration} seconds.`,
+      });
+    }
+  };
+
+  const handleSaveSettings = () => {
+    // In a real app, this would save all settings to a database
+    updateGameSetting('intermissionFrequency', settings.showAfterEvery);
+    updateGameSetting('intermissionDuration', settings.slideDuration);
+    
+    toast({
+      title: "Settings Saved",
+      description: "Your intermission settings have been updated.",
+    });
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -87,7 +169,7 @@ const Intermission = () => {
         </CardHeader>
         <CardContent>
           <div className="space-y-6">
-            {slides.map((slide) => (
+            {localSlides.map((slide) => (
               <div key={slide.id} className="card-trivia p-4">
                 <div className="flex justify-between items-start mb-4">
                   <div className="flex items-center gap-2">
@@ -98,7 +180,11 @@ const Intermission = () => {
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="flex items-center gap-2">
-                      <Switch id={`slide-${slide.id}`} checked={slide.isActive} />
+                      <Switch 
+                        id={`slide-${slide.id}`} 
+                        checked={slide.isActive} 
+                        onCheckedChange={() => toggleSlideActive(slide.id)}
+                      />
                       <Label htmlFor={`slide-${slide.id}`} className="text-sm">
                         {slide.isActive ? 'Active' : 'Inactive'}
                       </Label>
@@ -114,7 +200,7 @@ const Intermission = () => {
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => toggleSlideActive(slide.id)}>
                           {slide.isActive ? (
                             <>
                               <EyeOff className="mr-2 h-4 w-4" />
@@ -185,7 +271,11 @@ const Intermission = () => {
                 Enable or disable all intermission slides
               </span>
             </Label>
-            <Switch id="show-intermission" defaultChecked />
+            <Switch 
+              id="show-intermission" 
+              checked={settings.showIntermission}
+              onCheckedChange={handleToggleIntermission}
+            />
           </div>
           
           <div className="flex items-center justify-between space-x-2">
@@ -198,10 +288,11 @@ const Intermission = () => {
             <Input 
               id="every-questions" 
               type="number" 
-              defaultValue="10" 
+              value={settings.showAfterEvery} 
               min="1" 
               max="50" 
               className="w-20"
+              onChange={(e) => handleFrequencyChange(e.target.value)}
             />
           </div>
           
@@ -215,14 +306,15 @@ const Intermission = () => {
             <Input 
               id="slide-duration" 
               type="number" 
-              defaultValue="15" 
+              value={settings.slideDuration} 
               min="5" 
               max="60" 
               className="w-20"
+              onChange={(e) => handleDurationChange(e.target.value)}
             />
           </div>
           
-          <Button className="w-full mt-4">Save Settings</Button>
+          <Button className="w-full mt-4" onClick={handleSaveSettings}>Save Settings</Button>
         </CardContent>
       </Card>
     </div>
