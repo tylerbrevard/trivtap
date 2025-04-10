@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Edit, Trash, Wifi, Image, Text, MoreVertical, EyeOff, Eye, X } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Wifi, Image, Text, MoreVertical, EyeOff, Eye } from 'lucide-react';
 import { 
   DropdownMenu,
   DropdownMenuContent,
@@ -25,8 +25,35 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { gameSettings, updateGameSetting, GameSettings } from '@/utils/gameSettings';
 
+// Define the base slide interface and specific slide types
+interface BaseSlide {
+  id: string;
+  type: 'text' | 'wifi' | 'image';
+  title: string;
+  isActive: boolean;
+}
+
+interface TextSlide extends BaseSlide {
+  type: 'text';
+  content: string;
+}
+
+interface WifiSlide extends BaseSlide {
+  type: 'wifi';
+  wifiName: string;
+  wifiPassword: string;
+}
+
+interface ImageSlide extends BaseSlide {
+  type: 'image';
+  imageUrl: string;
+}
+
+// Union type for all slide types
+type Slide = TextSlide | WifiSlide | ImageSlide;
+
 // Initial slides data - this will be used if there's nothing in localStorage
-const initialSlides = [
+const initialSlides: Slide[] = [
   {
     id: '1',
     type: 'text',
@@ -59,8 +86,8 @@ const initialSlides = [
 ];
 
 const Intermission = () => {
-  const [localSlides, setLocalSlides] = useState([]);
-  const [editingSlide, setEditingSlide] = useState(null);
+  const [localSlides, setLocalSlides] = useState<Slide[]>([]);
+  const [editingSlide, setEditingSlide] = useState<Slide | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [settings, setSettings] = useState({
     showIntermission: gameSettings.showIntermission,
@@ -99,7 +126,7 @@ const Intermission = () => {
   }, [localSlides]);
 
   // Toggle slide active state
-  const toggleSlideActive = (slideId) => {
+  const toggleSlideActive = (slideId: string) => {
     setLocalSlides(prevSlides => 
       prevSlides.map(slide => 
         slide.id === slideId ? { ...slide, isActive: !slide.isActive } : slide
@@ -113,7 +140,7 @@ const Intermission = () => {
   };
   
   // Handle settings changes
-  const handleToggleIntermission = (checked) => {
+  const handleToggleIntermission = (checked: boolean) => {
     setSettings(prev => ({ ...prev, showIntermission: checked }));
     updateGameSetting('showIntermission', checked);
     
@@ -125,7 +152,7 @@ const Intermission = () => {
     });
   };
 
-  const handleFrequencyChange = (value) => {
+  const handleFrequencyChange = (value: string) => {
     const frequency = parseInt(value, 10);
     if (!isNaN(frequency) && frequency > 0) {
       setSettings(prev => ({ ...prev, showAfterEvery: frequency }));
@@ -138,7 +165,7 @@ const Intermission = () => {
     }
   };
 
-  const handleDurationChange = (value) => {
+  const handleDurationChange = (value: string) => {
     const duration = parseInt(value, 10);
     if (!isNaN(duration) && duration > 0) {
       setSettings(prev => ({ ...prev, slideDuration: duration }));
@@ -164,16 +191,21 @@ const Intermission = () => {
   };
 
   // Edit slide functions
-  const openEditDialog = (slide) => {
+  const openEditDialog = (slide: Slide) => {
     setEditingSlide({...slide});
     setIsEditDialogOpen(true);
   };
 
-  const handleEditSlideChange = (field, value) => {
-    setEditingSlide(prev => ({
-      ...prev,
-      [field]: value
-    }));
+  const handleEditSlideChange = (field: string, value: string) => {
+    if (!editingSlide) return;
+    
+    setEditingSlide(prev => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        [field]: value
+      };
+    });
   };
 
   const saveSlideChanges = () => {
@@ -193,7 +225,7 @@ const Intermission = () => {
     });
   };
 
-  const deleteSlide = (slideId) => {
+  const deleteSlide = (slideId: string) => {
     setLocalSlides(prevSlides => prevSlides.filter(slide => slide.id !== slideId));
     
     toast({
@@ -202,22 +234,37 @@ const Intermission = () => {
     });
   };
   
-  const createNewSlide = (type) => {
-    const newSlide = {
+  const createNewSlide = (type: 'text' | 'wifi' | 'image') => {
+    let newSlide: Slide;
+    
+    // Create base slide properties
+    const baseSlide = {
       id: Date.now().toString(),
       type,
       title: `New ${type.charAt(0).toUpperCase() + type.slice(1)} Slide`,
       isActive: true
     };
     
-    // Add type-specific default properties
+    // Add type-specific properties
     if (type === 'text') {
-      newSlide.content = 'Enter your content here';
+      newSlide = {
+        ...baseSlide,
+        type: 'text',
+        content: 'Enter your content here'
+      };
     } else if (type === 'wifi') {
-      newSlide.wifiName = 'Network Name';
-      newSlide.wifiPassword = 'password123';
-    } else if (type === 'image') {
-      newSlide.imageUrl = 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?ixlib=rb-4.0.3&auto=format&fit=crop&w=1050&q=80';
+      newSlide = {
+        ...baseSlide,
+        type: 'wifi',
+        wifiName: 'Network Name',
+        wifiPassword: 'password123'
+      };
+    } else {
+      newSlide = {
+        ...baseSlide,
+        type: 'image',
+        imageUrl: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?ixlib=rb-4.0.3&auto=format&fit=crop&w=1050&q=80'
+      };
     }
     
     setLocalSlides(prevSlides => [...prevSlides, newSlide]);
@@ -229,6 +276,12 @@ const Intermission = () => {
       title: "Slide Created",
       description: `New ${type} slide added. You can edit it now.`,
     });
+  };
+  
+  // Fixed the error handling for the image error event
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    const target = e.currentTarget;
+    target.src = 'https://placehold.co/600x400?text=Image+URL+Error';
   };
   
   return (
@@ -325,7 +378,7 @@ const Intermission = () => {
                 
                 {slide.type === 'text' && (
                   <div className="bg-card p-3 rounded-md">
-                    <p className="whitespace-pre-line">{slide.content}</p>
+                    <p className="whitespace-pre-line">{(slide as TextSlide).content}</p>
                   </div>
                 )}
                 
@@ -334,11 +387,11 @@ const Intermission = () => {
                     <div className="flex gap-8">
                       <div>
                         <p className="text-sm text-muted-foreground">WiFi Name</p>
-                        <p className="font-medium">{slide.wifiName}</p>
+                        <p className="font-medium">{(slide as WifiSlide).wifiName}</p>
                       </div>
                       <div>
                         <p className="text-sm text-muted-foreground">Password</p>
-                        <p className="font-medium">{slide.wifiPassword}</p>
+                        <p className="font-medium">{(slide as WifiSlide).wifiPassword}</p>
                       </div>
                     </div>
                   </div>
@@ -347,9 +400,10 @@ const Intermission = () => {
                 {slide.type === 'image' && (
                   <div className="bg-card rounded-md overflow-hidden">
                     <img 
-                      src={slide.imageUrl} 
+                      src={(slide as ImageSlide).imageUrl} 
                       alt={slide.title} 
                       className="w-full h-auto max-h-[200px] object-cover"
+                      onError={handleImageError}
                     />
                   </div>
                 )}
@@ -446,7 +500,7 @@ const Intermission = () => {
                   <Textarea
                     id="slide-content"
                     rows={5}
-                    value={editingSlide.content}
+                    value={(editingSlide as TextSlide).content}
                     onChange={(e) => handleEditSlideChange('content', e.target.value)}
                   />
                 </div>
@@ -458,7 +512,7 @@ const Intermission = () => {
                     <Label htmlFor="wifi-name">Network Name</Label>
                     <Input
                       id="wifi-name"
-                      value={editingSlide.wifiName}
+                      value={(editingSlide as WifiSlide).wifiName}
                       onChange={(e) => handleEditSlideChange('wifiName', e.target.value)}
                     />
                   </div>
@@ -466,7 +520,7 @@ const Intermission = () => {
                     <Label htmlFor="wifi-password">Password</Label>
                     <Input
                       id="wifi-password"
-                      value={editingSlide.wifiPassword}
+                      value={(editingSlide as WifiSlide).wifiPassword}
                       onChange={(e) => handleEditSlideChange('wifiPassword', e.target.value)}
                     />
                   </div>
@@ -478,16 +532,14 @@ const Intermission = () => {
                   <Label htmlFor="image-url">Image URL</Label>
                   <Input
                     id="image-url"
-                    value={editingSlide.imageUrl}
+                    value={(editingSlide as ImageSlide).imageUrl}
                     onChange={(e) => handleEditSlideChange('imageUrl', e.target.value)}
                   />
                   <div className="mt-2 rounded-md overflow-hidden border border-input">
                     <img
-                      src={editingSlide.imageUrl}
+                      src={(editingSlide as ImageSlide).imageUrl}
                       alt="Preview"
-                      onError={(e) => {
-                        e.target.src = 'https://placehold.co/600x400?text=Image+URL+Error';
-                      }}
+                      onError={handleImageError}
                       className="w-full h-auto max-h-[150px] object-cover"
                     />
                   </div>
