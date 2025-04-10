@@ -109,17 +109,34 @@ const QuestionLibrary = () => {
           questionBuckets.get(bq.question_id).push(bq.bucket_id);
         });
         
-        // Format questions data - ensure options is always an array
-        const formattedQuestions = questionsData?.map(q => ({
-          id: q.id,
-          text: q.text,
-          category_id: q.categories?.id || '',
-          category: q.categories?.name || 'Uncategorized',
-          difficulty: q.difficulty || 'medium',
-          options: Array.isArray(q.options) ? q.options : [],
-          correct_answer: q.correct_answer,
-          buckets: questionBuckets.get(q.id) || []
-        })) || [];
+        // Format questions data - ensure options is always a string array
+        const formattedQuestions = questionsData?.map(q => {
+          // Convert options to string array regardless of input type
+          let optionsArray: string[] = [];
+          if (Array.isArray(q.options)) {
+            optionsArray = q.options.map(opt => String(opt));
+          } else if (q.options) {
+            try {
+              // Handle if options is stored as a JSON string
+              const parsed = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
+              optionsArray = Array.isArray(parsed) ? parsed.map(opt => String(opt)) : [];
+            } catch (e) {
+              console.error('Error parsing options:', e);
+              optionsArray = [];
+            }
+          }
+          
+          return {
+            id: q.id,
+            text: q.text,
+            category_id: q.categories?.id || '',
+            category: q.categories?.name || 'Uncategorized',
+            difficulty: q.difficulty || 'medium',
+            options: optionsArray,
+            correct_answer: q.correct_answer,
+            buckets: questionBuckets.get(q.id) || []
+          };
+        }) || [];
         
         console.log(`Loaded ${formattedQuestions.length} questions`);
         setQuestions(formattedQuestions);
