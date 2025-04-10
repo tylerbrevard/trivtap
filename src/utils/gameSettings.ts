@@ -12,10 +12,13 @@ export const gameSettings = {
   showIntermission: true, // show intermission slides (new setting)
 };
 
+// Define a type for game settings to improve type safety
+export type GameSettings = typeof gameSettings;
+
 // Helper function to update a specific setting
-export const updateGameSetting = (key: keyof typeof gameSettings, value: number | boolean) => {
+export const updateGameSetting = (key: keyof GameSettings, value: number | boolean) => {
   if (key in gameSettings) {
-    // @ts-ignore - We're using a union type for the value
+    // Type assertion is safe here since we've checked that the key exists
     gameSettings[key] = value;
     // Store in localStorage for persistence
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
@@ -31,8 +34,8 @@ const initializeSettings = () => {
       const parsedSettings = JSON.parse(storedSettings);
       Object.keys(parsedSettings).forEach(key => {
         if (key in gameSettings) {
-          // @ts-ignore - We're handling different types
-          gameSettings[key as keyof typeof gameSettings] = parsedSettings[key];
+          // Type assertion is safe here since we've checked that the key exists
+          gameSettings[key as keyof GameSettings] = parsedSettings[key];
         }
       });
       console.log('Game settings loaded from storage:', gameSettings);
