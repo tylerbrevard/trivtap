@@ -75,6 +75,7 @@ const DisplayScreen = () => {
   const [players, setPlayers] = useState<any[]>([]);
   const [gameCode, setGameCode] = useState('');
   const [questionCounter, setQuestionCounter] = useState(1);
+  const [hasGameStarted, setHasGameStarted] = useState(false);
   const { toast } = useToast();
   
   console.log('Current state:', currentState);
@@ -82,7 +83,7 @@ const DisplayScreen = () => {
   console.log('Available questions:', mockQuestions.length);
   console.log('Question counter:', questionCounter);
   
-  // Initialize game code and set up subscriptions - only once
+  // Initialize game code - ONLY ONCE
   useEffect(() => {
     // Check if a game code is already stored for this session
     const storedGameCode = localStorage.getItem('persistentGameCode');
@@ -108,67 +109,30 @@ const DisplayScreen = () => {
       console.log('Generated new game code:', newCode);
     }
     
-    // Store game session info - use the stored or newly generated code
+    // Store game session info
     const sessionCode = storedGameCode || localStorage.getItem('persistentGameCode');
     sessionStorage.setItem('activeGameCode', sessionCode);
     localStorage.setItem('activeGameCode', sessionCode);
     
-    const setupPlayerSubscription = async () => {
-      console.log('Setting up player subscription');
-      
-      // Mock player for testing if needed
-      if (process.env.NODE_ENV === 'development') {
-        setTimeout(() => {
-          const mockPlayer = { id: 'mock-id', name: 'Test Player', score: 100 };
-          console.log('Adding mock player for testing');
-          setPlayers(prev => [...prev, mockPlayer]);
-        }, 2000);
-      }
-      
-      const channel = supabase
-        .channel('public:players')
-        .on(
-          'postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'players' },
-          (payload) => {
-            console.log('New player joined via Supabase:', payload.new);
-            setPlayers((current) => {
-              const newPlayers = [...current, payload.new];
-              console.log('Updated players list:', newPlayers);
-              return newPlayers;
-            });
-            toast({
-              title: "New player joined!",
-              description: `${payload.new.name} has joined the game.`,
-            });
-          }
-        )
-        .subscribe();
-        
-      return () => {
-        channel.unsubscribe();
-      };
-    };
+    // Remove any test players that might have been added in development mode
+    if (localStorage.getItem('testPlayerAdded')) {
+      localStorage.removeItem('testPlayerAdded');
+    }
     
-    const setupSubscription = setupPlayerSubscription();
-    
-    return () => {
-      setupSubscription.then(cleanup => {
-        if (cleanup && typeof cleanup === 'function') {
-          cleanup();
-        }
-      }).catch(error => {
-        console.error("Error cleaning up subscription:", error);
-      });
-    };
-  }, []); // Empty dependency array ensures this only runs once
-  
-  // Function to check for player joins - separated to avoid dependency issues
-  useEffect(() => {
     // Clear all player scores initially to avoid stale data
     const playerKeys = Object.keys(localStorage).filter(key => key.startsWith('playerScore_'));
     playerKeys.forEach(key => localStorage.removeItem(key));
     
+    return () => {
+      // Clear up when component unmounts
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Cleaning up development test data');
+      }
+    };
+  }, []); // Empty dependency array ensures this only runs once
+  
+  // Function to check for player joins - separate to avoid dependency issues
+  useEffect(() => {
     const checkForPlayerJoins = () => {
       // Check for new player joins via localStorage
       const playerJoinData = localStorage.getItem('playerJoined');
@@ -201,30 +165,6 @@ const DisplayScreen = () => {
           }
         } catch (error) {
           console.error('Error processing player join data:', error);
-        }
-      }
-      
-      // Check for session storage-based joins
-      const playerName = sessionStorage.getItem('playerName');
-      const playerGameId = sessionStorage.getItem('gameId');
-      
-      if (playerName && playerGameId && playerGameId === gameCode) {
-        console.log('Player joined via sessionStorage:', playerName, playerGameId);
-        // Check if this player is already in our list to avoid duplicates
-        const playerExists = players.some(p => p.name === playerName);
-        
-        if (!playerExists) {
-          const newPlayer = { 
-            id: `session-${Date.now()}`, 
-            name: playerName,
-            score: 0 
-          };
-          setPlayers(prev => [...prev, newPlayer]);
-          
-          toast({
-            title: "New player joined!",
-            description: `${playerName} has joined the game.`,
-          });
         }
       }
       
@@ -268,26 +208,37 @@ const DisplayScreen = () => {
     localStorage.setItem('gameState', JSON.stringify(gameState));
   }, []);
   
-  // Game state management (timer, question progression)
+  // Initialize the game when the join screen has been shown for a bit
   useEffect(() => {
     let timerId: number | undefined;
     
-    if (currentState === 'join') {
+    if (currentState === 'join' && !hasGameStarted) {
       // The join screen will show for 10 seconds before transitioning to the first question
       timerId = window.setTimeout(() => {
         setCurrentState('question');
         setTimeLeft(mockSettings.questionDuration);
+        setHasGameStarted(true);
         console.log('Starting game with first question');
         
         // Store initial game state
         updateGameState('question', currentQuestionIndex, mockSettings.questionDuration, questionCounter);
       }, 10000);
+      
       return () => {
         if (timerId) clearTimeout(timerId);
       };
-    } 
+    }
     
-    if (currentState === 'question') {
+    return () => {
+      if (timerId) clearTimeout(timerId);
+    };
+  }, [currentState, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted]);
+  
+  // Game state management (timer, question progression)
+  useEffect(() => {
+    let timerId: number | undefined;
+    
+    if (currentState === 'question' && hasGameStarted) {
       // Set up the timer to count down
       if (timeLeft > 0) {
         timerId = window.setTimeout(() => {
@@ -315,6 +266,9 @@ const DisplayScreen = () => {
           if (questionCounter % mockSettings.intermissionFrequency === 0) {
             console.log('Showing intermission');
             setCurrentState('intermission');
+            
+            // Update game state for intermission
+            updateGameState('intermission', currentQuestionIndex, 0, questionCounter);
             
             // After intermission, move to the next question
             timerId = window.setTimeout(() => {
@@ -348,7 +302,7 @@ const DisplayScreen = () => {
     return () => {
       if (timerId) clearTimeout(timerId);
     };
-  }, [currentState, timeLeft, currentQuestionIndex, questionCounter, updateGameState]);
+  }, [currentState, timeLeft, currentQuestionIndex, questionCounter, updateGameState, hasGameStarted]);
   
   const moveToNextQuestion = useCallback(() => {
     // Calculate the next question index
@@ -362,9 +316,7 @@ const DisplayScreen = () => {
     setCurrentState('question');
     
     // Update game state for the next question
-    setTimeout(() => {
-      updateGameState('question', nextQuestionIndex, mockSettings.questionDuration, questionCounter + 1);
-    }, 100);
+    updateGameState('question', nextQuestionIndex, mockSettings.questionDuration, questionCounter + 1);
   }, [currentQuestionIndex, questionCounter, updateGameState]);
   
   const currentQuestion = mockQuestions[currentQuestionIndex];
@@ -382,6 +334,21 @@ const DisplayScreen = () => {
   const uniquePlayers = players.filter((player, index, self) => 
     index === self.findIndex(p => p.name === player.name)
   );
+  
+  const handleLaunchDisplay = () => {
+    // Create full URL using origin and path
+    const displayUrl = `${window.location.origin}/display/${id}`;
+    
+    // Open the display in a new tab
+    window.open(displayUrl, '_blank', 'noopener,noreferrer');
+    
+    console.log('Launching display at:', displayUrl);
+    
+    toast({
+      title: "Display Launched",
+      description: "The display has been opened in a new tab.",
+    });
+  };
   
   const renderContent = () => {
     switch (currentState) {
@@ -409,6 +376,18 @@ const DisplayScreen = () => {
                 ))}
               </div>
             </div>
+            
+            <Button 
+              className="mt-8"
+              onClick={() => {
+                setCurrentState('question');
+                setTimeLeft(mockSettings.questionDuration);
+                setHasGameStarted(true);
+                updateGameState('question', currentQuestionIndex, mockSettings.questionDuration, questionCounter);
+              }}
+            >
+              Start Game Now
+            </Button>
           </div>
         );
         

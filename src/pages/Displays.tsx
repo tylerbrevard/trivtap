@@ -122,7 +122,7 @@ const Displays = () => {
                     ID: {display.id}
                     {display.isDefault && (
                       <span className="ml-2">
-                        <Badge variant="outline">Default</Badge>
+                        <Badge variant="outline" className="ml-2">Default</Badge>
                       </span>
                     )}
                   </CardDescription>

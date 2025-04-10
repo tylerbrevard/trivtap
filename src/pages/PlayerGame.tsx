@@ -69,12 +69,14 @@ const PlayerGame = () => {
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
   const [lastGameStateTimestamp, setLastGameStateTimestamp] = useState<number>(0);
+  const [currentGameState, setCurrentGameState] = useState<string>('question');
   const { toast } = useToast();
   const navigate = useNavigate();
   
   console.log('Player screen - current question index:', questionIndex);
   console.log('Player screen - current question:', currentQuestion.text);
   console.log('Player screen - answer revealed:', isAnswerRevealed);
+  console.log('Player screen - current game state:', currentGameState);
   
   // Check if player has joined a game
   useEffect(() => {
@@ -96,7 +98,6 @@ const PlayerGame = () => {
     setGameId(storedGameId);
     
     // Notify the display about this player by updating localStorage
-    // This will help the display to recognize connected players
     localStorage.setItem('playerJoined', JSON.stringify({ 
       name: storedName, 
       gameId: storedGameId, 
@@ -124,39 +125,43 @@ const PlayerGame = () => {
           // Update the last processed timestamp
           setLastGameStateTimestamp(parsedState.timestamp);
           
-          // Check if we need to update the question index or state
-          const needsUpdate = 
-            parsedState.questionIndex !== questionIndex || 
-            (parsedState.state === 'answer' && !isAnswerRevealed) ||
-            (parsedState.state === 'question' && isAnswerRevealed) ||
-            (parsedState.state === 'intermission');
+          // Store the current game state
+          setCurrentGameState(parsedState.state);
           
-          if (needsUpdate) {
-            console.log('Syncing with display screen', parsedState);
-            
-            // If we're in intermission, just wait for the next question state
-            if (parsedState.state === 'intermission') {
-              console.log('Display is showing intermission, waiting...');
-              setSelectedAnswer(null);
-              setAnsweredCorrectly(null);
-              return;
-            }
-            
-            // Synchronize with the display's current question
+          // Check if we need to update the question index or state
+          if (parsedState.state === 'intermission') {
+            console.log('Display is showing intermission, waiting...');
+            setSelectedAnswer(null);
+            setAnsweredCorrectly(null);
+            setIsAnswerRevealed(false);
+            return;
+          }
+          
+          // If the question index has changed, update to the new question
+          if (parsedState.questionIndex !== questionIndex) {
+            console.log('Question index changed:', parsedState.questionIndex);
             setQuestionIndex(parsedState.questionIndex);
             setCurrentQuestion(sampleQuestions[parsedState.questionIndex]);
             setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
             setSelectedAnswer(null);
-            setIsAnswerRevealed(parsedState.state === 'answer');
             setAnsweredCorrectly(null);
-            
-            // Force re-render for question navigation
-            if (parsedState.questionIndex !== questionIndex) {
-              console.log('Question index changed from display:', parsedState.questionIndex);
+            setIsAnswerRevealed(parsedState.state === 'answer');
+          } else {
+            // If only the state has changed (e.g., from question to answer)
+            if (parsedState.state === 'answer' && !isAnswerRevealed) {
+              console.log('Changing to answer state');
+              setIsAnswerRevealed(true);
+              setTimeLeft(0);
+            } else if (parsedState.state === 'question' && isAnswerRevealed) {
+              console.log('Changing back to question state');
+              setIsAnswerRevealed(false);
+              setTimeLeft(parsedState.timeLeft);
+              setSelectedAnswer(null);
+              setAnsweredCorrectly(null);
+            } else if (parsedState.state === 'question' && !isAnswerRevealed) {
+              // Just sync the timer if we're still in question state
+              setTimeLeft(parsedState.timeLeft);
             }
-          } else if (parsedState.state === 'question' && !isAnswerRevealed) {
-            // Just sync the timer
-            setTimeLeft(parsedState.timeLeft);
           }
         } catch (error) {
           console.error('Error parsing game state', error);
@@ -220,6 +225,22 @@ const PlayerGame = () => {
     if (timeLeft > currentQuestion.timeLimit * 0.3) return 'bg-yellow-500';
     return 'bg-red-500';
   };
+  
+  // Show intermission content when display is in intermission state
+  if (currentGameState === 'intermission') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="card-trivia p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold mb-4">Intermission</h2>
+          <p className="text-lg mb-6">The next question will appear shortly...</p>
+          <div className="bg-muted p-4 rounded-md">
+            <p className="text-md font-medium">Your Score</p>
+            <p className="text-2xl font-bold text-primary">{score}</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen flex flex-col bg-background p-4">
