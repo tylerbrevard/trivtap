@@ -109,14 +109,14 @@ const QuestionLibrary = () => {
           questionBuckets.get(bq.question_id).push(bq.bucket_id);
         });
         
-        // Format questions data
+        // Format questions data - ensure options is always an array
         const formattedQuestions = questionsData?.map(q => ({
           id: q.id,
           text: q.text,
           category_id: q.categories?.id || '',
           category: q.categories?.name || 'Uncategorized',
           difficulty: q.difficulty || 'medium',
-          options: q.options || [],
+          options: Array.isArray(q.options) ? q.options : [],
           correct_answer: q.correct_answer,
           buckets: questionBuckets.get(q.id) || []
         })) || [];
