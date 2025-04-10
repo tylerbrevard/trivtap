@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,18 +6,27 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { PlusCircle, Edit, Trash, Wifi, Image, Text, MoreVertical, EyeOff, Eye } from 'lucide-react';
+import { PlusCircle, Edit, Trash, Wifi, Image, Text, MoreVertical, EyeOff, Eye, X } from 'lucide-react';
 import { 
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { gameSettings, updateGameSetting, GameSettings } from '@/utils/gameSettings';
 
-// Mock slides data
-const slides = [
+// Initial slides data - this will be used if there's nothing in localStorage
+const initialSlides = [
   {
     id: '1',
     type: 'text',
@@ -49,7 +59,9 @@ const slides = [
 ];
 
 const Intermission = () => {
-  const [localSlides, setLocalSlides] = useState(slides);
+  const [localSlides, setLocalSlides] = useState([]);
+  const [editingSlide, setEditingSlide] = useState(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [settings, setSettings] = useState({
     showIntermission: gameSettings.showIntermission,
     showAfterEvery: gameSettings.intermissionFrequency,
@@ -57,17 +69,37 @@ const Intermission = () => {
   });
   const { toast } = useToast();
 
-  // Load settings on component mount
+  // Load settings and slides on component mount
   useEffect(() => {
     setSettings({
       showIntermission: gameSettings.showIntermission,
       showAfterEvery: gameSettings.intermissionFrequency,
       slideDuration: gameSettings.intermissionDuration
     });
+    
+    // Load slides from localStorage or use initialSlides
+    const savedSlides = localStorage.getItem('intermissionSlides');
+    if (savedSlides) {
+      try {
+        setLocalSlides(JSON.parse(savedSlides));
+      } catch (error) {
+        console.error('Error loading slides from storage:', error);
+        setLocalSlides(initialSlides);
+      }
+    } else {
+      setLocalSlides(initialSlides);
+    }
   }, []);
 
+  // Save slides to localStorage whenever they change
+  useEffect(() => {
+    if (localSlides.length > 0) {
+      localStorage.setItem('intermissionSlides', JSON.stringify(localSlides));
+    }
+  }, [localSlides]);
+
   // Toggle slide active state
-  const toggleSlideActive = (slideId: string) => {
+  const toggleSlideActive = (slideId) => {
     setLocalSlides(prevSlides => 
       prevSlides.map(slide => 
         slide.id === slideId ? { ...slide, isActive: !slide.isActive } : slide
@@ -81,7 +113,7 @@ const Intermission = () => {
   };
   
   // Handle settings changes
-  const handleToggleIntermission = (checked: boolean) => {
+  const handleToggleIntermission = (checked) => {
     setSettings(prev => ({ ...prev, showIntermission: checked }));
     updateGameSetting('showIntermission', checked);
     
@@ -93,7 +125,7 @@ const Intermission = () => {
     });
   };
 
-  const handleFrequencyChange = (value: string) => {
+  const handleFrequencyChange = (value) => {
     const frequency = parseInt(value, 10);
     if (!isNaN(frequency) && frequency > 0) {
       setSettings(prev => ({ ...prev, showAfterEvery: frequency }));
@@ -106,7 +138,7 @@ const Intermission = () => {
     }
   };
 
-  const handleDurationChange = (value: string) => {
+  const handleDurationChange = (value) => {
     const duration = parseInt(value, 10);
     if (!isNaN(duration) && duration > 0) {
       setSettings(prev => ({ ...prev, slideDuration: duration }));
@@ -130,6 +162,74 @@ const Intermission = () => {
       description: "Your intermission settings have been updated.",
     });
   };
+
+  // Edit slide functions
+  const openEditDialog = (slide) => {
+    setEditingSlide({...slide});
+    setIsEditDialogOpen(true);
+  };
+
+  const handleEditSlideChange = (field, value) => {
+    setEditingSlide(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const saveSlideChanges = () => {
+    if (!editingSlide) return;
+    
+    setLocalSlides(prevSlides => 
+      prevSlides.map(slide => 
+        slide.id === editingSlide.id ? editingSlide : slide
+      )
+    );
+    
+    setIsEditDialogOpen(false);
+    
+    toast({
+      title: "Slide Updated",
+      description: "Your slide changes have been saved.",
+    });
+  };
+
+  const deleteSlide = (slideId) => {
+    setLocalSlides(prevSlides => prevSlides.filter(slide => slide.id !== slideId));
+    
+    toast({
+      title: "Slide Deleted",
+      description: "The slide has been removed.",
+    });
+  };
+  
+  const createNewSlide = (type) => {
+    const newSlide = {
+      id: Date.now().toString(),
+      type,
+      title: `New ${type.charAt(0).toUpperCase() + type.slice(1)} Slide`,
+      isActive: true
+    };
+    
+    // Add type-specific default properties
+    if (type === 'text') {
+      newSlide.content = 'Enter your content here';
+    } else if (type === 'wifi') {
+      newSlide.wifiName = 'Network Name';
+      newSlide.wifiPassword = 'password123';
+    } else if (type === 'image') {
+      newSlide.imageUrl = 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?ixlib=rb-4.0.3&auto=format&fit=crop&w=1050&q=80';
+    }
+    
+    setLocalSlides(prevSlides => [...prevSlides, newSlide]);
+    
+    // Open the edit dialog for the new slide
+    openEditDialog(newSlide);
+    
+    toast({
+      title: "Slide Created",
+      description: `New ${type} slide added. You can edit it now.`,
+    });
+  };
   
   return (
     <div className="space-y-6">
@@ -144,15 +244,15 @@ const Intermission = () => {
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => createNewSlide('text')}>
                 <Text className="mr-2 h-4 w-4" />
                 Text Slide
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => createNewSlide('wifi')}>
                 <Wifi className="mr-2 h-4 w-4" />
                 WiFi Info Slide
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => createNewSlide('image')}>
                 <Image className="mr-2 h-4 w-4" />
                 Image Slide
               </DropdownMenuItem>
@@ -197,7 +297,7 @@ const Intermission = () => {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => openEditDialog(slide)}>
                           <Edit className="mr-2 h-4 w-4" />
                           Edit
                         </DropdownMenuItem>
@@ -214,7 +314,7 @@ const Intermission = () => {
                             </>
                           )}
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
+                        <DropdownMenuItem onClick={() => deleteSlide(slide.id)} className="text-destructive">
                           <Trash className="mr-2 h-4 w-4" />
                           Delete
                         </DropdownMenuItem>
@@ -318,6 +418,96 @@ const Intermission = () => {
           <Button className="w-full mt-4" onClick={handleSaveSettings}>Save Settings</Button>
         </CardContent>
       </Card>
+
+      {/* Edit Slide Dialog */}
+      {editingSlide && (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Edit Slide</DialogTitle>
+              <DialogDescription>
+                Make changes to your intermission slide.
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="space-y-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="slide-title">Title</Label>
+                <Input
+                  id="slide-title"
+                  value={editingSlide.title}
+                  onChange={(e) => handleEditSlideChange('title', e.target.value)}
+                />
+              </div>
+              
+              {editingSlide.type === 'text' && (
+                <div className="space-y-2">
+                  <Label htmlFor="slide-content">Content</Label>
+                  <Textarea
+                    id="slide-content"
+                    rows={5}
+                    value={editingSlide.content}
+                    onChange={(e) => handleEditSlideChange('content', e.target.value)}
+                  />
+                </div>
+              )}
+              
+              {editingSlide.type === 'wifi' && (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="wifi-name">Network Name</Label>
+                    <Input
+                      id="wifi-name"
+                      value={editingSlide.wifiName}
+                      onChange={(e) => handleEditSlideChange('wifiName', e.target.value)}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="wifi-password">Password</Label>
+                    <Input
+                      id="wifi-password"
+                      value={editingSlide.wifiPassword}
+                      onChange={(e) => handleEditSlideChange('wifiPassword', e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+              
+              {editingSlide.type === 'image' && (
+                <div className="space-y-2">
+                  <Label htmlFor="image-url">Image URL</Label>
+                  <Input
+                    id="image-url"
+                    value={editingSlide.imageUrl}
+                    onChange={(e) => handleEditSlideChange('imageUrl', e.target.value)}
+                  />
+                  <div className="mt-2 rounded-md overflow-hidden border border-input">
+                    <img
+                      src={editingSlide.imageUrl}
+                      alt="Preview"
+                      onError={(e) => {
+                        e.target.src = 'https://placehold.co/600x400?text=Image+URL+Error';
+                      }}
+                      className="w-full h-auto max-h-[150px] object-cover"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <DialogFooter className="flex space-x-2 sm:space-x-0">
+              <DialogClose asChild>
+                <Button type="button" variant="secondary">
+                  Cancel
+                </Button>
+              </DialogClose>
+              <Button type="button" onClick={saveSlideChanges}>
+                Save Changes
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };
