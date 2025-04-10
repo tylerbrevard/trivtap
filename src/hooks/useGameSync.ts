@@ -1,6 +1,6 @@
 
 import { useState, useEffect, useCallback } from 'react';
-import { updateGameState, moveToNextQuestion, autoSyncGameState } from '@/utils/gameStateUtils';
+import { updateGameState, moveToNextQuestion, autoSyncGameState, listenForGameStateChanges } from '@/utils/gameStateUtils';
 import { gameSettings } from '@/utils/gameSettings';
 
 interface UseGameSyncProps {
@@ -59,6 +59,22 @@ export const useGameSync = ({
     return { newQuestionIndex, newQuestionCounter };
   }, [questionIndex, questionCounter, totalQuestions]);
 
+  // Listen for game state changes from other windows/tabs
+  useEffect(() => {
+    const removeListener = listenForGameStateChanges((gameState) => {
+      if (gameState.timestamp > lastStateChange) {
+        console.log('Applying game state from event:', gameState);
+        setCurrentState(gameState.state);
+        setQuestionIndex(gameState.questionIndex);
+        setTimeLeft(gameState.timeLeft);
+        setQuestionCounter(gameState.questionCounter);
+        setLastStateChange(gameState.timestamp);
+      }
+    });
+    
+    return removeListener;
+  }, [lastStateChange]);
+
   // Listen for timer updates and state changes in question mode
   useEffect(() => {
     let timerId: number | undefined;
@@ -101,6 +117,27 @@ export const useGameSync = ({
   const togglePause = useCallback(() => {
     setForcePause(prev => !prev);
   }, []);
+
+  // Check for stored game state on initialization
+  useEffect(() => {
+    const storedGameState = localStorage.getItem('gameState');
+    if (storedGameState) {
+      try {
+        const parsedState = JSON.parse(storedGameState);
+        console.log('Found stored game state:', parsedState);
+        
+        if (parsedState.timestamp > lastStateChange) {
+          setCurrentState(parsedState.state);
+          setQuestionIndex(parsedState.questionIndex);
+          setTimeLeft(parsedState.timeLeft);
+          setQuestionCounter(parsedState.questionCounter);
+          setLastStateChange(parsedState.timestamp);
+        }
+      } catch (error) {
+        console.error('Error parsing stored game state:', error);
+      }
+    }
+  }, [lastStateChange]);
 
   return {
     currentState,

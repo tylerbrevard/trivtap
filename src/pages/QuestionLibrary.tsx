@@ -26,6 +26,9 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Link } from "react-router-dom";
+import CategoryEditModal from "@/components/CategoryEditModal";
+import CategoryQuestions from "@/components/CategoryQuestions";
+import BucketQuestions from "@/components/BucketQuestions";
 
 // Define types for our data
 interface Question {
@@ -61,6 +64,22 @@ const QuestionLibrary = () => {
     categories: true
   });
   const [searchQuery, setSearchQuery] = useState('');
+  const [editCategoryModal, setEditCategoryModal] = useState<{
+    isOpen: boolean;
+    category: Category | null;
+  }>({
+    isOpen: false,
+    category: null
+  });
+  const [viewMode, setViewMode] = useState<{
+    mode: 'list' | 'category' | 'bucket';
+    categoryId?: string;
+    categoryName?: string;
+    bucketId?: string;
+    bucketName?: string;
+  }>({
+    mode: 'list'
+  });
   const { toast } = useToast();
 
   // Fetch questions from Supabase
@@ -259,6 +278,85 @@ const QuestionLibrary = () => {
     question.text.toLowerCase().includes(searchQuery.toLowerCase()) ||
     question.category.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Handle create/edit category
+  const handleOpenCategoryModal = (category: Category | null = null) => {
+    setEditCategoryModal({
+      isOpen: true,
+      category
+    });
+  };
+
+  const handleCategorySuccess = () => {
+    // Refresh categories
+    setLoading(prev => ({ ...prev, categories: true }));
+    
+    const fetchCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('categories')
+          .select('id, name');
+          
+        if (error) {
+          console.error('Error refreshing categories:', error);
+          return;
+        }
+        
+        setCategories(data || []);
+      } catch (error) {
+        console.error('Error refreshing categories:', error);
+      } finally {
+        setLoading(prev => ({ ...prev, categories: false }));
+      }
+    };
+
+    fetchCategories();
+  };
+
+  // Handle view category questions
+  const handleViewCategoryQuestions = (categoryId: string, categoryName: string) => {
+    setViewMode({
+      mode: 'category',
+      categoryId,
+      categoryName
+    });
+  };
+
+  // Handle view bucket questions
+  const handleViewBucketQuestions = (bucketId: string, bucketName: string) => {
+    setViewMode({
+      mode: 'bucket',
+      bucketId,
+      bucketName
+    });
+  };
+
+  // Handle return to list view
+  const handleReturnToList = () => {
+    setViewMode({
+      mode: 'list'
+    });
+  };
+
+  if (viewMode.mode === 'category' && viewMode.categoryId && viewMode.categoryName) {
+    return (
+      <CategoryQuestions 
+        categoryId={viewMode.categoryId}
+        categoryName={viewMode.categoryName}
+        onClose={handleReturnToList}
+      />
+    );
+  }
+
+  if (viewMode.mode === 'bucket' && viewMode.bucketId && viewMode.bucketName) {
+    return (
+      <BucketQuestions 
+        bucketId={viewMode.bucketId}
+        bucketName={viewMode.bucketName}
+        onClose={handleReturnToList}
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -460,7 +558,13 @@ const QuestionLibrary = () => {
                           <div className="text-muted-foreground">
                             {bucket.questionCount} questions
                           </div>
-                          <Button variant="outline" size="sm">View Questions</Button>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={() => handleViewBucketQuestions(bucket.id, bucket.name)}
+                          >
+                            View Questions
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>
@@ -481,7 +585,7 @@ const QuestionLibrary = () => {
             <CardHeader>
               <div className="flex justify-between items-center">
                 <CardTitle>Categories</CardTitle>
-                <Button>
+                <Button onClick={() => handleOpenCategoryModal()}>
                   <Tag className="mr-2 h-4 w-4" />
                   New Category
                 </Button>
@@ -503,10 +607,35 @@ const QuestionLibrary = () => {
                   {categories.map((category) => (
                     <Card key={category.id}>
                       <CardHeader className="pb-2">
-                        <CardTitle className="text-lg">{category.name}</CardTitle>
+                        <div className="flex justify-between items-center">
+                          <CardTitle className="text-lg">{category.name}</CardTitle>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon">
+                                <MoreVertical className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleOpenCategoryModal(category)}>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive">
+                                <Trash className="mr-2 h-4 w-4" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
                       </CardHeader>
                       <CardContent>
-                        <Button variant="outline" size="sm">Browse Questions</Button>
+                        <Button 
+                          variant="outline" 
+                          size="sm"
+                          onClick={() => handleViewCategoryQuestions(category.id, category.name)}
+                        >
+                          Browse Questions
+                        </Button>
                       </CardContent>
                     </Card>
                   ))}
@@ -520,6 +649,13 @@ const QuestionLibrary = () => {
           </Card>
         </TabsContent>
       </Tabs>
+      
+      <CategoryEditModal
+        isOpen={editCategoryModal.isOpen}
+        onClose={() => setEditCategoryModal({ isOpen: false, category: null })}
+        category={editCategoryModal.category}
+        onSuccess={handleCategorySuccess}
+      />
     </div>
   );
 };

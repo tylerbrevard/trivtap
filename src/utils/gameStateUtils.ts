@@ -25,6 +25,12 @@ export const updateGameState = (
   console.log('Updating game state:', gameState);
   localStorage.setItem('gameState', JSON.stringify(gameState));
   
+  // Trigger a custom event to notify other windows about the state change
+  const stateChangeEvent = new CustomEvent('triviaStateChange', { 
+    detail: gameState 
+  });
+  window.dispatchEvent(stateChangeEvent);
+  
   // Return the timestamp for tracking
   return gameState.timestamp;
 };
@@ -144,4 +150,21 @@ export const autoSyncGameState = (
       }
     }, gameSettings.answerRevealDuration * 1000);
   }
+};
+
+/**
+ * Listen for game state changes from other windows/tabs
+ * @param callback Function to call when state changes are detected
+ */
+export const listenForGameStateChanges = (callback: (gameState: any) => void) => {
+  const handleStateChange = (event: CustomEvent) => {
+    console.log('Received game state change event:', event.detail);
+    callback(event.detail);
+  };
+  
+  window.addEventListener('triviaStateChange', handleStateChange as EventListener);
+  
+  return () => {
+    window.removeEventListener('triviaStateChange', handleStateChange as EventListener);
+  };
 };
