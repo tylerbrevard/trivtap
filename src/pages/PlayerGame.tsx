@@ -6,6 +6,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
+import { listenForGameStateChanges } from '@/utils/gameStateUtils';
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -106,7 +107,12 @@ const PlayerGame = () => {
               const gameState = localStorage.getItem('gameState');
               if (gameState) {
                 const parsedState = JSON.parse(gameState);
-                setCurrentQuestion(formattedQuestions[parsedState.questionIndex] || formattedQuestions[0]);
+                const initialQuestionIndex = parsedState.questionIndex || 0;
+                setQuestionIndex(initialQuestionIndex);
+                setCurrentQuestion(formattedQuestions[initialQuestionIndex] || formattedQuestions[0]);
+                setCurrentGameState(parsedState.state || 'question');
+                setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
+                setIsAnswerRevealed(parsedState.state === 'answer');
               } else {
                 setCurrentQuestion(formattedQuestions[0]);
               }
@@ -125,6 +131,7 @@ const PlayerGame = () => {
   
   console.log('Player screen - current question index:', questionIndex);
   console.log('Player screen - questions available:', questions.length);
+  console.log('Player screen - current game state:', currentGameState);
   
   useEffect(() => {
     const storedName = sessionStorage.getItem('playerName');
@@ -163,39 +170,31 @@ const PlayerGame = () => {
           console.log('Checking game state:', parsedState);
           
           if (!parsedState.timestamp || parsedState.timestamp <= lastGameStateTimestamp) {
-            console.log('Game state is not newer, ignoring');
-            setFailedSyncAttempts(prev => prev + 1);
-            
-            if (failedSyncAttempts > 20) {
-              console.log('Forcing state sync after multiple failed attempts');
-              setLastGameStateTimestamp(0);
-              setFailedSyncAttempts(0);
+            // Only increment failed attempts if it's the same state we're seeing repeatedly
+            if (lastGameStateTimestamp > 0) {
+              console.log('Game state is not newer, ignoring');
+              setFailedSyncAttempts(prev => prev + 1);
+              
+              if (failedSyncAttempts > 20) {
+                console.log('Forcing state sync after multiple failed attempts');
+                setLastGameStateTimestamp(0);
+                setFailedSyncAttempts(0);
+              }
             }
             return;
           }
           
+          // Reset failed attempts counter since we got a new state
           setFailedSyncAttempts(0);
           setLastGameStateTimestamp(parsedState.timestamp);
-          setCurrentGameState(parsedState.state);
           
-          if (parsedState.state === 'intermission') {
-            console.log('Display is showing intermission, waiting...');
-            setSelectedAnswer(null);
-            setAnsweredCorrectly(null);
-            setIsAnswerRevealed(false);
-            return;
-          }
+          // Always update the current game state
+          const newGameState = parsedState.state;
+          setCurrentGameState(newGameState);
           
-          if (parsedState.state === 'leaderboard') {
-            console.log('Display is showing leaderboard, waiting...');
-            setSelectedAnswer(null);
-            setAnsweredCorrectly(null);
-            setIsAnswerRevealed(false);
-            return;
-          }
-          
+          // Always check if question index changed
           if (parsedState.questionIndex !== questionIndex) {
-            console.log('Question index changed:', parsedState.questionIndex);
+            console.log(`Question index changed from ${questionIndex} to ${parsedState.questionIndex}`);
             setQuestionIndex(parsedState.questionIndex);
             
             if (questions.length > 0 && parsedState.questionIndex < questions.length) {
@@ -203,24 +202,36 @@ const PlayerGame = () => {
               console.log('Updated current question to:', questions[parsedState.questionIndex]?.text);
             }
             
-            setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
+            // Reset player state for a new question
             setSelectedAnswer(null);
             setAnsweredCorrectly(null);
-            setIsAnswerRevealed(parsedState.state === 'answer');
-          } else {
-            if (parsedState.state === 'answer' && !isAnswerRevealed) {
-              console.log('Changing to answer state');
-              setIsAnswerRevealed(true);
-              setTimeLeft(0);
-            } else if (parsedState.state === 'question' && isAnswerRevealed) {
-              console.log('Changing back to question state');
-              setIsAnswerRevealed(false);
-              setTimeLeft(parsedState.timeLeft);
-              setSelectedAnswer(null);
-              setAnsweredCorrectly(null);
-            } else if (parsedState.state === 'question' && !isAnswerRevealed) {
-              setTimeLeft(parsedState.timeLeft);
-            }
+            setIsAnswerRevealed(newGameState === 'answer');
+            setTimeLeft(newGameState === 'question' ? parsedState.timeLeft : 0);
+            return;
+          }
+          
+          // Handle state transitions
+          if (newGameState === 'answer' && !isAnswerRevealed) {
+            console.log('Changing to answer state');
+            setIsAnswerRevealed(true);
+            setTimeLeft(0);
+          } else if (newGameState === 'question' && isAnswerRevealed) {
+            console.log('Changing back to question state');
+            setIsAnswerRevealed(false);
+            setTimeLeft(parsedState.timeLeft);
+            setSelectedAnswer(null);
+            setAnsweredCorrectly(null);
+          } else if (newGameState === 'question' && !isAnswerRevealed) {
+            // Update time left even if we're still in question state
+            setTimeLeft(parsedState.timeLeft);
+          }
+          
+          // Handle intermission and leaderboard states
+          if (newGameState === 'intermission' || newGameState === 'leaderboard') {
+            console.log(`Display is showing ${newGameState}, waiting...`);
+            setSelectedAnswer(null);
+            setAnsweredCorrectly(null);
+            setIsAnswerRevealed(false);
           }
         } catch (error) {
           console.error('Error parsing game state', error);
@@ -231,35 +242,45 @@ const PlayerGame = () => {
       }
     };
     
-    const intervalId = setInterval(checkGameState, 300);
+    // Check more frequently to ensure we don't miss state changes
+    const intervalId = setInterval(checkGameState, 250);
     return () => clearInterval(intervalId);
-  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions]);
+  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions, currentGameState]);
   
   // Register event listener for game state changes
   useEffect(() => {
-    const handleStateChange = (event: CustomEvent) => {
-      console.log('Received game state change event in player:', event.detail);
-      if (event.detail.timestamp > lastGameStateTimestamp) {
-        setLastGameStateTimestamp(event.detail.timestamp);
-        setCurrentGameState(event.detail.state);
+    const cleanupListener = listenForGameStateChanges((gameState) => {
+      console.log('Received game state change event in player:', gameState);
+      
+      if (gameState.timestamp > lastGameStateTimestamp) {
+        setLastGameStateTimestamp(gameState.timestamp);
+        setCurrentGameState(gameState.state);
         
-        if (event.detail.questionIndex !== questionIndex) {
-          setQuestionIndex(event.detail.questionIndex);
+        if (gameState.questionIndex !== questionIndex) {
+          setQuestionIndex(gameState.questionIndex);
           
-          if (questions.length > 0 && event.detail.questionIndex < questions.length) {
-            setCurrentQuestion(questions[event.detail.questionIndex]);
+          if (questions.length > 0 && gameState.questionIndex < questions.length) {
+            setCurrentQuestion(questions[gameState.questionIndex]);
+            console.log('Custom event updated question to:', questions[gameState.questionIndex]?.text);
           }
+          
+          // Reset player state for new question
+          setSelectedAnswer(null);
+          setAnsweredCorrectly(null);
+          setIsAnswerRevealed(gameState.state === 'answer');
+          setTimeLeft(gameState.state === 'question' ? gameState.timeLeft : 0);
+        } else if (gameState.state !== currentGameState) {
+          // Handle state change for same question
+          setIsAnswerRevealed(gameState.state === 'answer');
+          setTimeLeft(gameState.state === 'question' ? gameState.timeLeft : 0);
         }
       }
-    };
+    });
     
-    window.addEventListener('triviaStateChange', handleStateChange as EventListener);
-    
-    return () => {
-      window.removeEventListener('triviaStateChange', handleStateChange as EventListener);
-    };
-  }, [lastGameStateTimestamp, questionIndex, questions]);
+    return cleanupListener;
+  }, [lastGameStateTimestamp, questionIndex, questions, currentGameState]);
   
+  // Handle correct/incorrect answer selection
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
       const timerId = setTimeout(() => {
@@ -313,6 +334,7 @@ const PlayerGame = () => {
   
   const handleForceSync = () => {
     setLastGameStateTimestamp(0);
+    setFailedSyncAttempts(0);
     toast({
       title: "Syncing",
       description: "Forced sync with game state",
@@ -426,10 +448,10 @@ const PlayerGame = () => {
         ))}
       </div>
       
-      {timeLeft === 0 && !isAnswerRevealed && (
+      {timeLeft === 0 && !isAnswerRevealed && currentGameState === 'question' && (
         <div className="flex items-center gap-3 justify-center mt-4 text-muted-foreground">
           <AlertTriangle className="h-5 w-5" />
-          <span>Time's up!</span>
+          <span>Time's up! Waiting for next question...</span>
         </div>
       )}
       
@@ -448,7 +470,7 @@ const PlayerGame = () => {
       {process.env.NODE_ENV === 'development' && (
         <div className="mt-4 p-3 border border-dashed border-gray-300 rounded-md">
           <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-          <Button variant="outline" size="sm" onClick={handleForceSync}>
+          <Button variant="outline" size="sm" onClick={handleForceSync} className="mr-2">
             Force Sync
           </Button>
           <div className="mt-2 text-xs text-muted-foreground">
@@ -456,6 +478,7 @@ const PlayerGame = () => {
             <p>Question Index: {questionIndex}</p>
             <p>Last Sync: {new Date(lastGameStateTimestamp).toLocaleTimeString()}</p>
             <p>Questions loaded: {questions.length}</p>
+            <p>Failed sync attempts: {failedSyncAttempts}</p>
           </div>
         </div>
       )}

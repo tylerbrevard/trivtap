@@ -1,3 +1,4 @@
+
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -192,11 +193,22 @@ export const cycleIntermissionSlide = (
       
       // Set timeout for the next slide
       setTimeout(() => {
-        cycleIntermissionSlide(
-          currentQuestionIndex,
-          questionCounter,
-          gameSettings
-        );
+        // Verify we're still in intermission state before cycling to the next slide
+        const currentGameState = localStorage.getItem('gameState');
+        if (currentGameState) {
+          try {
+            const parsedState = JSON.parse(currentGameState);
+            if (parsedState.state === 'intermission') {
+              cycleIntermissionSlide(
+                currentQuestionIndex,
+                questionCounter,
+                gameSettings
+              );
+            }
+          } catch (error) {
+            console.error('Error checking game state before cycling slides:', error);
+          }
+        }
       }, gameSettings.intermissionDuration * 1000);
     }
   } catch (error) {
@@ -230,12 +242,14 @@ export const autoSyncGameState = (
   
   if (currentState === 'question') {
     // Move from question to answer state
-    updateGameState(
+    const timestamp = updateGameState(
       currentQuestionIndex,
       'answer',
       0,
       questionCounter
     );
+    
+    console.log('Changed state from question to answer, timestamp:', timestamp);
     
     // Set timeout to move to the next appropriate state
     setTimeout(() => {
