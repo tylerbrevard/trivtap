@@ -1,4 +1,3 @@
-
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -10,7 +9,7 @@
  */
 export const updateGameState = (
   currentQuestionIndex: number, 
-  nextState: 'question' | 'answer' | 'intermission' | 'leaderboard',
+  nextState: 'question' | 'answer' | 'intermission' | 'leaderboard' | 'join',
   timeLeft: number, 
   questionCounter: number
 ) => {
@@ -19,7 +18,8 @@ export const updateGameState = (
     questionIndex: currentQuestionIndex,
     timeLeft: timeLeft,
     questionCounter: questionCounter,
-    timestamp: Date.now()
+    timestamp: Date.now(),
+    slidesIndex: nextState === 'intermission' ? getNextSlideIndex() : 0
   };
   
   console.log('Updating game state:', gameState);
@@ -33,6 +33,47 @@ export const updateGameState = (
   
   // Return the timestamp for tracking
   return gameState.timestamp;
+};
+
+/**
+ * Get the next slide index for intermission, cycling through active slides
+ */
+export const getNextSlideIndex = (): number => {
+  // Get the current slide index from localStorage, defaulting to 0
+  const currentState = localStorage.getItem('gameState');
+  let currentSlideIndex = 0;
+  
+  if (currentState) {
+    try {
+      const parsedState = JSON.parse(currentState);
+      currentSlideIndex = parsedState.slidesIndex || 0;
+    } catch (error) {
+      console.error('Error parsing current state for slides:', error);
+    }
+  }
+  
+  // Get all the available slides
+  const savedSlides = localStorage.getItem('intermissionSlides');
+  if (!savedSlides) {
+    return 0;
+  }
+  
+  try {
+    const slides = JSON.parse(savedSlides);
+    const activeSlides = slides.filter((slide: any) => slide.isActive);
+    
+    if (activeSlides.length === 0) {
+      return 0;
+    }
+    
+    // Move to the next slide, cycling back to the beginning if needed
+    const nextIndex = (currentSlideIndex + 1) % activeSlides.length;
+    console.log(`Moving to slide index ${nextIndex} of ${activeSlides.length} active slides`);
+    return nextIndex;
+  } catch (error) {
+    console.error('Error calculating next slide:', error);
+    return 0;
+  }
 };
 
 /**
@@ -63,6 +104,87 @@ export const moveToNextQuestion = (
     newQuestionIndex: nextQuestionIndex,
     newQuestionCounter: questionCounter + 1
   };
+};
+
+/**
+ * Cycles to the next intermission slide
+ * @param currentQuestionIndex Current question index
+ * @param questionCounter Question counter
+ * @param gameSettings Game settings with timing configurations
+ */
+export const cycleIntermissionSlide = (
+  currentQuestionIndex: number,
+  questionCounter: number,
+  gameSettings: any
+) => {
+  console.log('Cycling to next intermission slide');
+  
+  // Get the slides from localStorage
+  const savedSlides = localStorage.getItem('intermissionSlides');
+  if (!savedSlides) {
+    console.log('No intermission slides found, moving to next question');
+    moveToNextQuestion(
+      currentQuestionIndex,
+      questionCounter,
+      gameSettings.questionDuration,
+      1000 // Large number to prevent index errors until we know the actual count
+    );
+    return;
+  }
+  
+  try {
+    const slides = JSON.parse(savedSlides);
+    const activeSlides = slides.filter((slide: any) => slide.isActive);
+    
+    if (activeSlides.length === 0) {
+      console.log('No active intermission slides, moving to next question');
+      moveToNextQuestion(
+        currentQuestionIndex,
+        questionCounter,
+        gameSettings.questionDuration,
+        1000 // Large number to prevent index errors until we know the actual count
+      );
+      return;
+    }
+    
+    const nextIndex = getNextSlideIndex();
+    
+    // If we've gone through all slides, move to the next question
+    if (nextIndex === 0 && activeSlides.length > 1) {
+      console.log('Completed all intermission slides, moving to next question');
+      moveToNextQuestion(
+        currentQuestionIndex,
+        questionCounter,
+        gameSettings.questionDuration,
+        1000 // Large number to prevent index errors until we know the actual count
+      );
+    } else {
+      // Otherwise, update to show the next slide
+      updateGameState(
+        currentQuestionIndex,
+        'intermission',
+        0,
+        questionCounter
+      );
+      
+      // Set timeout for the next slide
+      setTimeout(() => {
+        cycleIntermissionSlide(
+          currentQuestionIndex,
+          questionCounter,
+          gameSettings
+        );
+      }, gameSettings.intermissionDuration * 1000);
+    }
+  } catch (error) {
+    console.error('Error cycling intermission slides:', error);
+    moveToNextQuestion(
+      currentQuestionIndex,
+      questionCounter,
+      gameSettings.questionDuration,
+      1000 // Large number to prevent index errors until we know the actual count
+    );
+  }
 };
 
 /**
@@ -101,7 +223,7 @@ export const autoSyncGameState = (
         questionCounter % gameSettings.leaderboardFrequency === 0 && 
         !shouldShowIntermission;
       
-      if (shouldShowIntermission) {
+      if (shouldShowIntermission && gameSettings.showIntermission) {
         console.log('Auto-syncing: Moving to intermission');
         updateGameState(
           currentQuestionIndex,
@@ -110,13 +232,12 @@ export const autoSyncGameState = (
           questionCounter
         );
         
-        // After intermission, move to next question
+        // Start cycling through intermission slides
         setTimeout(() => {
-          moveToNextQuestion(
+          cycleIntermissionSlide(
             currentQuestionIndex,
             questionCounter,
-            gameSettings.questionDuration,
-            totalQuestions
+            gameSettings
           );
         }, gameSettings.intermissionDuration * 1000);
       } 

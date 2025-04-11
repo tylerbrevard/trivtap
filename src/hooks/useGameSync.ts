@@ -25,10 +25,11 @@ export const useGameSync = ({
   const [timeLeft, setTimeLeft] = useState(gameSettings.questionDuration);
   const [lastStateChange, setLastStateChange] = useState<number>(Date.now());
   const [forcePause, setForcePause] = useState(false);
+  const [slidesIndex, setSlidesIndex] = useState(0);
 
   // Update game state handler
   const handleUpdateGameState = useCallback((
-    state: 'question' | 'answer' | 'intermission' | 'leaderboard',
+    state: 'question' | 'answer' | 'intermission' | 'leaderboard' | 'join',
     qIndex: number,
     time: number,
     qCounter: number
@@ -68,6 +69,11 @@ export const useGameSync = ({
         setQuestionIndex(gameState.questionIndex);
         setTimeLeft(gameState.timeLeft);
         setQuestionCounter(gameState.questionCounter);
+        
+        if (gameState.slidesIndex !== undefined) {
+          setSlidesIndex(gameState.slidesIndex);
+        }
+        
         setLastStateChange(gameState.timestamp);
       }
     });
@@ -108,10 +114,18 @@ export const useGameSync = ({
       }, 1000);
     }
     
+    // Handle intermission slide cycling
+    if (currentState === 'intermission' && autoSync && !forcePause) {
+      timerId = window.setTimeout(() => {
+        // The slide cycling is handled in gameStateUtils.cycleIntermissionSlide
+        // which is called from autoSyncGameState
+      }, gameSettings.intermissionDuration * 1000);
+    }
+    
     return () => {
       if (timerId) clearTimeout(timerId);
     };
-  }, [currentState, timeLeft, questionIndex, questionCounter, forcePause, autoSync, totalQuestions]);
+  }, [currentState, timeLeft, questionIndex, questionCounter, forcePause, autoSync, totalQuestions, slidesIndex]);
 
   // Toggle pause function
   const togglePause = useCallback(() => {
@@ -131,6 +145,11 @@ export const useGameSync = ({
           setQuestionIndex(parsedState.questionIndex);
           setTimeLeft(parsedState.timeLeft);
           setQuestionCounter(parsedState.questionCounter);
+          
+          if (parsedState.slidesIndex !== undefined) {
+            setSlidesIndex(parsedState.slidesIndex);
+          }
+          
           setLastStateChange(parsedState.timestamp);
         }
       } catch (error) {
@@ -146,6 +165,7 @@ export const useGameSync = ({
     timeLeft,
     lastStateChange,
     forcePause,
+    slidesIndex,
     updateGameState: handleUpdateGameState,
     moveToNextQuestion: handleMoveToNext,
     togglePause,

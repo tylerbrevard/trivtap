@@ -65,6 +65,10 @@ const DisplayScreen = () => {
   const [players, setPlayers] = useState<any[]>([]);
   const [gameCode, setGameCode] = useState('');
   const [hasGameStarted, setHasGameStarted] = useState(false);
+  const [questions, setQuestions] = useState(mockQuestions);
+  const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [intermissionSlides, setIntermissionSlides] = useState<any[]>([]);
   const { toast } = useToast();
   
   const { 
@@ -77,9 +81,10 @@ const DisplayScreen = () => {
     moveToNextQuestion,
     togglePause,
     setCurrentState,
-    setTimeLeft
+    setTimeLeft,
+    lastStateChange
   } = useGameSync({
-    totalQuestions: mockQuestions.length,
+    totalQuestions: questions.length,
     initialQuestionIndex: 0,
     initialQuestionCounter: 1,
     autoSync: true
@@ -87,9 +92,137 @@ const DisplayScreen = () => {
   
   console.log('Current state:', currentState);
   console.log('Current question index:', questionIndex);
-  console.log('Available questions:', mockQuestions.length);
+  console.log('Available questions:', questions.length);
   console.log('Question counter:', questionCounter);
   console.log('Game settings:', gameSettings);
+
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        setIsLoadingQuestions(true);
+        
+        const { data: buckets, error: bucketsError } = await supabase
+          .from('buckets')
+          .select('id')
+          .eq('is_default', true)
+          .limit(1);
+          
+        if (bucketsError) {
+          console.error('Error fetching default bucket:', bucketsError);
+          setQuestions(mockQuestions);
+          setIsLoadingQuestions(false);
+          return;
+        }
+        
+        if (buckets && buckets.length > 0) {
+          const defaultBucketId = buckets[0].id;
+          
+          const { data: bucketQuestions, error: questionsError } = await supabase
+            .from('bucket_questions')
+            .select(`
+              question_id,
+              questions:question_id (
+                id, 
+                text, 
+                options, 
+                correct_answer, 
+                categories:category_id (
+                  id,
+                  name
+                )
+              )
+            `)
+            .eq('bucket_id', defaultBucketId);
+            
+          if (questionsError) {
+            console.error('Error fetching questions:', questionsError);
+            setQuestions(mockQuestions);
+            setIsLoadingQuestions(false);
+            return;
+          }
+          
+          if (bucketQuestions && bucketQuestions.length > 0) {
+            const formattedQuestions = bucketQuestions.map(item => {
+              const question = item.questions;
+              
+              let options: string[] = [];
+              if (question.options) {
+                if (Array.isArray(question.options)) {
+                  options = question.options.map(opt => String(opt));
+                } else if (typeof question.options === 'string') {
+                  try {
+                    const parsedOptions = JSON.parse(question.options);
+                    options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
+                  } catch {
+                    options = [String(question.options)];
+                  }
+                }
+              }
+              
+              return {
+                id: question.id,
+                text: question.text,
+                options: options,
+                correctAnswer: question.correct_answer,
+                category: question.categories ? question.categories.name : 'General'
+              };
+            });
+            
+            if (formattedQuestions.length > 0) {
+              console.log(`Loaded ${formattedQuestions.length} questions from the default bucket`);
+              setQuestions(formattedQuestions);
+            } else {
+              console.log('No questions in default bucket, using mock questions');
+              setQuestions(mockQuestions);
+            }
+          } else {
+            console.log('No questions found in the default bucket, using mock questions');
+            setQuestions(mockQuestions);
+          }
+        } else {
+          console.log('No default bucket found, using mock questions');
+          setQuestions(mockQuestions);
+        }
+      } catch (error) {
+        console.error('Error loading questions:', error);
+        setQuestions(mockQuestions);
+      } finally {
+        setIsLoadingQuestions(false);
+      }
+    };
+    
+    fetchQuestions();
+  }, []);
+
+  useEffect(() => {
+    const savedSlides = localStorage.getItem('intermissionSlides');
+    if (savedSlides) {
+      try {
+        const slides = JSON.parse(savedSlides);
+        const activeSlides = slides.filter((slide: any) => slide.isActive);
+        setIntermissionSlides(activeSlides);
+        console.log(`Loaded ${activeSlides.length} active intermission slides`);
+      } catch (error) {
+        console.error('Error loading intermission slides:', error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (currentState === 'intermission') {
+      const currentGameState = localStorage.getItem('gameState');
+      if (currentGameState) {
+        try {
+          const parsedState = JSON.parse(currentGameState);
+          if (parsedState.slidesIndex !== undefined) {
+            setCurrentSlideIndex(parsedState.slidesIndex);
+          }
+        } catch (error) {
+          console.error('Error parsing game state for slides:', error);
+        }
+      }
+    }
+  }, [currentState, lastStateChange]);
 
   useEffect(() => {
     const storedGameCode = localStorage.getItem('persistentGameCode');
@@ -224,7 +357,7 @@ const DisplayScreen = () => {
     }
   };
   
-  const currentQuestion = mockQuestions[questionIndex];
+  const currentQuestion = questions[questionIndex] || mockQuestions[0];
   
   const getTimerColor = () => {
     if (timeLeft > gameSettings.questionDuration * 0.6) return 'bg-green-500';
@@ -246,6 +379,15 @@ const DisplayScreen = () => {
       title: "Display Launched",
       description: "The display has been opened in a new tab.",
     });
+  };
+  
+  const getCurrentIntermissionSlide = () => {
+    if (intermissionSlides.length === 0) {
+      return null;
+    }
+    
+    const slideIndex = currentSlideIndex % intermissionSlides.length;
+    return intermissionSlides[slideIndex];
   };
   
   const renderContent = () => {
@@ -405,25 +547,68 @@ const DisplayScreen = () => {
         );
         
       case 'intermission':
+        const currentSlide = getCurrentIntermissionSlide();
+        
+        if (!currentSlide) {
+          return (
+            <div className="flex flex-col items-center justify-center h-full text-center">
+              <h1 className="text-4xl font-bold mb-8 text-primary">Intermission</h1>
+              <div className="card-trivia p-8 max-w-2xl w-full">
+                <h2 className="text-3xl font-bold mb-4">Welcome to Trivia Night!</h2>
+                <p className="text-xl mb-6">The next question will be coming up shortly...</p>
+              </div>
+              
+              {process.env.NODE_ENV === 'development' && (
+                <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+                  <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+                  <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
+                    Force Next Question
+                  </Button>
+                </div>
+              )}
+            </div>
+          );
+        }
+        
         return (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <h1 className="text-4xl font-bold mb-8 text-primary">Intermission</h1>
             <div className="card-trivia p-8 max-w-2xl w-full">
-              <h2 className="text-3xl font-bold mb-4">Welcome to Trivia Night!</h2>
-              <p className="text-xl mb-6">Every Wednesday at 8pm. Prizes for top 3 winners!</p>
-              <div className="bg-muted p-4 rounded-md">
-                <p className="text-lg font-medium">WiFi Details</p>
-                <div className="flex justify-center gap-8 mt-2">
-                  <div>
-                    <p className="text-sm text-muted-foreground">WiFi Name</p>
-                    <p className="font-medium">VenueGuest</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Password</p>
-                    <p className="font-medium">trivia2025</p>
+              <h2 className="text-3xl font-bold mb-4">{currentSlide.title}</h2>
+              
+              {currentSlide.type === 'text' && (
+                <p className="text-xl mb-6 whitespace-pre-line">{currentSlide.content}</p>
+              )}
+              
+              {currentSlide.type === 'wifi' && (
+                <div className="bg-muted p-4 rounded-md">
+                  <p className="text-lg font-medium">WiFi Details</p>
+                  <div className="flex justify-center gap-8 mt-2">
+                    <div>
+                      <p className="text-sm text-muted-foreground">WiFi Name</p>
+                      <p className="font-medium">{currentSlide.wifiName}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Password</p>
+                      <p className="font-medium">{currentSlide.wifiPassword}</p>
+                    </div>
                   </div>
                 </div>
-              </div>
+              )}
+              
+              {currentSlide.type === 'image' && (
+                <div className="mt-4">
+                  <img 
+                    src={currentSlide.imageUrl} 
+                    alt={currentSlide.title}
+                    className="max-w-full max-h-[300px] object-contain mx-auto"
+                    onError={(e) => {
+                      const target = e.currentTarget;
+                      target.src = 'https://placehold.co/600x400?text=Image+URL+Error';
+                    }}
+                  />
+                </div>
+              )}
             </div>
             
             {process.env.NODE_ENV === 'development' && (
@@ -526,8 +711,22 @@ const DisplayScreen = () => {
             )}
           </div>
         );
+        
+      default:
+        return <div>Unknown state: {currentState}</div>;
     }
   };
+  
+  if (isLoadingQuestions) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold mb-4">Loading Trivia Game...</h2>
+          <Progress value={50} className="w-64" />
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="min-h-screen bg-background flex flex-col">
