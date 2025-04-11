@@ -62,7 +62,7 @@ const Register = () => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <Link to="/" className="inline-block mb-6">
-            <h1 className="text-3xl font-bold text-primary">TriviaPulse</h1>
+            <h1 className="text-3xl font-bold text-primary">TrivTap</h1>
           </Link>
           <h2 className="text-2xl font-bold mb-2">Create Your Account</h2>
           <p className="text-muted-foreground">
