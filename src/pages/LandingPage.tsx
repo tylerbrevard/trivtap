@@ -192,9 +192,7 @@ const LandingPage = () => {
       <section className="py-16 bg-primary">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <h2 className="text-3xl md:text-4xl font-bold text-white mb-6">Ready to Boost Engagement?</h2>
-          <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">
-            Join thousands of venues using TriviaPulse to create memorable experiences for their customers.
-          </p>
+          <p className="text-xl text-white/80 mb-8 max-w-2xl mx-auto">Join thousands of venues using TrivTap to create memorable experiences for their customers.</p>
           <Link to="/register">
             <Button className="bg-white text-primary hover:bg-white/90 text-lg py-6 px-8">
               Start Free Trial
@@ -208,7 +206,7 @@ const LandingPage = () => {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row justify-between items-center">
             <div className="mb-4 md:mb-0">
-              <span className="text-xl font-bold text-primary">TriviaPulse</span>
+              <span className="text-xl font-bold text-primary">TrivTap</span>
             </div>
             <div className="flex space-x-6">
               <Link to="#" className="text-muted-foreground hover:text-primary">Privacy Policy</Link>
