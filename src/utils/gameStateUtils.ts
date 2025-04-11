@@ -263,6 +263,7 @@ export const autoSyncGameState = (
   totalQuestions: number
 ) => {
   console.log('Auto-syncing game state:', { currentState, currentQuestionIndex, questionCounter });
+  console.log('Using game settings:', gameSettings);
   
   if (currentState === 'question') {
     // Move from question to answer state
@@ -277,12 +278,23 @@ export const autoSyncGameState = (
     
     // Set timeout to move to the next appropriate state
     setTimeout(() => {
+      // Check if we should show intermission based on game settings
       const shouldShowIntermission = questionCounter > 0 && 
         questionCounter % gameSettings.intermissionFrequency === 0;
       
+      // Check if we should show leaderboard based on game settings
       const shouldShowLeaderboard = questionCounter > 0 && 
         questionCounter % gameSettings.leaderboardFrequency === 0 && 
         !shouldShowIntermission;
+      
+      console.log('Decision making for next state:', {
+        currentQuestionCounter: questionCounter,
+        intermissionFrequency: gameSettings.intermissionFrequency,
+        shouldShowIntermission,
+        leaderboardFrequency: gameSettings.leaderboardFrequency,
+        shouldShowLeaderboard,
+        showIntermissionSetting: gameSettings.showIntermission
+      });
       
       if (shouldShowIntermission && gameSettings.showIntermission) {
         console.log('Auto-syncing: Moving to intermission');

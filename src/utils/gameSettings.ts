@@ -17,11 +17,11 @@ export type GameSettings = {
 export const gameSettings: GameSettings = {
   questionDuration: 20, // seconds
   answerRevealDuration: 5, // seconds
-  intermissionFrequency: 10, // show intermission after every 10 questions
+  intermissionFrequency: 5, // show intermission after every 5 questions by default (changed from 10)
   intermissionDuration: 8, // seconds
   leaderboardFrequency: 10, // show leaderboard after every 10 questions
   autoProgress: true, // automatically progress through questions
-  showIntermission: true, // show intermission slides (new setting)
+  showIntermission: true, // show intermission slides
 };
 
 // Helper function to update a specific setting
@@ -41,13 +41,17 @@ const initializeSettings = () => {
   if (storedSettings) {
     try {
       const parsedSettings = JSON.parse(storedSettings);
+      
+      // Log what we're loading for debugging purposes
+      console.log('Loading game settings from storage:', parsedSettings);
+      
       Object.keys(parsedSettings).forEach(key => {
         if (key in gameSettings) {
           // Now we can safely assign the parsed value
           (gameSettings[key as keyof GameSettings] as any) = parsedSettings[key];
         }
       });
-      console.log('Game settings loaded from storage:', gameSettings);
+      console.log('Game settings after loading:', gameSettings);
     } catch (error) {
       console.error('Error loading game settings from storage:', error);
     }
