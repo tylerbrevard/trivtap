@@ -94,12 +94,35 @@ export const moveToNextQuestion = (
   console.log(`Moving to next question: ${nextQuestionIndex} from ${currentQuestionIndex}`);
   
   // Update game state for the next question
-  updateGameState(
+  const timestamp = updateGameState(
     nextQuestionIndex,
     'question',
     questionDuration,
     questionCounter + 1
   );
+  
+  console.log(`Updated game state for next question with timestamp: ${timestamp}`);
+  
+  // Force a second event dispatch with slight delay to ensure all clients receive it
+  setTimeout(() => {
+    const gameState = {
+      state: 'question',
+      questionIndex: nextQuestionIndex,
+      timeLeft: questionDuration,
+      questionCounter: questionCounter + 1,
+      timestamp: Date.now(),
+      slidesIndex: 0
+    };
+    
+    localStorage.setItem('gameState', JSON.stringify(gameState));
+    
+    // Trigger another custom event as a backup
+    const stateChangeEvent = new CustomEvent('triviaStateChange', { 
+      detail: gameState 
+    });
+    window.dispatchEvent(stateChangeEvent);
+    console.log('Sent backup state change event for question change');
+  }, 250);
   
   return {
     newQuestionIndex: nextQuestionIndex,
@@ -190,6 +213,7 @@ export const cycleIntermissionSlide = (
         detail: gameState 
       });
       window.dispatchEvent(stateChangeEvent);
+      console.log(`Updated to show intermission slide ${nextIndex}`);
       
       // Set timeout for the next slide
       setTimeout(() => {

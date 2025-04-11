@@ -86,6 +86,9 @@ const PlayerGame = () => {
                   } catch {
                     options = [String(question.options)];
                   }
+                } else if (typeof question.options === 'object') {
+                  // Handle JSON object stored directly
+                  options = Object.values(question.options).map(opt => String(opt));
                 }
               }
               
@@ -132,6 +135,7 @@ const PlayerGame = () => {
   console.log('Player screen - current question index:', questionIndex);
   console.log('Player screen - questions available:', questions.length);
   console.log('Player screen - current game state:', currentGameState);
+  console.log('Player screen - timeLeft:', timeLeft);
   
   useEffect(() => {
     const storedName = sessionStorage.getItem('playerName');
@@ -192,7 +196,7 @@ const PlayerGame = () => {
           const newGameState = parsedState.state;
           setCurrentGameState(newGameState);
           
-          // Always check if question index changed
+          // Handle question index change
           if (parsedState.questionIndex !== questionIndex) {
             console.log(`Question index changed from ${questionIndex} to ${parsedState.questionIndex}`);
             setQuestionIndex(parsedState.questionIndex);
@@ -207,7 +211,14 @@ const PlayerGame = () => {
             setAnsweredCorrectly(null);
             setIsAnswerRevealed(newGameState === 'answer');
             setTimeLeft(newGameState === 'question' ? parsedState.timeLeft : 0);
-            return;
+          } 
+          // Always update timeLeft when state is 'question'
+          else if (newGameState === 'question') {
+            setTimeLeft(parsedState.timeLeft);
+            // Also clear "Times Up" by resetting answeredCorrectly if needed
+            if (parsedState.timeLeft > 0 && answeredCorrectly === null) {
+              setAnsweredCorrectly(null);
+            }
           }
           
           // Handle state transitions
@@ -218,12 +229,8 @@ const PlayerGame = () => {
           } else if (newGameState === 'question' && isAnswerRevealed) {
             console.log('Changing back to question state');
             setIsAnswerRevealed(false);
-            setTimeLeft(parsedState.timeLeft);
             setSelectedAnswer(null);
             setAnsweredCorrectly(null);
-          } else if (newGameState === 'question' && !isAnswerRevealed) {
-            // Update time left even if we're still in question state
-            setTimeLeft(parsedState.timeLeft);
           }
           
           // Handle intermission and leaderboard states
@@ -245,7 +252,7 @@ const PlayerGame = () => {
     // Check more frequently to ensure we don't miss state changes
     const intervalId = setInterval(checkGameState, 250);
     return () => clearInterval(intervalId);
-  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions, currentGameState]);
+  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions, currentGameState, answeredCorrectly]);
   
   // Register event listener for game state changes
   useEffect(() => {
@@ -268,17 +275,24 @@ const PlayerGame = () => {
           setSelectedAnswer(null);
           setAnsweredCorrectly(null);
           setIsAnswerRevealed(gameState.state === 'answer');
-          setTimeLeft(gameState.state === 'question' ? gameState.timeLeft : 0);
-        } else if (gameState.state !== currentGameState) {
-          // Handle state change for same question
-          setIsAnswerRevealed(gameState.state === 'answer');
-          setTimeLeft(gameState.state === 'question' ? gameState.timeLeft : 0);
+        }
+        
+        // Always update timeLeft when state is 'question'
+        if (gameState.state === 'question') {
+          setTimeLeft(gameState.timeLeft);
+          // Also clear "Times Up" by resetting answeredCorrectly if needed
+          if (gameState.timeLeft > 0 && answeredCorrectly === null) {
+            setAnsweredCorrectly(null);
+          }
+        } else if (gameState.state === 'answer') {
+          setIsAnswerRevealed(true);
+          setTimeLeft(0);
         }
       }
     });
     
     return cleanupListener;
-  }, [lastGameStateTimestamp, questionIndex, questions, currentGameState]);
+  }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly]);
   
   // Handle correct/incorrect answer selection
   useEffect(() => {
@@ -476,6 +490,7 @@ const PlayerGame = () => {
           <div className="mt-2 text-xs text-muted-foreground">
             <p>Game State: {currentGameState}</p>
             <p>Question Index: {questionIndex}</p>
+            <p>Current Time Left: {timeLeft}</p>
             <p>Last Sync: {new Date(lastGameStateTimestamp).toLocaleTimeString()}</p>
             <p>Questions loaded: {questions.length}</p>
             <p>Failed sync attempts: {failedSyncAttempts}</p>
