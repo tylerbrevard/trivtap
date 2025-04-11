@@ -1,68 +1,19 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
-
-const sampleQuestions = [
-  {
-    id: '1',
-    text: 'Which planet is known as the Red Planet?',
-    options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
-    correctAnswer: 'Mars',
-    timeLimit: gameSettings.questionDuration,
-  },
-  {
-    id: '2',
-    text: 'Who painted the Mona Lisa?',
-    options: ['Vincent van Gogh', 'Leonardo da Vinci', 'Pablo Picasso', 'Michelangelo'],
-    correctAnswer: 'Leonardo da Vinci',
-    timeLimit: gameSettings.questionDuration,
-  },
-  {
-    id: '3',
-    text: 'In which year did World War II end?',
-    options: ['1943', '1944', '1945', '1946'],
-    correctAnswer: '1945',
-    timeLimit: gameSettings.questionDuration,
-  },
-  {
-    id: '4',
-    text: 'Which of these elements has the chemical symbol \'Au\'?',
-    options: ['Silver', 'Gold', 'Aluminum', 'Argon'],
-    correctAnswer: 'Gold',
-    timeLimit: gameSettings.questionDuration,
-  },
-  {
-    id: '5',
-    text: 'What is the capital city of Australia?',
-    options: ['Sydney', 'Melbourne', 'Canberra', 'Perth'],
-    correctAnswer: 'Canberra',
-    timeLimit: gameSettings.questionDuration,
-  },
-  {
-    id: '6',
-    text: 'Who wrote the novel \'Pride and Prejudice\'?',
-    options: ['Jane Austen', 'Charles Dickens', 'Emily Brontë', 'F. Scott Fitzgerald'],
-    correctAnswer: 'Jane Austen',
-    timeLimit: gameSettings.questionDuration,
-  },
-  {
-    id: '7',
-    text: 'Which of these is NOT a programming language?',
-    options: ['Python', 'Java', 'Cougar', 'Ruby'],
-    correctAnswer: 'Cougar',
-    timeLimit: gameSettings.questionDuration,
-  }
-];
+import { supabase } from "@/integrations/supabase/client";
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
-  const [currentQuestion, setCurrentQuestion] = useState(sampleQuestions[0]);
-  const [timeLeft, setTimeLeft] = useState(currentQuestion.timeLimit);
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [currentQuestion, setCurrentQuestion] = useState<any>(null);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [score, setScore] = useState(0);
   const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
@@ -71,13 +22,109 @@ const PlayerGame = () => {
   const [currentGameState, setCurrentGameState] = useState<string>('question');
   const [failedSyncAttempts, setFailedSyncAttempts] = useState(0);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const navigate = useNavigate();
   
+  // Load questions from Supabase
+  useEffect(() => {
+    const fetchQuestions = async () => {
+      try {
+        setLoading(true);
+        
+        const { data: buckets, error: bucketsError } = await supabase
+          .from('buckets')
+          .select('id')
+          .eq('is_default', true)
+          .limit(1);
+          
+        if (bucketsError) {
+          console.error('Error fetching default bucket:', bucketsError);
+          setLoading(false);
+          return;
+        }
+        
+        if (buckets && buckets.length > 0) {
+          const defaultBucketId = buckets[0].id;
+          
+          const { data: bucketQuestions, error: questionsError } = await supabase
+            .from('bucket_questions')
+            .select(`
+              question_id,
+              questions:question_id (
+                id, 
+                text, 
+                options, 
+                correct_answer, 
+                categories:category_id (
+                  id,
+                  name
+                )
+              )
+            `)
+            .eq('bucket_id', defaultBucketId);
+            
+          if (questionsError) {
+            console.error('Error fetching questions:', questionsError);
+            setLoading(false);
+            return;
+          }
+          
+          if (bucketQuestions && bucketQuestions.length > 0) {
+            const formattedQuestions = bucketQuestions.map(item => {
+              const question = item.questions;
+              
+              let options: string[] = [];
+              if (question.options) {
+                if (Array.isArray(question.options)) {
+                  options = question.options.map(opt => String(opt));
+                } else if (typeof question.options === 'string') {
+                  try {
+                    const parsedOptions = JSON.parse(question.options);
+                    options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
+                  } catch {
+                    options = [String(question.options)];
+                  }
+                }
+              }
+              
+              return {
+                id: question.id,
+                text: question.text,
+                options: options,
+                correctAnswer: question.correct_answer,
+                category: question.categories ? question.categories.name : 'General',
+                timeLimit: gameSettings.questionDuration
+              };
+            });
+            
+            if (formattedQuestions.length > 0) {
+              console.log(`Loaded ${formattedQuestions.length} questions from the default bucket for player view`);
+              setQuestions(formattedQuestions);
+              
+              // Initialize with the first question
+              const gameState = localStorage.getItem('gameState');
+              if (gameState) {
+                const parsedState = JSON.parse(gameState);
+                setCurrentQuestion(formattedQuestions[parsedState.questionIndex] || formattedQuestions[0]);
+              } else {
+                setCurrentQuestion(formattedQuestions[0]);
+              }
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error loading questions for player:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchQuestions();
+  }, []);
+  
   console.log('Player screen - current question index:', questionIndex);
-  console.log('Player screen - current question:', currentQuestion.text);
-  console.log('Player screen - answer revealed:', isAnswerRevealed);
-  console.log('Player screen - current game state:', currentGameState);
+  console.log('Player screen - questions available:', questions.length);
   
   useEffect(() => {
     const storedName = sessionStorage.getItem('playerName');
@@ -106,6 +153,7 @@ const PlayerGame = () => {
     console.log('Notified display about player:', storedName);
   }, [navigate, toast]);
   
+  // Monitor game state changes
   useEffect(() => {
     const checkGameState = () => {
       const storedGameState = localStorage.getItem('gameState');
@@ -138,10 +186,23 @@ const PlayerGame = () => {
             return;
           }
           
+          if (parsedState.state === 'leaderboard') {
+            console.log('Display is showing leaderboard, waiting...');
+            setSelectedAnswer(null);
+            setAnsweredCorrectly(null);
+            setIsAnswerRevealed(false);
+            return;
+          }
+          
           if (parsedState.questionIndex !== questionIndex) {
             console.log('Question index changed:', parsedState.questionIndex);
             setQuestionIndex(parsedState.questionIndex);
-            setCurrentQuestion(sampleQuestions[parsedState.questionIndex]);
+            
+            if (questions.length > 0 && parsedState.questionIndex < questions.length) {
+              setCurrentQuestion(questions[parsedState.questionIndex]);
+              console.log('Updated current question to:', questions[parsedState.questionIndex]?.text);
+            }
+            
             setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
             setSelectedAnswer(null);
             setAnsweredCorrectly(null);
@@ -172,10 +233,35 @@ const PlayerGame = () => {
     
     const intervalId = setInterval(checkGameState, 300);
     return () => clearInterval(intervalId);
-  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts]);
+  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions]);
+  
+  // Register event listener for game state changes
+  useEffect(() => {
+    const handleStateChange = (event: CustomEvent) => {
+      console.log('Received game state change event in player:', event.detail);
+      if (event.detail.timestamp > lastGameStateTimestamp) {
+        setLastGameStateTimestamp(event.detail.timestamp);
+        setCurrentGameState(event.detail.state);
+        
+        if (event.detail.questionIndex !== questionIndex) {
+          setQuestionIndex(event.detail.questionIndex);
+          
+          if (questions.length > 0 && event.detail.questionIndex < questions.length) {
+            setCurrentQuestion(questions[event.detail.questionIndex]);
+          }
+        }
+      }
+    };
+    
+    window.addEventListener('triviaStateChange', handleStateChange as EventListener);
+    
+    return () => {
+      window.removeEventListener('triviaStateChange', handleStateChange as EventListener);
+    };
+  }, [lastGameStateTimestamp, questionIndex, questions]);
   
   useEffect(() => {
-    if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0) {
+    if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
       const timerId = setTimeout(() => {
         if (selectedAnswer === currentQuestion.correctAnswer) {
           const pointsEarned = 100 + (timeLeft * 10);
@@ -219,6 +305,7 @@ const PlayerGame = () => {
   };
   
   const getTimerColor = () => {
+    if (!currentQuestion) return 'bg-green-500';
     if (timeLeft > currentQuestion.timeLimit * 0.6) return 'bg-green-500';
     if (timeLeft > currentQuestion.timeLimit * 0.3) return 'bg-yellow-500';
     return 'bg-red-500';
@@ -232,16 +319,46 @@ const PlayerGame = () => {
     });
   };
   
-  if (currentGameState === 'intermission') {
+  if (loading) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="card-trivia p-8 max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold mb-4">Intermission</h2>
+          <h2 className="text-2xl font-bold mb-4">Loading Game...</h2>
+          <p className="text-lg mb-6">Please wait while we load your trivia game.</p>
+        </div>
+      </div>
+    );
+  }
+  
+  if (currentGameState === 'intermission' || currentGameState === 'leaderboard') {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="card-trivia p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold mb-4">
+            {currentGameState === 'intermission' ? 'Intermission' : 'Leaderboard'}
+          </h2>
           <p className="text-lg mb-6">The next question will appear shortly...</p>
           <div className="bg-muted p-4 rounded-md">
             <p className="text-md font-medium">Your Score</p>
             <p className="text-2xl font-bold text-primary">{score}</p>
           </div>
+          
+          {process.env.NODE_ENV === 'development' && (
+            <Button variant="outline" size="sm" onClick={handleForceSync} className="mt-4">
+              Force Sync
+            </Button>
+          )}
+        </div>
+      </div>
+    );
+  }
+  
+  if (!currentQuestion) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="card-trivia p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold mb-4">Waiting for Game...</h2>
+          <p className="text-lg mb-6">The host will start the game shortly.</p>
           
           {process.env.NODE_ENV === 'development' && (
             <Button variant="outline" size="sm" onClick={handleForceSync} className="mt-4">
@@ -276,7 +393,7 @@ const PlayerGame = () => {
         <div className="w-full bg-card rounded-full h-2 overflow-hidden">
           <div 
             className={`h-full transition-all duration-300 ${getTimerColor()}`}
-            style={{ width: `${(timeLeft / currentQuestion.timeLimit) * 100}%` }}
+            style={{ width: `${(timeLeft / (currentQuestion?.timeLimit || 20)) * 100}%` }}
           />
         </div>
       </div>
@@ -287,7 +404,7 @@ const PlayerGame = () => {
       </div>
       
       <div className="grid grid-cols-1 gap-3 mb-6">
-        {currentQuestion.options.map((option, index) => (
+        {currentQuestion.options.map((option: string, index: number) => (
           <Button
             key={index}
             className={`h-auto py-4 px-4 text-left justify-start text-base ${
@@ -338,6 +455,7 @@ const PlayerGame = () => {
             <p>Game State: {currentGameState}</p>
             <p>Question Index: {questionIndex}</p>
             <p>Last Sync: {new Date(lastGameStateTimestamp).toLocaleTimeString()}</p>
+            <p>Questions loaded: {questions.length}</p>
           </div>
         </div>
       )}

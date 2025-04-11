@@ -147,7 +147,19 @@ export const cycleIntermissionSlide = (
       return;
     }
     
-    const nextIndex = getNextSlideIndex();
+    const currentState = localStorage.getItem('gameState');
+    let currentSlideIndex = 0;
+    
+    if (currentState) {
+      try {
+        const parsedState = JSON.parse(currentState);
+        currentSlideIndex = parsedState.slidesIndex || 0;
+      } catch (error) {
+        console.error('Error parsing current state for slides:', error);
+      }
+    }
+    
+    const nextIndex = (currentSlideIndex + 1) % activeSlides.length;
     
     // If we've gone through all slides, move to the next question
     if (nextIndex === 0 && activeSlides.length > 1) {
@@ -160,12 +172,23 @@ export const cycleIntermissionSlide = (
       );
     } else {
       // Otherwise, update to show the next slide
-      updateGameState(
-        currentQuestionIndex,
-        'intermission',
-        0,
-        questionCounter
-      );
+      const timestamp = Date.now();
+      const gameState = {
+        state: 'intermission',
+        questionIndex: currentQuestionIndex,
+        timeLeft: 0,
+        questionCounter: questionCounter,
+        timestamp: timestamp,
+        slidesIndex: nextIndex
+      };
+      
+      localStorage.setItem('gameState', JSON.stringify(gameState));
+      
+      // Trigger a custom event to notify other windows about the state change
+      const stateChangeEvent = new CustomEvent('triviaStateChange', { 
+        detail: gameState 
+      });
+      window.dispatchEvent(stateChangeEvent);
       
       // Set timeout for the next slide
       setTimeout(() => {
