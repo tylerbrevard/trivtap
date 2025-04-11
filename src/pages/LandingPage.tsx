@@ -1,30 +1,17 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { 
-  Award, 
-  Users, 
-  Smartphone, 
-  Zap, 
-  Clock, 
-  Github,
-  Menu,
-  X,
-  LogIn,
-} from 'lucide-react';
-
+import { Award, Users, Smartphone, Zap, Clock, Github, Menu, X, LogIn } from 'lucide-react';
 const LandingPage = () => {
   const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
-  
-  return (
-    <div className="min-h-screen flex flex-col">
+  return <div className="min-h-screen flex flex-col">
       {/* Navigation */}
       <header className="border-b border-border/40 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
             {/* Logo */}
             <div className="flex items-center">
-              <span className="text-2xl font-bold text-primary">TriviaPulse</span>
+              <span className="text-2xl font-bold text-primary">TrivTap.com</span>
             </div>
             
             {/* Desktop Nav */}
@@ -46,12 +33,7 @@ const LandingPage = () => {
             
             {/* Mobile menu button */}
             <div className="md:hidden">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                aria-label="Toggle menu"
-              >
+              <Button variant="ghost" size="icon" onClick={() => setMobileMenuOpen(!mobileMenuOpen)} aria-label="Toggle menu">
                 {mobileMenuOpen ? <X size={24} /> : <Menu size={24} />}
               </Button>
             </div>
@@ -59,55 +41,29 @@ const LandingPage = () => {
         </div>
         
         {/* Mobile menu */}
-        {mobileMenuOpen && (
-          <div className="md:hidden py-2 px-4 space-y-3 border-t border-border/40">
-            <a 
-              href="#features" 
-              className="block py-2 text-foreground/80 hover:text-primary transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
+        {mobileMenuOpen && <div className="md:hidden py-2 px-4 space-y-3 border-t border-border/40">
+            <a href="#features" className="block py-2 text-foreground/80 hover:text-primary transition-colors" onClick={() => setMobileMenuOpen(false)}>
               Features
             </a>
-            <a 
-              href="#how-it-works" 
-              className="block py-2 text-foreground/80 hover:text-primary transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
+            <a href="#how-it-works" className="block py-2 text-foreground/80 hover:text-primary transition-colors" onClick={() => setMobileMenuOpen(false)}>
               How It Works
             </a>
-            <a 
-              href="#testimonials" 
-              className="block py-2 text-foreground/80 hover:text-primary transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
+            <a href="#testimonials" className="block py-2 text-foreground/80 hover:text-primary transition-colors" onClick={() => setMobileMenuOpen(false)}>
               Testimonials
             </a>
-            <Link 
-              to="/login" 
-              className="block py-2 text-primary hover:text-primary/80 transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
-            >
+            <Link to="/login" className="block py-2 text-primary hover:text-primary/80 transition-colors" onClick={() => setMobileMenuOpen(false)}>
               Login
             </Link>
-            <Link 
-              to="/join" 
-              className="block pt-2"
-              onClick={() => setMobileMenuOpen(false)}
-            >
+            <Link to="/join" className="block pt-2" onClick={() => setMobileMenuOpen(false)}>
               <Button variant="outline" className="w-full flex items-center justify-center gap-2 border-primary text-primary hover:bg-primary/10">
                 <LogIn size={18} />
                 Join Game
               </Button>
             </Link>
-            <Link 
-              to="/register" 
-              className="block pt-2"
-              onClick={() => setMobileMenuOpen(false)}
-            >
+            <Link to="/register" className="block pt-2" onClick={() => setMobileMenuOpen(false)}>
               <Button className="btn-trivia w-full">Get Started</Button>
             </Link>
-          </div>
-        )}
+          </div>}
       </header>
       
       {/* Hero Section */}
@@ -133,11 +89,7 @@ const LandingPage = () => {
           
           <div className="mt-8 p-1 bg-gradient-to-r from-trivia-primary via-trivia-accent to-trivia-orange rounded-xl">
             <div className="card-trivia p-0 overflow-hidden rounded-lg">
-              <img 
-                src="https://images.unsplash.com/photo-1516478177764-9fe5bd7e9717?ixlib=rb-4.0.3&auto=format&fit=crop&w=1050&q=80" 
-                alt="Trivia night at a bar" 
-                className="w-full h-auto max-h-[400px] object-cover object-center"
-              />
+              <img src="https://images.unsplash.com/photo-1516478177764-9fe5bd7e9717?ixlib=rb-4.0.3&auto=format&fit=crop&w=1050&q=80" alt="Trivia night at a bar" className="w-full h-auto max-h-[400px] object-cover object-center" />
             </div>
           </div>
         </div>
@@ -146,7 +98,7 @@ const LandingPage = () => {
       {/* Features */}
       <section id="features" className="py-16 bg-card">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Why TriviaPulse?</h2>
+          <h2 className="text-3xl md:text-4xl font-bold text-center mb-12">Why TrivTap?</h2>
           
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {/* Feature 1 */}
@@ -269,8 +221,6 @@ const LandingPage = () => {
           </div>
         </div>
       </footer>
-    </div>
-  );
+    </div>;
 };
-
 export default LandingPage;
