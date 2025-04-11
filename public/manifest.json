@@ -1,7 +1,7 @@
 
 {
   "name": "TriviaPulse",
-  "short_name": "TriviaPulse",
+  "short_name": "TrivTap",
   "description": "Engage your audience with real-time trivia games",
   "start_url": "/",
   "display": "standalone",
