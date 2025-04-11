@@ -67,7 +67,7 @@ const LandingPage = () => {
       </header>
       
       {/* Hero Section */}
-      <section className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 lg:py-32 px-4 text-center">
+      <section className="flex-1 flex flex-col items-center justify-center py-12 md:py-24 px-4 text-center lg:py-[40px]">
         <div className="max-w-3xl mx-auto">
           <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight mb-4">
             Host <span className="text-primary">Engaging Trivia</span> for Your Venue
