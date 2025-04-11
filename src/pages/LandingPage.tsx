@@ -215,7 +215,7 @@ const LandingPage = () => {
             </div>
           </div>
           <div className="mt-8 text-center text-muted-foreground">
-            &copy; {new Date().getFullYear()} TriviaPulse. All rights reserved.
+            &copy; {new Date().getFullYear()} TrivTap. All rights reserved.
           </div>
         </div>
       </footer>
