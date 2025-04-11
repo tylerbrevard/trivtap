@@ -89,7 +89,7 @@ const LandingPage = () => {
           
           <div className="mt-8 p-1 bg-gradient-to-r from-trivia-primary via-trivia-accent to-trivia-orange rounded-xl">
             <div className="card-trivia p-0 overflow-hidden rounded-lg">
-              <img src="https://images.unsplash.com/photo-1516478177764-9fe5bd7e9717?ixlib=rb-4.0.3&auto=format&fit=crop&w=1050&q=80" alt="Trivia night at a bar" className="w-full h-auto max-h-[400px] object-cover object-center" />
+              <img alt="Trivia night at a bar" className="w-full h-auto max-h-[400px] object-cover object-center" src="/lovable-uploads/5d31cf62-7f08-4237-8e86-39d15cfd13a5.jpg" />
             </div>
           </div>
         </div>
