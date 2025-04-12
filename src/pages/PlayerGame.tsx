@@ -316,7 +316,8 @@ const PlayerGame = () => {
           if (gameState.timeLeft > 0) {
             setAnsweredCorrectly(null);
             setShowTimeUp(false); // Clear "Time's Up" if timer is running
-          } else if (gameState.timeLeft === the answering period has ended
+          } else if (gameState.timeLeft === 0 && !isAnswerRevealed) {
+            // Show "Time's Up" when answering period has ended
             setShowTimeUp(true);
           }
         } else if (gameState.state === 'answer') {
@@ -330,7 +331,7 @@ const PlayerGame = () => {
     });
     
     return cleanupListener;
-  }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly]);
+  }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly, isAnswerRevealed]);
   
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
@@ -367,7 +368,7 @@ const PlayerGame = () => {
       
       return () => clearTimeout(timerId);
     }
-  }, [selectedAnswer, currentQuestion, toast, timeLeft, playerName, gameId, score]);
+  }, [selectedAnswer, currentQuestion, toast, timeLeft, playerName, gameId, score, isAnswerRevealed]);
   
   const handleSelectAnswer = (answer: string) => {
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
