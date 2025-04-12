@@ -27,10 +27,15 @@ export const updateGameState = (
   localStorage.setItem('gameState', JSON.stringify(gameState));
   
   // Trigger a custom event to notify other windows about the state change
-  const stateChangeEvent = new CustomEvent('triviaStateChange', { 
-    detail: gameState 
-  });
-  window.dispatchEvent(stateChangeEvent);
+  try {
+    const stateChangeEvent = new CustomEvent('triviaStateChange', { 
+      detail: gameState 
+    });
+    window.dispatchEvent(stateChangeEvent);
+    console.log('Dispatched state change event:', gameState.state);
+  } catch (error) {
+    console.error('Error dispatching state change event:', error);
+  }
   
   // Return the timestamp for tracking
   return gameState.timestamp;
@@ -56,6 +61,7 @@ export const getNextSlideIndex = (): number => {
   // Get all the available slides
   const savedSlides = localStorage.getItem('intermissionSlides');
   if (!savedSlides) {
+    console.log('No intermission slides found, using default index 0');
     return 0;
   }
   
@@ -64,6 +70,7 @@ export const getNextSlideIndex = (): number => {
     const activeSlides = slides.filter((slide: any) => slide.isActive);
     
     if (activeSlides.length === 0) {
+      console.log('No active intermission slides, using default index 0');
       return 0;
     }
     
@@ -117,11 +124,15 @@ export const moveToNextQuestion = (
     localStorage.setItem('gameState', JSON.stringify(gameState));
     
     // Trigger another custom event as a backup
-    const stateChangeEvent = new CustomEvent('triviaStateChange', { 
-      detail: gameState 
-    });
-    window.dispatchEvent(stateChangeEvent);
-    console.log('Sent backup state change event for question change');
+    try {
+      const stateChangeEvent = new CustomEvent('triviaStateChange', { 
+        detail: gameState 
+      });
+      window.dispatchEvent(stateChangeEvent);
+      console.log('Sent backup state change event for question change');
+    } catch (error) {
+      console.error('Error sending backup state change event:', error);
+    }
   }, 250);
   
   return {
@@ -209,11 +220,15 @@ export const cycleIntermissionSlide = (
       localStorage.setItem('gameState', JSON.stringify(gameState));
       
       // Trigger a custom event to notify other windows about the state change
-      const stateChangeEvent = new CustomEvent('triviaStateChange', { 
-        detail: gameState 
-      });
-      window.dispatchEvent(stateChangeEvent);
-      console.log(`Updated to show intermission slide ${nextIndex}`);
+      try {
+        const stateChangeEvent = new CustomEvent('triviaStateChange', { 
+          detail: gameState 
+        });
+        window.dispatchEvent(stateChangeEvent);
+        console.log(`Updated to show intermission slide ${nextIndex}`);
+      } catch (error) {
+        console.error('Error dispatching intermission state change event:', error);
+      }
       
       // Set timeout for the next slide
       setTimeout(() => {
@@ -360,5 +375,50 @@ export const listenForGameStateChanges = (callback: (gameState: any) => void) =>
   
   return () => {
     window.removeEventListener('triviaStateChange', handleStateChange as EventListener);
+  };
+};
+
+/**
+ * Notify all connected windows about a player joining
+ * @param playerName Player name
+ * @param gameId Game ID
+ */
+export const notifyPlayerJoined = (playerName: string, gameId: string) => {
+  try {
+    const playerData = {
+      name: playerName,
+      gameId: gameId,
+      timestamp: Date.now()
+    };
+    
+    localStorage.setItem('playerJoined', JSON.stringify(playerData));
+    
+    const playerJoinedEvent = new CustomEvent('playerJoined', { 
+      detail: playerData
+    });
+    window.dispatchEvent(playerJoinedEvent);
+    console.log('Sent player joined notification:', playerName);
+    
+    return true;
+  } catch (error) {
+    console.error('Error notifying player joined:', error);
+    return false;
+  }
+};
+
+/**
+ * Listen for players joining from other windows/tabs
+ * @param callback Function to call when player joins
+ */
+export const listenForPlayersJoining = (callback: (playerData: any) => void) => {
+  const handlePlayerJoined = (event: CustomEvent) => {
+    console.log('Received player joined event:', event.detail);
+    callback(event.detail);
+  };
+  
+  window.addEventListener('playerJoined', handlePlayerJoined as EventListener);
+  
+  return () => {
+    window.removeEventListener('playerJoined', handlePlayerJoined as EventListener);
   };
 };

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ const PlayerGame = () => {
   const [failedSyncAttempts, setFailedSyncAttempts] = useState(0);
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
+  const [showTimeUp, setShowTimeUp] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -112,6 +114,11 @@ const PlayerGame = () => {
                 setCurrentGameState(parsedState.state || 'question');
                 setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
                 setIsAnswerRevealed(parsedState.state === 'answer');
+                
+                // Reset "Time's Up" message when receiving a new question state
+                if (parsedState.state === 'question' && parsedState.timeLeft > 0) {
+                  setShowTimeUp(false);
+                }
               } else {
                 setCurrentQuestion(formattedQuestions[0]);
               }
@@ -126,12 +133,40 @@ const PlayerGame = () => {
     };
     
     fetchQuestions();
+    
+    // Register player on display screen
+    const notifyDisplayAboutPlayer = () => {
+      const storedName = sessionStorage.getItem('playerName');
+      const storedGameId = sessionStorage.getItem('gameId');
+      
+      if (storedName && storedGameId) {
+        localStorage.setItem('playerJoined', JSON.stringify({ 
+          name: storedName, 
+          gameId: storedGameId, 
+          timestamp: Date.now() 
+        }));
+        console.log('Notified display about player:', storedName);
+        
+        // Broadcast a custom event for display screens in other windows
+        const playerJoinedEvent = new CustomEvent('playerJoined', { 
+          detail: { name: storedName, gameId: storedGameId, timestamp: Date.now() }
+        });
+        window.dispatchEvent(playerJoinedEvent);
+      }
+    };
+    
+    // Call immediately and then periodically to ensure display screens are aware of this player
+    notifyDisplayAboutPlayer();
+    const notifyInterval = setInterval(notifyDisplayAboutPlayer, 5000);
+    
+    return () => clearInterval(notifyInterval);
   }, []);
   
   console.log('Player screen - current question index:', questionIndex);
   console.log('Player screen - questions available:', questions.length);
   console.log('Player screen - current game state:', currentGameState);
   console.log('Player screen - timeLeft:', timeLeft);
+  console.log('Player screen - showTimeUp:', showTimeUp);
   
   useEffect(() => {
     const storedName = sessionStorage.getItem('playerName');
@@ -201,12 +236,19 @@ const PlayerGame = () => {
             setAnsweredCorrectly(null);
             setIsAnswerRevealed(newGameState === 'answer');
             setTimeLeft(newGameState === 'question' ? parsedState.timeLeft : 0);
+            
+            // Clear "Time's Up" message when changing to a new question
+            setShowTimeUp(false);
           } 
           else if (newGameState === 'question') {
             setTimeLeft(parsedState.timeLeft);
             
             if (parsedState.timeLeft > 0) {
               setAnsweredCorrectly(null);
+              setShowTimeUp(false); // Clear "Time's Up" if timer is running
+            } else if (parsedState.timeLeft === 0 && !isAnswerRevealed) {
+              // Show "Time's Up" only when time is 0 and answer is not revealed
+              setShowTimeUp(true);
             }
           }
           
@@ -219,6 +261,9 @@ const PlayerGame = () => {
             setIsAnswerRevealed(false);
             setSelectedAnswer(null);
             setAnsweredCorrectly(null);
+            
+            // Only show "Time's Up" if timeLeft is 0 in question state
+            setShowTimeUp(parsedState.timeLeft === 0);
           }
           
           if (newGameState === 'intermission' || newGameState === 'leaderboard') {
@@ -226,6 +271,7 @@ const PlayerGame = () => {
             setSelectedAnswer(null);
             setAnsweredCorrectly(null);
             setIsAnswerRevealed(false);
+            setShowTimeUp(false); // Clear "Time's Up" when in intermission or leaderboard
           }
         } catch (error) {
           console.error('Error parsing game state', error);
@@ -259,6 +305,9 @@ const PlayerGame = () => {
           setSelectedAnswer(null);
           setAnsweredCorrectly(null);
           setIsAnswerRevealed(gameState.state === 'answer');
+          
+          // Clear "Time's Up" message when changing to a new question
+          setShowTimeUp(false);
         }
         
         if (gameState.state === 'question') {
@@ -266,10 +315,16 @@ const PlayerGame = () => {
           
           if (gameState.timeLeft > 0) {
             setAnsweredCorrectly(null);
+            setShowTimeUp(false); // Clear "Time's Up" if timer is running
+          } else if (gameState.timeLeft === the answering period has ended
+            setShowTimeUp(true);
           }
         } else if (gameState.state === 'answer') {
           setIsAnswerRevealed(true);
           setTimeLeft(0);
+          setShowTimeUp(false); // Clear "Time's Up" message in answer state
+        } else if (gameState.state === 'intermission' || gameState.state === 'leaderboard') {
+          setShowTimeUp(false); // Clear "Time's Up" in intermission or leaderboard
         }
       }
     });
@@ -331,6 +386,7 @@ const PlayerGame = () => {
   const handleForceSync = () => {
     setLastGameStateTimestamp(0);
     setFailedSyncAttempts(0);
+    setShowTimeUp(false); // Reset time's up message when forcing sync
     toast({
       title: "Syncing",
       description: "Forced sync with game state",
@@ -388,7 +444,7 @@ const PlayerGame = () => {
     );
   }
   
-  if (timeLeft === 0 && !isAnswerRevealed && currentGameState === 'question') {
+  if (showTimeUp && timeLeft === 0 && !isAnswerRevealed && currentGameState === 'question') {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
         <div className="card-trivia p-8 max-w-md w-full text-center">
@@ -487,6 +543,7 @@ const PlayerGame = () => {
             <p>Game State: {currentGameState}</p>
             <p>Question Index: {questionIndex}</p>
             <p>Current Time Left: {timeLeft}</p>
+            <p>Show Time's Up: {showTimeUp.toString()}</p>
             <p>Last Sync: {new Date(lastGameStateTimestamp).toLocaleTimeString()}</p>
             <p>Questions loaded: {questions.length}</p>
             <p>Failed sync attempts: {failedSyncAttempts}</p>

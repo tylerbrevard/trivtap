@@ -1,3 +1,4 @@
+
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset
       xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
@@ -9,7 +10,31 @@
 
 <url>
   <loc>https://trivtap.com/</loc>
-  <lastmod>2025-04-11T20:43:47+00:00</lastmod>
+  <lastmod>2025-04-12T20:43:47+00:00</lastmod>
+</url>
+<url>
+  <loc>https://trivtap.com/login</loc>
+  <lastmod>2025-04-12T20:43:47+00:00</lastmod>
+</url>
+<url>
+  <loc>https://trivtap.com/register</loc>
+  <lastmod>2025-04-12T20:43:47+00:00</lastmod>
+</url>
+<url>
+  <loc>https://trivtap.com/join</loc>
+  <lastmod>2025-04-12T20:43:47+00:00</lastmod>
+</url>
+<url>
+  <loc>https://trivtap.com/privacy-policy</loc>
+  <lastmod>2025-04-12T20:43:47+00:00</lastmod>
+</url>
+<url>
+  <loc>https://trivtap.com/terms-of-service</loc>
+  <lastmod>2025-04-12T20:43:47+00:00</lastmod>
+</url>
+<url>
+  <loc>https://trivtap.com/contact-us</loc>
+  <lastmod>2025-04-12T20:43:47+00:00</lastmod>
 </url>
 
 

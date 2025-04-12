@@ -18,6 +18,9 @@ import Register from "./pages/Register";
 import NotFound from "./pages/NotFound";
 import AdminLayout from "./components/layouts/AdminLayout";
 import ImportPage from "./pages/ImportPage";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import ContactUs from "./pages/ContactUs";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +38,9 @@ const App = () => (
           <Route path="/join" element={<PlayerJoin />} />
           <Route path="/play" element={<PlayerGame />} />
           <Route path="/display/:id" element={<DisplayScreen />} />
+          <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/terms-of-service" element={<TermsOfService />} />
+          <Route path="/contact-us" element={<ContactUs />} />
           
           {/* Admin Routes */}
           <Route path="/admin" element={<AdminLayout />}>

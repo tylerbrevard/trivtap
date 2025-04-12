@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,6 @@ const LandingPage = () => {
             <nav className="hidden md:flex items-center space-x-8">
               <a href="#features" className="text-foreground/80 hover:text-primary transition-colors">Features</a>
               <a href="#how-it-works" className="text-foreground/80 hover:text-primary transition-colors">How It Works</a>
-              <a href="#testimonials" className="text-foreground/80 hover:text-primary transition-colors">Testimonials</a>
               <Link to="/login" className="text-primary hover:text-primary/80 transition-colors">Login</Link>
               <Link to="/join">
                 <Button variant="outline" className="flex items-center gap-2 border-primary text-primary hover:bg-primary/10">
@@ -48,9 +48,6 @@ const LandingPage = () => {
             <a href="#how-it-works" className="block py-2 text-foreground/80 hover:text-primary transition-colors" onClick={() => setMobileMenuOpen(false)}>
               How It Works
             </a>
-            <a href="#testimonials" className="block py-2 text-foreground/80 hover:text-primary transition-colors" onClick={() => setMobileMenuOpen(false)}>
-              Testimonials
-            </a>
             <Link to="/login" className="block py-2 text-primary hover:text-primary/80 transition-colors" onClick={() => setMobileMenuOpen(false)}>
               Login
             </Link>
@@ -77,10 +74,10 @@ const LandingPage = () => {
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Link to="/register">
-              <Button className="btn-trivia text-lg py-6 px-8">Start Hosting Trivia</Button>
+              <Button className="btn-trivia text-lg py-6 px-8 w-full sm:w-auto">Start Hosting Trivia</Button>
             </Link>
             <Link to="/join">
-              <Button variant="outline" className="text-lg py-6 px-8 border-primary text-primary hover:bg-primary/10 flex items-center gap-2">
+              <Button variant="outline" className="text-lg py-6 px-8 border-primary text-primary hover:bg-primary/10 flex items-center gap-2 w-full sm:w-auto">
                 <LogIn size={24} />
                 Join a Game
               </Button>
@@ -208,10 +205,10 @@ const LandingPage = () => {
             <div className="mb-4 md:mb-0">
               <span className="text-xl font-bold text-primary">TrivTap</span>
             </div>
-            <div className="flex space-x-6">
-              <Link to="#" className="text-muted-foreground hover:text-primary">Privacy Policy</Link>
-              <Link to="#" className="text-muted-foreground hover:text-primary">Terms of Service</Link>
-              <Link to="#" className="text-muted-foreground hover:text-primary">Contact Us</Link>
+            <div className="flex flex-wrap justify-center space-x-4 md:space-x-6">
+              <Link to="/privacy-policy" className="text-muted-foreground hover:text-primary">Privacy Policy</Link>
+              <Link to="/terms-of-service" className="text-muted-foreground hover:text-primary">Terms of Service</Link>
+              <Link to="/contact-us" className="text-muted-foreground hover:text-primary">Contact Us</Link>
             </div>
           </div>
           <div className="mt-8 text-center text-muted-foreground">
