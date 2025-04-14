@@ -1,4 +1,3 @@
-
 import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions } from './importUtils';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -260,5 +259,54 @@ export const exportQuestionsToJson = async (): Promise<string> => {
   } catch (error) {
     console.error('Error exporting questions to JSON:', error);
     throw new Error('Failed to export questions to JSON.');
+  }
+};
+
+// Function to remove a question from the collection
+export const removeQuestionFromCollection = async (questionId: string): Promise<boolean> => {
+  try {
+    // Get current user ID if available
+    const userId = await getCurrentUserId();
+    
+    // Get the stored questions from localStorage
+    const existingDataString = localStorage.getItem('trivia_questions');
+    if (!existingDataString) {
+      return false;
+    }
+    
+    const existingData = JSON.parse(existingDataString);
+    
+    // Determine which collection to update (user-specific or default)
+    const storageKey = userId || 'default';
+    
+    // Skip if collection doesn't exist
+    if (!existingData[storageKey]) {
+      return false;
+    }
+    
+    // Find and remove the question with the matching ID
+    const questions = existingData[storageKey];
+    const initialLength = questions.length;
+    existingData[storageKey] = questions.filter(q => q.id !== questionId);
+    
+    // If no question was removed, return false
+    if (initialLength === existingData[storageKey].length) {
+      // The question might be in the base questions, which can't be removed
+      const baseIds = baseStaticQuestions.map(q => q.id);
+      if (baseIds.includes(questionId)) {
+        console.warn(`Cannot remove base question with ID ${questionId}`);
+        throw new Error("Cannot remove questions from the default set. These questions are built into the system.");
+      }
+      return false;
+    }
+    
+    // Save updated questions back to localStorage
+    localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+    
+    console.log(`Successfully removed question with ID ${questionId}`);
+    return true;
+  } catch (error) {
+    console.error('Error removing question from collection:', error);
+    throw error;
   }
 };

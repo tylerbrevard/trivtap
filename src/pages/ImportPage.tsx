@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -6,11 +5,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Upload, AlertCircle, CheckCircle2, Download, Save } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle2, Download, Save, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCategories, getOrCreateCategory } from "@/utils/importUtils";
-import { addImportedQuestionsToCollection, exportQuestionsToJson, getCurrentUserId } from "@/utils/staticQuestions";
+import { addImportedQuestionsToCollection, exportQuestionsToJson, getCurrentUserId, getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
+import DuplicateQuestionRemover from "@/components/DuplicateQuestionRemover";
 
 const ImportPage = () => {
   const [selectedOption, setSelectedOption] = useState('csv');
@@ -23,16 +24,13 @@ const ImportPage = () => {
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
   const { toast } = useToast();
   
-  // Fetch categories and current user ID on component mount
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Load categories
         const categoriesData = await fetchCategories();
         setCategories(categoriesData);
         console.log("Loaded categories:", categoriesData);
         
-        // Get current user ID
         const userId = await getCurrentUserId();
         setCurrentUserId(userId);
         console.log("Current user ID:", userId || "Not logged in");
@@ -49,7 +47,6 @@ const ImportPage = () => {
     loadData();
   }, [toast]);
   
-  // Function to parse CSV data
   const parseCSVData = (csvContent: string): any[] => {
     const lines = csvContent.trim().split('\n');
     const questions: any[] = [];
@@ -103,7 +100,6 @@ const ImportPage = () => {
     return questions;
   };
   
-  // Function to parse JSON data
   const parseJSONData = (jsonContent: string): any[] => {
     try {
       const parsedData = JSON.parse(jsonContent);
@@ -148,7 +144,6 @@ const ImportPage = () => {
       const selectedFile = e.target.files[0];
       setFile(selectedFile);
       
-      // Read the file content
       const reader = new FileReader();
       reader.onload = (event) => {
         const content = event.target?.result as string;
@@ -209,7 +204,6 @@ const ImportPage = () => {
     try {
       let questions: any[] = [];
       
-      // Parse data based on selected format
       if (selectedOption === 'csv' && csvData) {
         console.log('Parsing CSV data');
         questions = parseCSVData(csvData);
@@ -224,7 +218,6 @@ const ImportPage = () => {
       
       console.log(`Starting import of ${questions.length} questions`);
       
-      // Add questions to the static collection
       const result = await addImportedQuestionsToCollection(questions);
       
       setImportResults({
@@ -261,153 +254,166 @@ const ImportPage = () => {
         <h1 className="text-3xl font-bold">Import Questions</h1>
       </div>
       
-      <Card>
-        <CardHeader>
-          <CardTitle>Import Questions</CardTitle>
-          <CardDescription>Add new trivia questions to your collection</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Import Format</label>
-            <Select defaultValue="csv" onValueChange={setSelectedOption}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select format" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="csv">CSV Format</SelectItem>
-                <SelectItem value="json">JSON Format</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          
-          {selectedOption === 'csv' && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">CSV Data</label>
-              <Textarea 
-                placeholder="question,category,option1,option2,option3,option4,correctAnswer,difficulty"
-                className="min-h-[150px]"
-                value={csvData}
-                onChange={(e) => setCsvData(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Format: Each line should be: question,category,option1,option2,option3,option4,correctAnswer,difficulty
-              </p>
-            </div>
-          )}
-          
-          {selectedOption === 'json' && (
-            <div className="space-y-2">
-              <label className="text-sm font-medium">JSON Data</label>
-              <Textarea 
-                placeholder='[{"question": "Which planet is known as the Red Planet?", "category": "Science", "options": ["Venus", "Mars", "Jupiter", "Saturn"], "correctAnswer": "Mars", "difficulty": "Easy"}]'
-                className="min-h-[150px]"
-                value={jsonData}
-                onChange={(e) => setJsonData(e.target.value)}
-              />
-              <p className="text-xs text-muted-foreground">
-                Format: Array of question objects with question, category, options (array), correctAnswer, and difficulty
-              </p>
-            </div>
-          )}
-          
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Or Upload a File</label>
-            <Input 
-              type="file" 
-              accept={selectedOption === 'csv' ? ".csv" : ".json"} 
-              onChange={handleFileChange}
-            />
-            {file && (
-              <p className="text-xs text-muted-foreground">
-                Selected file: {file.name} ({(file.size / 1024).toFixed(2)} KB)
-              </p>
-            )}
-          </div>
-          
-          {importResults && (
-            <Alert variant={importResults.success ? "default" : "destructive"}>
-              {importResults.success ? (
-                <CheckCircle2 className="h-4 w-4" />
-              ) : (
-                <AlertCircle className="h-4 w-4" />
+      <Tabs defaultValue="import">
+        <TabsList className="grid grid-cols-2 w-[400px]">
+          <TabsTrigger value="import">Import Questions</TabsTrigger>
+          <TabsTrigger value="manage">Manage Questions</TabsTrigger>
+        </TabsList>
+        
+        <TabsContent value="import">
+          <Card>
+            <CardHeader>
+              <CardTitle>Import Questions</CardTitle>
+              <CardDescription>Add new trivia questions to your collection</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Import Format</label>
+                <Select defaultValue="csv" onValueChange={setSelectedOption}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select format" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="csv">CSV Format</SelectItem>
+                    <SelectItem value="json">JSON Format</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              
+              {selectedOption === 'csv' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">CSV Data</label>
+                  <Textarea 
+                    placeholder="question,category,option1,option2,option3,option4,correctAnswer,difficulty"
+                    className="min-h-[150px]"
+                    value={csvData}
+                    onChange={(e) => setCsvData(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Format: Each line should be: question,category,option1,option2,option3,option4,correctAnswer,difficulty
+                  </p>
+                </div>
               )}
-              <AlertTitle>
-                {importResults.success ? "Import Successful" : "Import Failed"}
-              </AlertTitle>
-              <AlertDescription>
-                {importResults.message}
-              </AlertDescription>
-            </Alert>
-          )}
-          
-          <div className="flex flex-col sm:flex-row gap-3">
-            <Button 
-              className="flex-1"
-              onClick={handleImport}
-              disabled={importing}
-            >
-              {importing ? (
-                "Importing..."
-              ) : (
-                <>
-                  <Upload className="mr-2 h-4 w-4" />
-                  Import Questions
-                </>
+              
+              {selectedOption === 'json' && (
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">JSON Data</label>
+                  <Textarea 
+                    placeholder='[{"question": "Which planet is known as the Red Planet?", "category": "Science", "options": ["Venus", "Mars", "Jupiter", "Saturn"], "correctAnswer": "Mars", "difficulty": "Easy"}]'
+                    className="min-h-[150px]"
+                    value={jsonData}
+                    onChange={(e) => setJsonData(e.target.value)}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Format: Array of question objects with question, category, options (array), correctAnswer, and difficulty
+                  </p>
+                </div>
               )}
-            </Button>
-            
-            <Button 
-              variant="outline" 
-              className="flex-1"
-              onClick={handleExportQuestions}
-            >
-              <Save className="mr-2 h-4 w-4" />
-              Export Collection
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-      
-      <Card>
-        <CardHeader>
-          <CardTitle>About Static Questions</CardTitle>
-          <CardDescription>
-            {currentUserId 
-              ? "Your imported questions are saved to your account" 
-              : "Sign in to keep your questions when you return"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
-            We've updated the system to use static questions instead of database storage to reduce database usage and costs. When you import questions:
-          </p>
-          <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground mb-4">
-            <li>A set of default questions is always available to all users</li>
-            <li>
-              {currentUserId 
-                ? "Your imported questions are tied to your account and will be available when you log in later" 
-                : "When logged in, your imported questions will be saved to your account and available when you return"}
-            </li>
-            <li>You can export the full collection to save it locally</li>
-            <li>Import that exported file later to restore your collection</li>
-            <li>This approach significantly reduces database costs while maintaining functionality</li>
-          </ul>
-          <div className="bg-muted p-3 rounded-md">
-            <h4 className="text-sm font-medium mb-2">CSV Template Example</h4>
-            <pre className="overflow-x-auto text-xs">
-              <code>
-                Which planet is known as the Red Planet?,Science,Venus,Mars,Jupiter,Saturn,Mars,Easy<br/>
-                Who painted the Mona Lisa?,Art,Vincent van Gogh,Leonardo da Vinci,Pablo Picasso,Michelangelo,Leonardo da Vinci,Easy<br/>
-                In which year did World War II end?,History,1943,1944,1945,1946,1945,Medium
-              </code>
-            </pre>
-            <Button variant="outline" className="mt-3" onClick={handleDownloadTemplate}>
-              <Download className="mr-2 h-4 w-4" />
-              Download CSV Template
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+              
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Or Upload a File</label>
+                <Input 
+                  type="file" 
+                  accept={selectedOption === 'csv' ? ".csv" : ".json"} 
+                  onChange={handleFileChange}
+                />
+                {file && (
+                  <p className="text-xs text-muted-foreground">
+                    Selected file: {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                  </p>
+                )}
+              </div>
+              
+              {importResults && (
+                <Alert variant={importResults.success ? "default" : "destructive"}>
+                  {importResults.success ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4" />
+                  )}
+                  <AlertTitle>
+                    {importResults.success ? "Import Successful" : "Import Failed"}
+                  </AlertTitle>
+                  <AlertDescription>
+                    {importResults.message}
+                  </AlertDescription>
+                </Alert>
+              )}
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <Button 
+                  className="flex-1"
+                  onClick={handleImport}
+                  disabled={importing}
+                >
+                  {importing ? (
+                    "Importing..."
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-4 w-4" />
+                      Import Questions
+                    </>
+                  )}
+                </Button>
+                
+                <Button 
+                  variant="outline" 
+                  className="flex-1"
+                  onClick={handleExportQuestions}
+                >
+                  <Save className="mr-2 h-4 w-4" />
+                  Export Collection
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card className="mt-6">
+            <CardHeader>
+              <CardTitle>About Static Questions</CardTitle>
+              <CardDescription>
+                {currentUserId 
+                  ? "Your imported questions are saved to your account" 
+                  : "Sign in to keep your questions when you return"}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground mb-4">
+                We've updated the system to use static questions instead of database storage to reduce database usage and costs. When you import questions:
+              </p>
+              <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground mb-4">
+                <li>A set of default questions is always available to all users</li>
+                <li>
+                  {currentUserId 
+                    ? "Your imported questions are tied to your account and will be available when you log in later" 
+                    : "When logged in, your imported questions will be saved to your account and available when you return"}
+                </li>
+                <li>You can export the full collection to save it locally</li>
+                <li>Import that exported file later to restore your collection</li>
+                <li>This approach significantly reduces database costs while maintaining functionality</li>
+              </ul>
+              <div className="bg-muted p-3 rounded-md">
+                <h4 className="text-sm font-medium mb-2">CSV Template Example</h4>
+                <pre className="overflow-x-auto text-xs">
+                  <code>
+                    Which planet is known as the Red Planet?,Science,Venus,Mars,Jupiter,Saturn,Mars,Easy<br/>
+                    Who painted the Mona Lisa?,Art,Vincent van Gogh,Leonardo da Vinci,Pablo Picasso,Michelangelo,Leonardo da Vinci,Easy<br/>
+                    In which year did World War II end?,History,1943,1944,1945,1946,1945,Medium
+                  </code>
+                </pre>
+                <Button variant="outline" className="mt-3" onClick={handleDownloadTemplate}>
+                  <Download className="mr-2 h-4 w-4" />
+                  Download CSV Template
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        
+        <TabsContent value="manage">
+          <DuplicateQuestionRemover />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };
