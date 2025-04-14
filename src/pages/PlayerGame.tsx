@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -7,7 +6,7 @@ import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
-import { staticQuestions, getRandomQuestions, formatQuestionsForGame } from '@/utils/staticQuestions';
+import { baseStaticQuestions, getRandomQuestions, formatQuestionsForGame } from '@/utils/staticQuestions';
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -41,7 +40,8 @@ const PlayerGame = () => {
         setLoading(true);
         
         // Use the static questions instead of loading from the database
-        const formattedQuestions = formatQuestionsForGame(getRandomQuestions(15), gameSettings.questionDuration);
+        const randomQuestions = await getRandomQuestions(15);
+        const formattedQuestions = formatQuestionsForGame(randomQuestions, gameSettings.questionDuration);
         
         if (formattedQuestions.length > 0) {
           console.log(`Loaded ${formattedQuestions.length} questions from static source for player view`);
