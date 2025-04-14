@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -7,10 +6,13 @@ import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
+import { staticQuestions, getRandomQuestions, formatQuestionsForGame } from '@/utils/staticQuestions';
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
   const [gameId, setGameId] = useState<string | null>(null);
+  const [isRegistered, setIsRegistered] = useState<boolean>(false);
+  const [registeredPlayerId, setRegisteredPlayerId] = useState<string | null>(null);
   const [questionIndex, setQuestionIndex] = useState(0);
   const [questions, setQuestions] = useState<any[]>([]);
   const [currentQuestion, setCurrentQuestion] = useState<any>(null);
@@ -25,104 +27,38 @@ const PlayerGame = () => {
   const [autoSyncEnabled, setAutoSyncEnabled] = useState(true);
   const [loading, setLoading] = useState(true);
   const [showTimeUp, setShowTimeUp] = useState(false);
+  const [correctAnswers, setCorrectAnswers] = useState(0);
   const { toast } = useToast();
   const navigate = useNavigate();
   
   useEffect(() => {
-    const fetchQuestions = async () => {
+    const loadQuestions = async () => {
       try {
         setLoading(true);
         
-        const { data: buckets, error: bucketsError } = await supabase
-          .from('buckets')
-          .select('id')
-          .eq('is_default', true)
-          .limit(1);
-          
-        if (bucketsError) {
-          console.error('Error fetching default bucket:', bucketsError);
-          setLoading(false);
-          return;
-        }
+        // Use the static questions instead of loading from the database
+        const formattedQuestions = formatQuestionsForGame(getRandomQuestions(15), gameSettings.questionDuration);
         
-        if (buckets && buckets.length > 0) {
-          const defaultBucketId = buckets[0].id;
+        if (formattedQuestions.length > 0) {
+          console.log(`Loaded ${formattedQuestions.length} questions from static source for player view`);
+          setQuestions(formattedQuestions);
           
-          const { data: bucketQuestions, error: questionsError } = await supabase
-            .from('bucket_questions')
-            .select(`
-              question_id,
-              questions:question_id (
-                id, 
-                text, 
-                options, 
-                correct_answer, 
-                categories:category_id (
-                  id,
-                  name
-                )
-              )
-            `)
-            .eq('bucket_id', defaultBucketId);
+          const gameState = localStorage.getItem('gameState');
+          if (gameState) {
+            const parsedState = JSON.parse(gameState);
+            const initialQuestionIndex = parsedState.questionIndex || 0;
+            setQuestionIndex(initialQuestionIndex);
+            setCurrentQuestion(formattedQuestions[initialQuestionIndex] || formattedQuestions[0]);
+            setCurrentGameState(parsedState.state || 'question');
+            setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
+            setIsAnswerRevealed(parsedState.state === 'answer');
             
-          if (questionsError) {
-            console.error('Error fetching questions:', questionsError);
-            setLoading(false);
-            return;
-          }
-          
-          if (bucketQuestions && bucketQuestions.length > 0) {
-            const formattedQuestions = bucketQuestions.map(item => {
-              const question = item.questions;
-              
-              let options: string[] = [];
-              if (question.options) {
-                if (Array.isArray(question.options)) {
-                  options = question.options.map(opt => String(opt));
-                } else if (typeof question.options === 'string') {
-                  try {
-                    const parsedOptions = JSON.parse(question.options);
-                    options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
-                  } catch {
-                    options = [String(question.options)];
-                  }
-                } else if (typeof question.options === 'object') {
-                  options = Object.values(question.options).map(opt => String(opt));
-                }
-              }
-              
-              return {
-                id: question.id,
-                text: question.text,
-                options: options,
-                correctAnswer: question.correct_answer,
-                category: question.categories ? question.categories.name : 'General',
-                timeLimit: gameSettings.questionDuration
-              };
-            });
-            
-            if (formattedQuestions.length > 0) {
-              console.log(`Loaded ${formattedQuestions.length} questions from the default bucket for player view`);
-              setQuestions(formattedQuestions);
-              
-              const gameState = localStorage.getItem('gameState');
-              if (gameState) {
-                const parsedState = JSON.parse(gameState);
-                const initialQuestionIndex = parsedState.questionIndex || 0;
-                setQuestionIndex(initialQuestionIndex);
-                setCurrentQuestion(formattedQuestions[initialQuestionIndex] || formattedQuestions[0]);
-                setCurrentGameState(parsedState.state || 'question');
-                setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
-                setIsAnswerRevealed(parsedState.state === 'answer');
-                
-                // Reset "Time's Up" message when receiving a new question state
-                if (parsedState.state === 'question' && parsedState.timeLeft > 0) {
-                  setShowTimeUp(false);
-                }
-              } else {
-                setCurrentQuestion(formattedQuestions[0]);
-              }
+            // Reset "Time's Up" message when receiving a new question state
+            if (parsedState.state === 'question' && parsedState.timeLeft > 0) {
+              setShowTimeUp(false);
             }
+          } else {
+            setCurrentQuestion(formattedQuestions[0]);
           }
         }
       } catch (error) {
@@ -132,24 +68,31 @@ const PlayerGame = () => {
       }
     };
     
-    fetchQuestions();
+    loadQuestions();
     
     // Register player on display screen
     const notifyDisplayAboutPlayer = () => {
       const storedName = sessionStorage.getItem('playerName');
       const storedGameId = sessionStorage.getItem('gameId');
+      const storedIsRegistered = sessionStorage.getItem('isRegistered') === 'true';
       
       if (storedName && storedGameId) {
         localStorage.setItem('playerJoined', JSON.stringify({ 
           name: storedName, 
           gameId: storedGameId, 
-          timestamp: Date.now() 
+          timestamp: Date.now(),
+          isRegistered: storedIsRegistered
         }));
         console.log('Notified display about player:', storedName);
         
         // Broadcast a custom event for display screens in other windows
         const playerJoinedEvent = new CustomEvent('playerJoined', { 
-          detail: { name: storedName, gameId: storedGameId, timestamp: Date.now() }
+          detail: { 
+            name: storedName, 
+            gameId: storedGameId, 
+            timestamp: Date.now(),
+            isRegistered: storedIsRegistered 
+          }
         });
         window.dispatchEvent(playerJoinedEvent);
       }
@@ -162,15 +105,28 @@ const PlayerGame = () => {
     return () => clearInterval(notifyInterval);
   }, []);
   
-  console.log('Player screen - current question index:', questionIndex);
-  console.log('Player screen - questions available:', questions.length);
-  console.log('Player screen - current game state:', currentGameState);
-  console.log('Player screen - timeLeft:', timeLeft);
-  console.log('Player screen - showTimeUp:', showTimeUp);
-  
   useEffect(() => {
+    const checkRegisteredPlayer = async () => {
+      const { data: session } = await supabase.auth.getSession();
+      
+      if (session && session.session) {
+        const { data, error } = await supabase
+          .from('registered_players')
+          .select('id, name')
+          .eq('user_id', session.session.user.id)
+          .single();
+          
+        if (!error && data) {
+          setIsRegistered(true);
+          setRegisteredPlayerId(data.id);
+          console.log('Found registered player:', data.name);
+        }
+      }
+    };
+    
     const storedName = sessionStorage.getItem('playerName');
     const storedGameId = sessionStorage.getItem('gameId');
+    const storedIsRegistered = sessionStorage.getItem('isRegistered') === 'true';
     
     if (!storedName || !storedGameId) {
       toast({
@@ -182,15 +138,21 @@ const PlayerGame = () => {
       return;
     }
     
-    console.log('Player joined:', storedName, 'Game ID:', storedGameId);
+    console.log('Player joined:', storedName, 'Game ID:', storedGameId, 'Registered:', storedIsRegistered);
     setPlayerName(storedName);
     setGameId(storedGameId);
+    setIsRegistered(storedIsRegistered);
     
     localStorage.setItem('playerJoined', JSON.stringify({ 
       name: storedName, 
       gameId: storedGameId, 
-      timestamp: Date.now() 
+      timestamp: Date.now(),
+      isRegistered: storedIsRegistered
     }));
+    
+    if (storedIsRegistered) {
+      checkRegisteredPlayer();
+    }
     
     console.log('Notified display about player:', storedName);
   }, [navigate, toast]);
@@ -336,16 +298,21 @@ const PlayerGame = () => {
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
       const timerId = setTimeout(() => {
-        if (selectedAnswer === currentQuestion.correctAnswer) {
+        const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
+        
+        if (isCorrect) {
           const pointsEarned = 100 + (timeLeft * 10);
           setScore(prevScore => prevScore + pointsEarned);
+          setCorrectAnswers(prev => prev + 1);
           setAnsweredCorrectly(true);
           
           const playerScoreData = {
             name: playerName,
             score: score + pointsEarned,
             gameId: gameId,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            isRegistered: isRegistered,
+            correctAnswers: correctAnswers + 1
           };
           localStorage.setItem(`playerScore_${playerName}`, JSON.stringify(playerScoreData));
           
@@ -368,7 +335,42 @@ const PlayerGame = () => {
       
       return () => clearTimeout(timerId);
     }
-  }, [selectedAnswer, currentQuestion, toast, timeLeft, playerName, gameId, score, isAnswerRevealed]);
+  }, [selectedAnswer, currentQuestion, toast, timeLeft, playerName, gameId, score, isAnswerRevealed, isRegistered, correctAnswers]);
+  
+  useEffect(() => {
+    const updateGameHistory = async () => {
+      if (isRegistered && registeredPlayerId && currentGameState === 'leaderboard' && questions.length > 0) {
+        try {
+          // Check if we already recorded this game
+          const gameHistoryKey = `game_history_${gameId}_${registeredPlayerId}`;
+          const historyRecorded = localStorage.getItem(gameHistoryKey) === 'true';
+          
+          if (!historyRecorded) {
+            const { error } = await supabase
+              .from('player_game_history')
+              .insert({
+                player_id: registeredPlayerId,
+                game_id: gameId,
+                score: score,
+                correct_answers: correctAnswers,
+                total_questions: questions.length
+              });
+              
+            if (error) {
+              console.error('Error saving game history:', error);
+            } else {
+              console.log('Game history saved for registered player:', playerName);
+              localStorage.setItem(gameHistoryKey, 'true');
+            }
+          }
+        } catch (error) {
+          console.error('Error updating game history:', error);
+        }
+      }
+    };
+    
+    updateGameHistory();
+  }, [currentGameState, isRegistered, registeredPlayerId, gameId, score, correctAnswers, questions.length, playerName]);
   
   const handleSelectAnswer = (answer: string) => {
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
@@ -416,6 +418,11 @@ const PlayerGame = () => {
           <div className="bg-muted p-4 rounded-md">
             <p className="text-md font-medium">Your Score</p>
             <p className="text-2xl font-bold text-primary">{score}</p>
+            {isRegistered && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Your score will be saved to your account
+              </p>
+            )}
           </div>
           
           {process.env.NODE_ENV === 'development' && (
@@ -548,6 +555,7 @@ const PlayerGame = () => {
             <p>Last Sync: {new Date(lastGameStateTimestamp).toLocaleTimeString()}</p>
             <p>Questions loaded: {questions.length}</p>
             <p>Failed sync attempts: {failedSyncAttempts}</p>
+            <p>Registered player: {isRegistered ? 'Yes' : 'No'}</p>
           </div>
         </div>
       )}

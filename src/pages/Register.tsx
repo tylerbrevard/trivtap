@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Eye, EyeOff, Lock, Mail, User, Building } from 'lucide-react';
+import { supabase } from "@/integrations/supabase/client";
 
 const Register = () => {
   const [businessName, setBusinessName] = useState('');
@@ -17,7 +18,7 @@ const Register = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!businessName || !name || !email || !password) {
@@ -40,17 +41,61 @@ const Register = () => {
     
     setIsLoading(true);
     
-    // Mock registration - in a real app, this would be an API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // Register the user with Supabase Auth
+      const { data: authData, error: authError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: name,
+            business_name: businessName
+          }
+        }
+      });
+      
+      if (authError) throw authError;
+      
+      // Create profile in profiles table
+      if (authData.user) {
+        const { error: profileError } = await supabase
+          .from('profiles')
+          .upsert({
+            id: authData.user.id,
+            full_name: name,
+            business_name: businessName
+          });
+          
+        if (profileError) throw profileError;
+        
+        // Create registered player entry
+        const { error: playerError } = await supabase
+          .from('registered_players')
+          .insert({
+            user_id: authData.user.id,
+            name: name,
+            email: email
+          });
+          
+        if (playerError) throw playerError;
+      }
       
       toast({
         title: "Registration Successful",
-        description: "Your account has been created. Welcome to TriviaPulse!",
+        description: "Your account has been created. Welcome to TrivTap!",
       });
       
       navigate('/admin/dashboard');
-    }, 1500);
+    } catch (error: any) {
+      console.error('Registration error:', error);
+      toast({
+        title: "Registration Failed",
+        description: error.message || "An error occurred during registration.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const toggleShowPassword = () => {

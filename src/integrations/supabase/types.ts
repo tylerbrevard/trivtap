@@ -256,6 +256,51 @@ export type Database = {
           },
         ]
       }
+      player_game_history: {
+        Row: {
+          correct_answers: number
+          created_at: string
+          game_id: string | null
+          id: string
+          player_id: string | null
+          score: number
+          total_questions: number
+        }
+        Insert: {
+          correct_answers?: number
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          player_id?: string | null
+          score?: number
+          total_questions?: number
+        }
+        Update: {
+          correct_answers?: number
+          created_at?: string
+          game_id?: string | null
+          id?: string
+          player_id?: string | null
+          score?: number
+          total_questions?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_game_history_game_id_fkey"
+            columns: ["game_id"]
+            isOneToOne: false
+            referencedRelation: "games"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_game_history_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "registered_players"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       players: {
         Row: {
           created_at: string
@@ -321,6 +366,36 @@ export type Database = {
         }
         Relationships: []
       }
+      question_templates: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          owner_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          owner_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       questions: {
         Row: {
           category_id: string | null
@@ -361,6 +436,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      registered_players: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          name: string
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          name: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: []
       }
       settings: {
         Row: {

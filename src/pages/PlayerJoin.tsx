@@ -1,17 +1,45 @@
 
-import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Gamepad2, ArrowRight } from 'lucide-react';
+import { Gamepad2, ArrowRight, UserPlus } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { supabase } from "@/integrations/supabase/client";
 
 const PlayerJoin = () => {
   const [otp, setOtp] = useState('');
   const [playerName, setPlayerName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isRegistered, setIsRegistered] = useState(false);
+  const [currentTab, setCurrentTab] = useState<string>("guest");
   const { toast } = useToast();
   const navigate = useNavigate();
+  
+  useEffect(() => {
+    // Check if user is already logged in
+    const checkSession = async () => {
+      const { data } = await supabase.auth.getSession();
+      if (data.session) {
+        const { data: playerData, error } = await supabase
+          .from('registered_players')
+          .select('name')
+          .eq('user_id', data.session.user.id)
+          .single();
+          
+        if (!error && playerData) {
+          setPlayerName(playerData.name);
+          setIsRegistered(true);
+          setCurrentTab("registered");
+        }
+      }
+    };
+    
+    checkSession();
+  }, []);
   
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -36,31 +64,97 @@ const PlayerJoin = () => {
     
     setIsSubmitting(true);
     
-    // Mock API call to validate OTP
-    setTimeout(() => {
-      setIsSubmitting(false);
+    // Store player info in localStorage/sessionStorage
+    sessionStorage.setItem('playerName', playerName);
+    sessionStorage.setItem('gameId', otp);
+    
+    // If player is registered, store their registration status
+    if (isRegistered) {
+      sessionStorage.setItem('isRegistered', 'true');
+    }
+    
+    toast({
+      title: "Game Joined!",
+      description: `Welcome ${playerName}! Get ready to play.`,
+    });
+    
+    // Redirect to the game screen
+    navigate('/play');
+    setIsSubmitting(false);
+  };
+  
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!email || !password) {
+      toast({
+        title: "Missing Fields",
+        description: "Please enter both email and password.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsSubmitting(true);
+    
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      // Simulate successful join - in a real app, this would verify the OTP with the backend
-      if (otp.length >= 4) {
-        // Store player info in localStorage/sessionStorage
-        sessionStorage.setItem('playerName', playerName);
-        sessionStorage.setItem('gameId', otp);
-        
-        toast({
-          title: "Game Joined!",
-          description: `Welcome ${playerName}! Get ready to play.`,
-        });
-        
-        // Redirect to the game screen
-        navigate('/play');
-      } else {
-        toast({
-          title: "Invalid OTP",
-          description: "The OTP code you entered is invalid. Please check and try again.",
-          variant: "destructive",
-        });
+      if (error) throw error;
+      
+      if (data.user) {
+        const { data: playerData, error: playerError } = await supabase
+          .from('registered_players')
+          .select('name')
+          .eq('user_id', data.user.id)
+          .single();
+          
+        if (!playerError && playerData) {
+          setPlayerName(playerData.name);
+          setIsRegistered(true);
+          
+          toast({
+            title: "Login Successful",
+            description: `Welcome back, ${playerData.name}!`,
+          });
+          
+          setCurrentTab("registered");
+        }
       }
-    }, 1000);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login Failed",
+        description: error.message || "An error occurred during login.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+  
+  const handleLogout = async () => {
+    try {
+      await supabase.auth.signOut();
+      setIsRegistered(false);
+      setPlayerName('');
+      setCurrentTab("guest");
+      
+      toast({
+        title: "Logged Out",
+        description: "You have been logged out.",
+      });
+    } catch (error: any) {
+      console.error('Logout error:', error);
+      toast({
+        title: "Logout Failed",
+        description: error.message || "An error occurred during logout.",
+        variant: "destructive",
+      });
+    }
   };
   
   return (
@@ -78,49 +172,167 @@ const PlayerJoin = () => {
           </p>
         </div>
         
-        <div className="card-trivia p-6">
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <label htmlFor="otp" className="block text-sm font-medium">
-                Game Code
-              </label>
-              <Input
-                id="otp"
-                type="text"
-                value={otp}
-                onChange={(e) => setOtp(e.target.value.toUpperCase())}
-                placeholder="Enter code (e.g., ABCD)"
-                className="trivia-input text-center text-2xl tracking-widest uppercase"
-                maxLength={6}
-                autoComplete="off"
-              />
+        <Tabs value={currentTab} onValueChange={setCurrentTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="guest">Guest Player</TabsTrigger>
+            <TabsTrigger value="registered">Registered Player</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="guest" className="mt-4">
+            <div className="card-trivia p-6">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                <div className="space-y-2">
+                  <label htmlFor="otp" className="block text-sm font-medium">
+                    Game Code
+                  </label>
+                  <Input
+                    id="otp"
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value.toUpperCase())}
+                    placeholder="Enter code (e.g., ABCD)"
+                    className="trivia-input text-center text-2xl tracking-widest uppercase"
+                    maxLength={6}
+                    autoComplete="off"
+                  />
+                </div>
+                
+                <div className="space-y-2">
+                  <label htmlFor="playerName" className="block text-sm font-medium">
+                    Your Name
+                  </label>
+                  <Input
+                    id="playerName"
+                    type="text"
+                    value={playerName}
+                    onChange={(e) => setPlayerName(e.target.value)}
+                    placeholder="Enter your name"
+                    className="trivia-input"
+                    maxLength={20}
+                  />
+                </div>
+                
+                <Button 
+                  type="submit" 
+                  className="btn-trivia w-full flex items-center justify-center gap-2"
+                  disabled={isSubmitting}
+                >
+                  Join Game
+                  <ArrowRight size={18} />
+                </Button>
+              </form>
             </div>
             
-            <div className="space-y-2">
-              <label htmlFor="playerName" className="block text-sm font-medium">
-                Your Name
-              </label>
-              <Input
-                id="playerName"
-                type="text"
-                value={playerName}
-                onChange={(e) => setPlayerName(e.target.value)}
-                placeholder="Enter your name"
-                className="trivia-input"
-                maxLength={20}
-              />
+            <div className="mt-6 text-center">
+              <p className="text-sm text-muted-foreground">
+                Want to save your game history? 
+                <Button
+                  variant="link"
+                  className="p-0 pl-1 h-auto"
+                  onClick={() => setCurrentTab("registered")}
+                >
+                  Register or login
+                </Button>
+              </p>
             </div>
-            
-            <Button 
-              type="submit" 
-              className="btn-trivia w-full flex items-center justify-center gap-2"
-              disabled={isSubmitting}
-            >
-              Join Game
-              <ArrowRight size={18} />
-            </Button>
-          </form>
-        </div>
+          </TabsContent>
+          
+          <TabsContent value="registered" className="mt-4">
+            {isRegistered ? (
+              <div className="card-trivia p-6">
+                <div className="text-center mb-4">
+                  <h3 className="text-xl font-semibold">Welcome, {playerName}!</h3>
+                  <p className="text-muted-foreground">Your game history will be saved</p>
+                </div>
+                
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  <div className="space-y-2">
+                    <label htmlFor="registeredOtp" className="block text-sm font-medium">
+                      Game Code
+                    </label>
+                    <Input
+                      id="registeredOtp"
+                      type="text"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.toUpperCase())}
+                      placeholder="Enter code (e.g., ABCD)"
+                      className="trivia-input text-center text-2xl tracking-widest uppercase"
+                      maxLength={6}
+                      autoComplete="off"
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="submit" 
+                    className="btn-trivia w-full flex items-center justify-center gap-2"
+                    disabled={isSubmitting}
+                  >
+                    Join Game
+                    <ArrowRight size={18} />
+                  </Button>
+                  
+                  <Button 
+                    type="button" 
+                    variant="outline"
+                    className="w-full"
+                    onClick={handleLogout}
+                  >
+                    Logout
+                  </Button>
+                </form>
+              </div>
+            ) : (
+              <div className="card-trivia p-6">
+                <form onSubmit={handleLogin} className="space-y-6">
+                  <div className="space-y-2">
+                    <label htmlFor="email" className="block text-sm font-medium">
+                      Email
+                    </label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={email}
+                      onChange={(e) => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="trivia-input"
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <label htmlFor="password" className="block text-sm font-medium">
+                      Password
+                    </label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="••••••••"
+                      className="trivia-input"
+                    />
+                  </div>
+                  
+                  <Button 
+                    type="submit" 
+                    className="btn-trivia w-full"
+                    disabled={isSubmitting}
+                  >
+                    {isSubmitting ? "Signing in..." : "Sign In"}
+                  </Button>
+                  
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground">
+                      Don't have an account?{" "}
+                      <Link to="/register" className="text-primary hover:underline">
+                        Register here
+                      </Link>
+                    </p>
+                  </div>
+                </form>
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
         
         <div className="mt-6 text-center">
           <p className="text-sm text-muted-foreground">

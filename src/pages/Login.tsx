@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
 import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
   const [email, setEmail] = useState('');
@@ -15,7 +16,7 @@ const Login = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!email || !password) {
@@ -29,18 +30,30 @@ const Login = () => {
     
     setIsLoading(true);
     
-    // Mock authentication - in a real app, this would be an API call
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password
+      });
       
-      // For demo purposes, any login works
+      if (error) throw error;
+      
       toast({
         title: "Login Successful",
-        description: "Welcome back to TriviaPulse!",
+        description: "Welcome back to TrivTap!",
       });
       
       navigate('/admin/dashboard');
-    }, 1500);
+    } catch (error: any) {
+      console.error('Login error:', error);
+      toast({
+        title: "Login Failed",
+        description: error.message || "An error occurred during login.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
   
   const toggleShowPassword = () => {
