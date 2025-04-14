@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -28,6 +29,9 @@ const PlayerGame = () => {
   const [loading, setLoading] = useState(true);
   const [showTimeUp, setShowTimeUp] = useState(false);
   const [correctAnswers, setCorrectAnswers] = useState(0);
+  const [pendingPoints, setPendingPoints] = useState(0);
+  const [pendingCorrect, setPendingCorrect] = useState(false);
+  const [hasSelectedAnswer, setHasSelectedAnswer] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -195,9 +199,12 @@ const PlayerGame = () => {
             }
             
             setSelectedAnswer(null);
+            setHasSelectedAnswer(false);
             setAnsweredCorrectly(null);
             setIsAnswerRevealed(newGameState === 'answer');
             setTimeLeft(newGameState === 'question' ? parsedState.timeLeft : 0);
+            setPendingPoints(0);
+            setPendingCorrect(false);
             
             // Clear "Time's Up" message when changing to a new question
             setShowTimeUp(false);
@@ -214,15 +221,57 @@ const PlayerGame = () => {
             }
           }
           
+          // When changing to answer state, reveal the correct/incorrect status
           if (newGameState === 'answer' && !isAnswerRevealed) {
             console.log('Changing to answer state');
             setIsAnswerRevealed(true);
             setTimeLeft(0);
+            
+            // Apply pending points and update answer status
+            if (pendingPoints > 0 && pendingCorrect) {
+              setScore(prevScore => prevScore + pendingPoints);
+              setCorrectAnswers(prev => prev + 1);
+              setAnsweredCorrectly(true);
+              
+              const playerScoreData = {
+                name: playerName,
+                score: score + pendingPoints,
+                gameId: gameId,
+                timestamp: Date.now(),
+                isRegistered: isRegistered,
+                correctAnswers: correctAnswers + 1
+              };
+              localStorage.setItem(`playerScore_${playerName}`, JSON.stringify(playerScoreData));
+              
+              console.log('Applied pending points:', pendingPoints);
+              
+              toast({
+                title: "Correct!",
+                description: `+${pendingPoints} points`,
+                variant: "default",
+              });
+              
+              // Reset pending values
+              setPendingPoints(0);
+              setPendingCorrect(false);
+            } else if (hasSelectedAnswer) {
+              setAnsweredCorrectly(false);
+              console.log('Revealing incorrect answer');
+              
+              toast({
+                title: "Incorrect",
+                description: "Better luck on the next question!",
+                variant: "default",
+              });
+            }
           } else if (newGameState === 'question' && isAnswerRevealed) {
             console.log('Changing back to question state');
             setIsAnswerRevealed(false);
             setSelectedAnswer(null);
+            setHasSelectedAnswer(false);
             setAnsweredCorrectly(null);
+            setPendingPoints(0);
+            setPendingCorrect(false);
             
             // Only show "Time's Up" if timeLeft is 0 in question state
             setShowTimeUp(parsedState.timeLeft === 0);
@@ -231,8 +280,11 @@ const PlayerGame = () => {
           if (newGameState === 'intermission' || newGameState === 'leaderboard') {
             console.log(`Display is showing ${newGameState}, waiting...`);
             setSelectedAnswer(null);
+            setHasSelectedAnswer(false);
             setAnsweredCorrectly(null);
             setIsAnswerRevealed(false);
+            setPendingPoints(0);
+            setPendingCorrect(false);
             setShowTimeUp(false); // Clear "Time's Up" when in intermission or leaderboard
           }
         } catch (error) {
@@ -246,7 +298,7 @@ const PlayerGame = () => {
     
     const intervalId = setInterval(checkGameState, 200);
     return () => clearInterval(intervalId);
-  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions, currentGameState, answeredCorrectly]);
+  }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions, currentGameState, answeredCorrectly, pendingPoints, pendingCorrect, hasSelectedAnswer, score, playerName, gameId, isRegistered, correctAnswers, toast]);
   
   useEffect(() => {
     const cleanupListener = listenForGameStateChanges((gameState) => {
@@ -265,8 +317,11 @@ const PlayerGame = () => {
           }
           
           setSelectedAnswer(null);
+          setHasSelectedAnswer(false);
           setAnsweredCorrectly(null);
           setIsAnswerRevealed(gameState.state === 'answer');
+          setPendingPoints(0);
+          setPendingCorrect(false);
           
           // Clear "Time's Up" message when changing to a new question
           setShowTimeUp(false);
@@ -286,6 +341,42 @@ const PlayerGame = () => {
           setIsAnswerRevealed(true);
           setTimeLeft(0);
           setShowTimeUp(false); // Clear "Time's Up" message in answer state
+          
+          // Apply pending points
+          if (pendingPoints > 0 && pendingCorrect) {
+            setScore(prevScore => prevScore + pendingPoints);
+            setCorrectAnswers(prev => prev + 1);
+            setAnsweredCorrectly(true);
+            
+            const playerScoreData = {
+              name: playerName,
+              score: score + pendingPoints,
+              gameId: gameId,
+              timestamp: Date.now(),
+              isRegistered: isRegistered,
+              correctAnswers: correctAnswers + 1
+            };
+            localStorage.setItem(`playerScore_${playerName}`, JSON.stringify(playerScoreData));
+            
+            console.log('Applied pending points via game event:', pendingPoints);
+            
+            toast({
+              title: "Correct!",
+              description: `+${pendingPoints} points`,
+              variant: "default",
+            });
+            
+            setPendingPoints(0);
+            setPendingCorrect(false);
+          } else if (hasSelectedAnswer) {
+            setAnsweredCorrectly(false);
+            
+            toast({
+              title: "Incorrect",
+              description: "Better luck on the next question!",
+              variant: "default",
+            });
+          }
         } else if (gameState.state === 'intermission' || gameState.state === 'leaderboard') {
           setShowTimeUp(false); // Clear "Time's Up" in intermission or leaderboard
         }
@@ -293,49 +384,26 @@ const PlayerGame = () => {
     });
     
     return cleanupListener;
-  }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly, isAnswerRevealed]);
+  }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly, isAnswerRevealed, pendingPoints, pendingCorrect, hasSelectedAnswer, score, playerName, gameId, isRegistered, correctAnswers, toast]);
   
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
-      const timerId = setTimeout(() => {
-        const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
-        
-        if (isCorrect) {
-          const pointsEarned = 100 + (timeLeft * 10);
-          setScore(prevScore => prevScore + pointsEarned);
-          setCorrectAnswers(prev => prev + 1);
-          setAnsweredCorrectly(true);
-          
-          const playerScoreData = {
-            name: playerName,
-            score: score + pointsEarned,
-            gameId: gameId,
-            timestamp: Date.now(),
-            isRegistered: isRegistered,
-            correctAnswers: correctAnswers + 1
-          };
-          localStorage.setItem(`playerScore_${playerName}`, JSON.stringify(playerScoreData));
-          
-          console.log('Correct answer!', 'Points earned:', pointsEarned, 'Updated player score data:', playerScoreData);
-          toast({
-            title: "Correct!",
-            description: `+${pointsEarned} points`,
-            variant: "default",
-          });
-        } else {
-          setAnsweredCorrectly(false);
-          console.log('Incorrect answer');
-          toast({
-            title: "Incorrect",
-            description: "Better luck on the next question!",
-            variant: "default",
-          });
-        }
-      }, 500);
+      const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
       
-      return () => clearTimeout(timerId);
+      if (isCorrect) {
+        const pointsEarned = 100 + (timeLeft * 10);
+        // Instead of applying points immediately, store them for later
+        setPendingPoints(pointsEarned);
+        setPendingCorrect(true);
+        console.log('Stored pending points:', pointsEarned);
+      } else {
+        // Just mark that we selected an answer, but don't reveal result yet
+        console.log('Answer selected, but result hidden until reveal');
+      }
+      
+      setHasSelectedAnswer(true);
     }
-  }, [selectedAnswer, currentQuestion, toast, timeLeft, playerName, gameId, score, isAnswerRevealed, isRegistered, correctAnswers]);
+  }, [selectedAnswer, currentQuestion, timeLeft, isAnswerRevealed]);
   
   useEffect(() => {
     const updateGameHistory = async () => {
@@ -556,6 +624,8 @@ const PlayerGame = () => {
             <p>Questions loaded: {questions.length}</p>
             <p>Failed sync attempts: {failedSyncAttempts}</p>
             <p>Registered player: {isRegistered ? 'Yes' : 'No'}</p>
+            <p>Pending points: {pendingPoints}</p>
+            <p>Has selected answer: {hasSelectedAnswer ? 'Yes' : 'No'}</p>
           </div>
         </div>
       )}

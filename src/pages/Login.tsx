@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Eye, EyeOff, Lock, Mail } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, History, Trophy } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
@@ -73,7 +73,7 @@ const Login = () => {
           </p>
         </div>
         
-        <div className="card-trivia p-6">
+        <div className="card-trivia p-6 mb-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -127,6 +127,27 @@ const Login = () => {
               {isLoading ? "Signing in..." : "Sign In"}
             </Button>
           </form>
+        </div>
+        
+        <div className="bg-card border border-border/40 rounded-lg p-5 mb-6">
+          <h3 className="text-lg font-semibold mb-3 flex items-center">
+            <Trophy className="mr-2 h-5 w-5 text-primary" />
+            Player Benefits
+          </h3>
+          <ul className="space-y-2 text-sm">
+            <li className="flex items-start">
+              <History className="h-4 w-4 mr-2 mt-0.5 text-primary" />
+              <span>Track your game history and total points across all games</span>
+            </li>
+            <li className="flex items-start">
+              <Trophy className="h-4 w-4 mr-2 mt-0.5 text-primary" />
+              <span>See your rankings compared to other players</span>
+            </li>
+            <li className="flex items-start">
+              <Lock className="h-4 w-4 mr-2 mt-0.5 text-primary" />
+              <span>Secure your nickname so no one else can use it</span>
+            </li>
+          </ul>
         </div>
         
         <div className="mt-6 text-center">

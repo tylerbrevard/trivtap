@@ -4,7 +4,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { Gamepad2, ArrowRight, UserPlus } from 'lucide-react';
+import { Gamepad2, ArrowRight, UserPlus, History } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -46,8 +46,8 @@ const PlayerJoin = () => {
     
     if (!otp) {
       toast({
-        title: "OTP Required",
-        description: "Please enter the OTP code displayed on the trivia screen.",
+        title: "Game Code Required",
+        description: "Please enter the game code displayed on the trivia screen.",
         variant: "destructive",
       });
       return;
@@ -64,13 +64,15 @@ const PlayerJoin = () => {
     
     setIsSubmitting(true);
     
-    // Store player info in localStorage/sessionStorage
+    // Store player info in sessionStorage
     sessionStorage.setItem('playerName', playerName);
     sessionStorage.setItem('gameId', otp);
     
     // If player is registered, store their registration status
     if (isRegistered) {
       sessionStorage.setItem('isRegistered', 'true');
+    } else {
+      sessionStorage.setItem('isRegistered', 'false');
     }
     
     toast({
@@ -223,17 +225,23 @@ const PlayerJoin = () => {
               </form>
             </div>
             
-            <div className="mt-6 text-center">
-              <p className="text-sm text-muted-foreground">
-                Want to save your game history? 
-                <Button
-                  variant="link"
-                  className="p-0 pl-1 h-auto"
-                  onClick={() => setCurrentTab("registered")}
-                >
-                  Register or login
-                </Button>
-              </p>
+            <div className="mt-6 p-4 bg-card rounded-lg border border-border/40">
+              <div className="flex items-start gap-3">
+                <History className="h-5 w-5 text-primary mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-medium">Save Your Game History</h3>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Register or login to track your scores and see your game history!
+                  </p>
+                  <Button
+                    variant="link"
+                    className="p-0 h-auto text-xs text-primary"
+                    onClick={() => setCurrentTab("registered")}
+                  >
+                    Register or login →
+                  </Button>
+                </div>
+              </div>
             </div>
           </TabsContent>
           

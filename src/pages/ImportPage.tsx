@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -5,10 +6,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/components/ui/use-toast";
-import { Upload, AlertCircle, CheckCircle2, Download } from 'lucide-react';
+import { Upload, AlertCircle, CheckCircle2, Download, Save } from 'lucide-react';
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
-import { fetchCategories, getOrCreateCategory, getDefaultBucket, associateQuestionsWithBucket, ImportQuestion } from "@/utils/importUtils";
+import { fetchCategories, getOrCreateCategory } from "@/utils/importUtils";
+import { addImportedQuestionsToCollection, exportQuestionsToJson } from "@/utils/staticQuestions";
 
 const ImportPage = () => {
   const [selectedOption, setSelectedOption] = useState('csv');
@@ -41,9 +43,9 @@ const ImportPage = () => {
   }, [toast]);
   
   // Function to parse CSV data
-  const parseCSVData = (csvContent: string): ImportQuestion[] => {
+  const parseCSVData = (csvContent: string): any[] => {
     const lines = csvContent.trim().split('\n');
-    const questions: ImportQuestion[] = [];
+    const questions: any[] = [];
     
     console.log(`Parsing ${lines.length} lines of CSV data`);
     
@@ -95,7 +97,7 @@ const ImportPage = () => {
   };
   
   // Function to parse JSON data
-  const parseJSONData = (jsonContent: string): ImportQuestion[] => {
+  const parseJSONData = (jsonContent: string): any[] => {
     try {
       const parsedData = JSON.parse(jsonContent);
       
@@ -106,7 +108,7 @@ const ImportPage = () => {
       console.log(`Parsing ${parsedData.length} items from JSON data`);
       
       const validQuestions = parsedData.filter(item => {
-        if (!item.question || !item.category || !item.correctAnswer) {
+        if (!item.question && !item.text) {
           console.warn('Skipping question with missing required fields');
           return false;
         }
@@ -131,92 +133,6 @@ const ImportPage = () => {
     } catch (error) {
       console.error('Error parsing JSON:', error);
       throw new Error('Failed to parse JSON data. Please check the format.');
-    }
-  };
-  
-  // Function to import questions to database
-  const importQuestionsToDB = async (questions: ImportQuestion[]) => {
-    let successCount = 0;
-    let errorCount = 0;
-    let newQuestionIds: string[] = [];
-    
-    try {
-      console.log(`Starting import of ${questions.length} questions`);
-      
-      for (const question of questions) {
-        try {
-          // Get or create category
-          console.log(`Processing question: ${question.question.substring(0, 30)}...`);
-          console.log(`Getting category ID for: ${question.category}`);
-          const categoryId = await getOrCreateCategory(question.category);
-          console.log(`Using category ID: ${categoryId}`);
-          
-          // Insert question
-          console.log(`Inserting question with category ID: ${categoryId}`);
-          const { data, error } = await supabase
-            .from('questions')
-            .insert({
-              text: question.question,
-              category_id: categoryId,
-              options: question.options,
-              correct_answer: question.correctAnswer,
-              difficulty: question.difficulty
-            })
-            .select('id')
-            .single();
-            
-          if (error) {
-            console.error('Error inserting question:', error);
-            errorCount++;
-            continue;
-          } else if (!data) {
-            console.error('No data returned from question insert');
-            errorCount++;
-            continue;
-          }
-          
-          console.log(`Question inserted successfully with ID: ${data.id}`);
-          successCount++;
-          newQuestionIds.push(data.id);
-        } catch (itemError) {
-          console.error('Error processing question:', itemError);
-          errorCount++;
-        }
-      }
-      
-      // Only try to associate with bucket if we have successfully imported questions
-      if (newQuestionIds.length > 0) {
-        try {
-          // Get default bucket
-          console.log('Getting default bucket');
-          const defaultBucket = await getDefaultBucket();
-          
-          if (defaultBucket) {
-            // Associate questions with the default bucket
-            console.log(`Associating ${newQuestionIds.length} questions with default bucket`);
-            await associateQuestionsWithBucket(newQuestionIds, defaultBucket.id);
-            console.log('Questions associated with default bucket successfully');
-          } else {
-            console.warn('Default bucket not found or could not be created');
-            // Still count as success since questions were imported, just not associated
-          }
-        } catch (bucketError) {
-          console.error('Error with bucket operations:', bucketError);
-          // Don't fail the whole import if only the bucket association fails
-          return { 
-            successCount, 
-            errorCount, 
-            newQuestionIds,
-            bucketError: bucketError instanceof Error ? bucketError.message : 'Unknown bucket error'
-          };
-        }
-      }
-      
-      console.log(`Import completed. Success: ${successCount}, Errors: ${errorCount}`);
-      return { successCount, errorCount, newQuestionIds };
-    } catch (error) {
-      console.error('Import process failed:', error);
-      throw error;
     }
   };
   
@@ -252,12 +168,39 @@ const ImportPage = () => {
     document.body.removeChild(element);
   };
   
+  const handleExportQuestions = () => {
+    try {
+      const jsonString = exportQuestionsToJson();
+      
+      const element = document.createElement('a');
+      const file = new Blob([jsonString], {type: 'application/json'});
+      element.href = URL.createObjectURL(file);
+      element.download = 'trivia_questions.json';
+      document.body.appendChild(element);
+      element.click();
+      document.body.removeChild(element);
+      
+      toast({
+        title: "Export Successful",
+        description: "Questions exported successfully!",
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : 'Failed to export questions',
+        variant: "destructive",
+      });
+    }
+  };
+  
   const handleImport = async () => {
     setImporting(true);
     setImportResults(null);
     
     try {
-      let questions: ImportQuestion[] = [];
+      let questions: any[] = [];
       
       // Parse data based on selected format
       if (selectedOption === 'csv' && csvData) {
@@ -274,44 +217,19 @@ const ImportPage = () => {
       
       console.log(`Starting import of ${questions.length} questions`);
       
-      // Import questions to database
-      const result = await importQuestionsToDB(questions);
+      // Add questions to the static collection instead of the database
+      const result = addImportedQuestionsToCollection(questions);
       
-      // Only consider it a success if at least one question was imported
-      const wasSuccessful = result.successCount > 0;
-      let statusMessage = '';
-      
-      if (wasSuccessful) {
-        statusMessage = `Successfully imported ${result.successCount} questions`;
-        
-        if (result.bucketError) {
-          statusMessage += ` but failed to add to Default Bucket: ${result.bucketError}`;
-        } else {
-          statusMessage += ` to the Default Bucket`;
-        }
-        
-        if (result.errorCount > 0) {
-          statusMessage += `. ${result.errorCount} questions failed to import.`;
-        }
-      } else {
-        statusMessage = `Import failed. All ${result.errorCount} questions failed to import. Please check the console for details.`;
-      }
-      
-      console.log(statusMessage);
       setImportResults({
-        success: wasSuccessful,
-        message: statusMessage
+        success: true,
+        message: result
       });
       
       toast({
-        title: wasSuccessful ? "Import Successful" : "Import Failed",
-        description: statusMessage,
-        variant: wasSuccessful ? "default" : "destructive",
+        title: "Import Successful",
+        description: result,
+        variant: "default",
       });
-      
-      // Refresh categories list
-      const categoriesData = await fetchCategories();
-      setCategories(categoriesData);
       
     } catch (error) {
       console.error('Import failed:', error);
@@ -338,8 +256,8 @@ const ImportPage = () => {
       
       <Card>
         <CardHeader>
-          <CardTitle>Import Questions to Default Bucket</CardTitle>
-          <CardDescription>Add new trivia questions by importing data</CardDescription>
+          <CardTitle>Import Questions</CardTitle>
+          <CardDescription>Add new trivia questions to your collection</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -415,40 +333,63 @@ const ImportPage = () => {
             </Alert>
           )}
           
-          <Button 
-            className="w-full"
-            onClick={handleImport}
-            disabled={importing}
-          >
-            {importing ? (
-              "Importing..."
-            ) : (
-              <>
-                <Upload className="mr-2 h-4 w-4" />
-                Import Questions
-              </>
-            )}
-          </Button>
+          <div className="flex flex-col sm:flex-row gap-3">
+            <Button 
+              className="flex-1"
+              onClick={handleImport}
+              disabled={importing}
+            >
+              {importing ? (
+                "Importing..."
+              ) : (
+                <>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Import Questions
+                </>
+              )}
+            </Button>
+            
+            <Button 
+              variant="outline" 
+              className="flex-1"
+              onClick={handleExportQuestions}
+            >
+              <Save className="mr-2 h-4 w-4" />
+              Export Collection
+            </Button>
+          </div>
         </CardContent>
       </Card>
       
       <Card>
         <CardHeader>
-          <CardTitle>CSV Template</CardTitle>
-          <CardDescription>Example CSV format for importing questions</CardDescription>
+          <CardTitle>About Static Questions</CardTitle>
+          <CardDescription>Understand the new approach for trivia questions</CardDescription>
         </CardHeader>
         <CardContent>
-          <pre className="bg-muted p-4 rounded-md overflow-x-auto text-sm">
-            <code>
-              Which planet is known as the Red Planet?,Science,Venus,Mars,Jupiter,Saturn,Mars,Easy<br/>
-              Who painted the Mona Lisa?,Art,Vincent van Gogh,Leonardo da Vinci,Pablo Picasso,Michelangelo,Leonardo da Vinci,Easy<br/>
-              In which year did World War II end?,History,1943,1944,1945,1946,1945,Medium
-            </code>
-          </pre>
-          <Button variant="outline" className="mt-4" onClick={handleDownloadTemplate}>
-            <Download className="mr-2 h-4 w-4" />
-            Download CSV Template
-          </Button>
+          <p className="text-sm text-muted-foreground mb-4">
+            We've updated the system to use static questions instead of database storage to reduce database usage and costs. When you import questions:
+          </p>
+          <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground mb-4">
+            <li>Questions are stored in memory during the session</li>
+            <li>You can export the full collection to save it locally</li>
+            <li>Import that exported file later to restore your collection</li>
+            <li>This approach significantly reduces database costs while maintaining functionality</li>
+          </ul>
+          <div className="bg-muted p-3 rounded-md">
+            <h4 className="text-sm font-medium mb-2">CSV Template Example</h4>
+            <pre className="overflow-x-auto text-xs">
+              <code>
+                Which planet is known as the Red Planet?,Science,Venus,Mars,Jupiter,Saturn,Mars,Easy<br/>
+                Who painted the Mona Lisa?,Art,Vincent van Gogh,Leonardo da Vinci,Pablo Picasso,Michelangelo,Leonardo da Vinci,Easy<br/>
+                In which year did World War II end?,History,1943,1944,1945,1946,1945,Medium
+              </code>
+            </pre>
+            <Button variant="outline" className="mt-3" onClick={handleDownloadTemplate}>
+              <Download className="mr-2 h-4 w-4" />
+              Download CSV Template
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

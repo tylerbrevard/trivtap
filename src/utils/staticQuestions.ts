@@ -156,3 +156,43 @@ export const formatQuestionsForGame = (questions: StaticQuestion[], defaultTimeL
     timeLimit: question.timeLimit || defaultTimeLimit
   }));
 };
+
+// Function to add imported questions to the static collection
+export const addImportedQuestionsToCollection = (newQuestions: any[]): string => {
+  try {
+    // Generate new IDs for the imported questions
+    const importedQuestions = newQuestions.map((question, index) => {
+      // Create a new StaticQuestion object from the imported data
+      const newQuestion: StaticQuestion = {
+        id: `imported_${Date.now()}_${index}`,
+        text: question.question || question.text,
+        options: question.options,
+        correctAnswer: question.correctAnswer,
+        category: question.category,
+        difficulty: (question.difficulty?.toLowerCase() || 'medium') as 'easy' | 'medium' | 'hard',
+        timeLimit: question.timeLimit
+      };
+      
+      return newQuestion;
+    });
+    
+    // Add the new questions to the static collection
+    staticQuestions.push(...importedQuestions);
+    
+    // Return success message with number of questions added
+    return `Successfully added ${importedQuestions.length} questions to the collection.`;
+  } catch (error) {
+    console.error('Error adding imported questions:', error);
+    throw new Error('Failed to add imported questions to collection.');
+  }
+};
+
+// Function to export all questions to JSON format
+export const exportQuestionsToJson = (): string => {
+  try {
+    return JSON.stringify(staticQuestions, null, 2);
+  } catch (error) {
+    console.error('Error exporting questions to JSON:', error);
+    throw new Error('Failed to export questions to JSON.');
+  }
+};
