@@ -157,3 +157,80 @@ export const associateQuestionsWithBucket = async (questionIds: string[], bucket
     throw error;
   }
 };
+
+// Function to save questions to localStorage, tied to user ID if authenticated
+export const saveQuestionsToLocalStorage = (questions: any[], userId?: string) => {
+  try {
+    // Get existing questions from localStorage
+    const existingDataString = localStorage.getItem('trivia_questions');
+    let existingData: Record<string, any[]> = {};
+    
+    if (existingDataString) {
+      existingData = JSON.parse(existingDataString);
+    }
+    
+    // Key to store questions under: either user ID or 'default' for unauthenticated users
+    const storageKey = userId || 'default';
+    
+    // Initialize the array for this key if it doesn't exist
+    if (!existingData[storageKey]) {
+      existingData[storageKey] = [];
+    }
+    
+    // Add the new questions to the existing array
+    existingData[storageKey] = [...existingData[storageKey], ...questions];
+    
+    // Save back to localStorage
+    localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+    
+    console.log(`Saved ${questions.length} questions to localStorage under key: ${storageKey}`);
+    return true;
+  } catch (error) {
+    console.error('Error saving questions to localStorage:', error);
+    return false;
+  }
+};
+
+// Function to get questions from localStorage
+export const getQuestionsFromLocalStorage = (userId?: string) => {
+  try {
+    const existingDataString = localStorage.getItem('trivia_questions');
+    if (!existingDataString) {
+      return [];
+    }
+    
+    const existingData = JSON.parse(existingDataString);
+    const storageKey = userId || 'default';
+    
+    // Return the questions for this user, or an empty array if none exist
+    return existingData[storageKey] || [];
+  } catch (error) {
+    console.error('Error retrieving questions from localStorage:', error);
+    return [];
+  }
+};
+
+// Function to get all available questions (including default and user-specific)
+export const getAllAvailableQuestions = (userId?: string) => {
+  try {
+    const existingDataString = localStorage.getItem('trivia_questions');
+    if (!existingDataString) {
+      return [];
+    }
+    
+    const existingData = JSON.parse(existingDataString);
+    
+    // Always include default questions
+    let allQuestions = [...(existingData['default'] || [])];
+    
+    // Add user-specific questions if user is logged in
+    if (userId && existingData[userId]) {
+      allQuestions = [...allQuestions, ...existingData[userId]];
+    }
+    
+    return allQuestions;
+  } catch (error) {
+    console.error('Error retrieving all available questions:', error);
+    return [];
+  }
+};

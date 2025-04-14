@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { Search, MoreVertical, Edit, Trash, Copy } from 'lucide-react';
 import { 
   DropdownMenu,
@@ -13,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
 
 interface BucketQuestionsProps {
   bucketId: string;
@@ -20,22 +20,12 @@ interface BucketQuestionsProps {
   onClose: () => void;
 }
 
-interface Question {
-  id: string;
-  text: string;
-  category: string;
-  category_id: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  options: string[];
-  correct_answer: string;
-}
-
 const BucketQuestions: React.FC<BucketQuestionsProps> = ({
   bucketId,
   bucketName,
   onClose
 }) => {
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<StaticQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
@@ -45,78 +35,17 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
       try {
         setLoading(true);
         
-        // Get question IDs in this bucket
-        const { data: bucketQuestionsData, error: bucketError } = await supabase
-          .from('bucket_questions')
-          .select('question_id')
-          .eq('bucket_id', bucketId);
-          
-        if (bucketError) {
-          console.error('Error fetching bucket questions:', bucketError);
-          return;
-        }
+        // Get all static questions
+        const allQuestions = await getStaticQuestions();
         
-        if (!bucketQuestionsData || bucketQuestionsData.length === 0) {
-          setQuestions([]);
-          setLoading(false);
-          return;
-        }
+        // For now, we'll filter by category that matches the bucket name
+        // In a real implementation, you'd need to have a proper bucket-question association
+        const bucketQuestions = bucketId === 'default' 
+          ? allQuestions 
+          : allQuestions.filter(q => q.category.toLowerCase() === bucketName.toLowerCase());
         
-        // Extract question IDs
-        const questionIds = bucketQuestionsData.map(bq => bq.question_id);
-        
-        // Get the actual questions
-        const { data: questionsData, error } = await supabase
-          .from('questions')
-          .select(`
-            id, 
-            text, 
-            options, 
-            correct_answer, 
-            difficulty,
-            categories(id, name)
-          `)
-          .in('id', questionIds);
-          
-        if (error) {
-          console.error('Error fetching questions:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load questions. Please try again.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        // Format questions data
-        const formattedQuestions = questionsData?.map(q => {
-          // Convert options to string array
-          let optionsArray: string[] = [];
-          if (Array.isArray(q.options)) {
-            optionsArray = q.options.map(opt => String(opt));
-          } else if (q.options) {
-            try {
-              const parsed = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-              optionsArray = Array.isArray(parsed) ? parsed.map(opt => String(opt)) : [];
-            } catch (e) {
-              console.error('Error parsing options:', e);
-              optionsArray = [];
-            }
-          }
-          
-          return {
-            id: q.id,
-            text: q.text,
-            category_id: q.categories?.id || '',
-            category: q.categories?.name || 'Uncategorized',
-            difficulty: q.difficulty || 'medium',
-            options: optionsArray,
-            correct_answer: q.correct_answer
-          };
-        }) || [];
-        
-        console.log(`Loaded ${formattedQuestions.length} questions for bucket ${bucketName}`);
-        setQuestions(formattedQuestions);
+        console.log(`Loaded ${bucketQuestions.length} questions for bucket ${bucketName}`);
+        setQuestions(bucketQuestions);
       } catch (error) {
         console.error('Error in fetchBucketQuestions:', error);
         toast({
@@ -217,7 +146,7 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
                     <div 
                       key={index} 
                       className={`p-2 rounded-md text-sm ${
-                        option === question.correct_answer 
+                        option === question.correctAnswer 
                           ? 'bg-green-500/20 text-green-700 border border-green-500/30' 
                           : 'bg-muted border border-transparent'
                       }`}

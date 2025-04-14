@@ -1,4 +1,7 @@
 
+import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions } from './importUtils';
+import { supabase } from "@/integrations/supabase/client";
+
 // Collection of static trivia questions to reduce database usage
 export interface StaticQuestion {
   id: string;
@@ -10,7 +13,8 @@ export interface StaticQuestion {
   timeLimit?: number;
 }
 
-export const staticQuestions: StaticQuestion[] = [
+// Base set of static questions that will always be available
+export const baseStaticQuestions: StaticQuestion[] = [
   {
     id: "q1",
     text: "What is the capital of France?",
@@ -133,19 +137,77 @@ export const staticQuestions: StaticQuestion[] = [
   }
 ];
 
+// Initialize local storage with base questions if it doesn't exist yet
+const initializeStorage = () => {
+  try {
+    if (!localStorage.getItem('trivia_questions')) {
+      // Initialize storage with base questions
+      saveQuestionsToLocalStorage(baseStaticQuestions);
+      console.log("Initialized local storage with base questions");
+    }
+  } catch (error) {
+    console.error("Error initializing local storage:", error);
+  }
+};
+
+// Call initialization on module load
+initializeStorage();
+
+// Get the current user ID if logged in
+export const getCurrentUserId = async (): Promise<string | undefined> => {
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    return session?.user?.id;
+  } catch (error) {
+    console.error("Error getting current user:", error);
+    return undefined;
+  }
+};
+
+// Get all static questions, combining base questions with user-imported ones
+export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
+  try {
+    const userId = await getCurrentUserId();
+    
+    // Get all available questions from localStorage
+    const storedQuestions = getAllAvailableQuestions(userId);
+    
+    // Ensure base questions are always included
+    let allQuestions = [...baseStaticQuestions];
+    
+    // Add stored questions, avoiding duplicates by ID
+    const existingIds = new Set(allQuestions.map(q => q.id));
+    
+    storedQuestions.forEach(question => {
+      if (!existingIds.has(question.id)) {
+        allQuestions.push(question);
+        existingIds.add(question.id);
+      }
+    });
+    
+    return allQuestions;
+  } catch (error) {
+    console.error("Error getting static questions:", error);
+    return baseStaticQuestions; // Fallback to base questions on error
+  }
+};
+
 // Function to get questions by category
-export const getQuestionsByCategory = (category: string): StaticQuestion[] => {
-  return staticQuestions.filter(q => q.category.toLowerCase() === category.toLowerCase());
+export const getQuestionsByCategory = async (category: string): Promise<StaticQuestion[]> => {
+  const allQuestions = await getStaticQuestions();
+  return allQuestions.filter(q => q.category.toLowerCase() === category.toLowerCase());
 };
 
 // Function to get questions by difficulty
-export const getQuestionsByDifficulty = (difficulty: 'easy' | 'medium' | 'hard'): StaticQuestion[] => {
-  return staticQuestions.filter(q => q.difficulty === difficulty);
+export const getQuestionsByDifficulty = async (difficulty: 'easy' | 'medium' | 'hard'): Promise<StaticQuestion[]> => {
+  const allQuestions = await getStaticQuestions();
+  return allQuestions.filter(q => q.difficulty === difficulty);
 };
 
 // Function to get random questions
-export const getRandomQuestions = (count: number = 10): StaticQuestion[] => {
-  const shuffled = [...staticQuestions].sort(() => 0.5 - Math.random());
+export const getRandomQuestions = async (count: number = 10): Promise<StaticQuestion[]> => {
+  const allQuestions = await getStaticQuestions();
+  const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
   return shuffled.slice(0, Math.min(count, shuffled.length));
 };
 
@@ -157,9 +219,12 @@ export const formatQuestionsForGame = (questions: StaticQuestion[], defaultTimeL
   }));
 };
 
-// Function to add imported questions to the static collection
-export const addImportedQuestionsToCollection = (newQuestions: any[]): string => {
+// Function to add imported questions to the collection
+export const addImportedQuestionsToCollection = async (newQuestions: any[]): Promise<string> => {
   try {
+    // Get current user ID if available
+    const userId = await getCurrentUserId();
+    
     // Generate new IDs for the imported questions
     const importedQuestions = newQuestions.map((question, index) => {
       // Create a new StaticQuestion object from the imported data
@@ -176,8 +241,8 @@ export const addImportedQuestionsToCollection = (newQuestions: any[]): string =>
       return newQuestion;
     });
     
-    // Add the new questions to the static collection
-    staticQuestions.push(...importedQuestions);
+    // Save questions to localStorage
+    saveQuestionsToLocalStorage(importedQuestions, userId);
     
     // Return success message with number of questions added
     return `Successfully added ${importedQuestions.length} questions to the collection.`;
@@ -188,9 +253,10 @@ export const addImportedQuestionsToCollection = (newQuestions: any[]): string =>
 };
 
 // Function to export all questions to JSON format
-export const exportQuestionsToJson = (): string => {
+export const exportQuestionsToJson = async (): Promise<string> => {
   try {
-    return JSON.stringify(staticQuestions, null, 2);
+    const allQuestions = await getStaticQuestions();
+    return JSON.stringify(allQuestions, null, 2);
   } catch (error) {
     console.error('Error exporting questions to JSON:', error);
     throw new Error('Failed to export questions to JSON.');

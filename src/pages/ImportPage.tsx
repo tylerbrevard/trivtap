@@ -10,7 +10,7 @@ import { Upload, AlertCircle, CheckCircle2, Download, Save } from 'lucide-react'
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCategories, getOrCreateCategory } from "@/utils/importUtils";
-import { addImportedQuestionsToCollection, exportQuestionsToJson } from "@/utils/staticQuestions";
+import { addImportedQuestionsToCollection, exportQuestionsToJson, getCurrentUserId } from "@/utils/staticQuestions";
 
 const ImportPage = () => {
   const [selectedOption, setSelectedOption] = useState('csv');
@@ -20,17 +20,24 @@ const ImportPage = () => {
   const [importing, setImporting] = useState(false);
   const [importResults, setImportResults] = useState<{ success: boolean; message: string } | null>(null);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
   const { toast } = useToast();
   
-  // Fetch categories on component mount
+  // Fetch categories and current user ID on component mount
   useEffect(() => {
-    const loadCategories = async () => {
+    const loadData = async () => {
       try {
+        // Load categories
         const categoriesData = await fetchCategories();
         setCategories(categoriesData);
         console.log("Loaded categories:", categoriesData);
+        
+        // Get current user ID
+        const userId = await getCurrentUserId();
+        setCurrentUserId(userId);
+        console.log("Current user ID:", userId || "Not logged in");
       } catch (err) {
-        console.error('Failed to fetch categories:', err);
+        console.error('Failed to load initial data:', err);
         toast({
           title: "Error",
           description: "Failed to load categories.",
@@ -39,7 +46,7 @@ const ImportPage = () => {
       }
     };
     
-    loadCategories();
+    loadData();
   }, [toast]);
   
   // Function to parse CSV data
@@ -168,9 +175,9 @@ const ImportPage = () => {
     document.body.removeChild(element);
   };
   
-  const handleExportQuestions = () => {
+  const handleExportQuestions = async () => {
     try {
-      const jsonString = exportQuestionsToJson();
+      const jsonString = await exportQuestionsToJson();
       
       const element = document.createElement('a');
       const file = new Blob([jsonString], {type: 'application/json'});
@@ -217,8 +224,8 @@ const ImportPage = () => {
       
       console.log(`Starting import of ${questions.length} questions`);
       
-      // Add questions to the static collection instead of the database
-      const result = addImportedQuestionsToCollection(questions);
+      // Add questions to the static collection
+      const result = await addImportedQuestionsToCollection(questions);
       
       setImportResults({
         success: true,
@@ -227,7 +234,7 @@ const ImportPage = () => {
       
       toast({
         title: "Import Successful",
-        description: result,
+        description: `${questions.length} questions imported successfully! ${currentUserId ? 'They will be available in your account.' : 'They will be available in this browser.'}`,
         variant: "default",
       });
       
@@ -364,14 +371,23 @@ const ImportPage = () => {
       <Card>
         <CardHeader>
           <CardTitle>About Static Questions</CardTitle>
-          <CardDescription>Understand the new approach for trivia questions</CardDescription>
+          <CardDescription>
+            {currentUserId 
+              ? "Your imported questions are saved to your account" 
+              : "Sign in to keep your questions when you return"}
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
             We've updated the system to use static questions instead of database storage to reduce database usage and costs. When you import questions:
           </p>
           <ul className="list-disc pl-5 space-y-1 text-sm text-muted-foreground mb-4">
-            <li>Questions are stored in memory during the session</li>
+            <li>A set of default questions is always available to all users</li>
+            <li>
+              {currentUserId 
+                ? "Your imported questions are tied to your account and will be available when you log in later" 
+                : "When logged in, your imported questions will be saved to your account and available when you return"}
+            </li>
             <li>You can export the full collection to save it locally</li>
             <li>Import that exported file later to restore your collection</li>
             <li>This approach significantly reduces database costs while maintaining functionality</li>

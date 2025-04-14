@@ -5,7 +5,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
 import { Search, MoreVertical, Edit, Trash, Copy } from 'lucide-react';
 import { 
   DropdownMenu,
@@ -13,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
 
 interface CategoryQuestionsProps {
   categoryId: string;
@@ -20,23 +20,12 @@ interface CategoryQuestionsProps {
   onClose: () => void;
 }
 
-interface Question {
-  id: string;
-  text: string;
-  category: string;
-  category_id: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  options: string[];
-  correct_answer: string;
-  buckets: string[];
-}
-
 const CategoryQuestions: React.FC<CategoryQuestionsProps> = ({
   categoryId,
   categoryName,
   onClose
 }) => {
-  const [questions, setQuestions] = useState<Question[]>([]);
+  const [questions, setQuestions] = useState<StaticQuestion[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const { toast } = useToast();
@@ -46,57 +35,16 @@ const CategoryQuestions: React.FC<CategoryQuestionsProps> = ({
       try {
         setLoading(true);
         
-        const { data: questionsData, error } = await supabase
-          .from('questions')
-          .select(`
-            id, 
-            text, 
-            options, 
-            correct_answer, 
-            difficulty
-          `)
-          .eq('category_id', categoryId);
-          
-        if (error) {
-          console.error('Error fetching category questions:', error);
-          toast({
-            title: "Error",
-            description: "Failed to load questions. Please try again.",
-            variant: "destructive",
-          });
-          return;
-        }
+        // Get all static questions
+        const allQuestions = await getStaticQuestions();
         
-        // Format questions data
-        const formattedQuestions = questionsData?.map(q => {
-          // Convert options to string array
-          let optionsArray: string[] = [];
-          if (Array.isArray(q.options)) {
-            optionsArray = q.options.map(opt => String(opt));
-          } else if (q.options) {
-            try {
-              const parsed = typeof q.options === 'string' ? JSON.parse(q.options) : q.options;
-              optionsArray = Array.isArray(parsed) ? parsed.map(opt => String(opt)) : [];
-            } catch (e) {
-              console.error('Error parsing options:', e);
-              optionsArray = [];
-            }
-          }
-          
-          return {
-            id: q.id,
-            text: q.text,
-            category_id: categoryId,
-            category: categoryName,
-            difficulty: q.difficulty || 'medium',
-            options: optionsArray,
-            correct_answer: q.correct_answer,
-            buckets: []
-          };
-        }) || [];
+        // Filter questions by category
+        const categoryQuestions = allQuestions.filter(q => 
+          q.category.toLowerCase() === categoryName.toLowerCase()
+        );
         
-        console.log(`Loaded ${formattedQuestions.length} questions for category ${categoryName}`);
-        setQuestions(formattedQuestions);
+        console.log(`Loaded ${categoryQuestions.length} questions for category ${categoryName}`);
+        setQuestions(categoryQuestions);
       } catch (error) {
         console.error('Error in fetchCategoryQuestions:', error);
         toast({
@@ -191,7 +139,7 @@ const CategoryQuestions: React.FC<CategoryQuestionsProps> = ({
                     <div 
                       key={index} 
                       className={`p-2 rounded-md text-sm ${
-                        option === question.correct_answer 
+                        option === question.correctAnswer 
                           ? 'bg-green-500/20 text-green-700 border border-green-500/30' 
                           : 'bg-muted border border-transparent'
                       }`}
