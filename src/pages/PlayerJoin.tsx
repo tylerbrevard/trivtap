@@ -7,6 +7,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { Gamepad2, ArrowRight, UserPlus, History } from 'lucide-react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
+import PlayerRegistrationForm from '@/components/PlayerRegistrationForm';
 
 const PlayerJoin = () => {
   const [otp, setOtp] = useState('');
@@ -16,6 +17,7 @@ const PlayerJoin = () => {
   const [password, setPassword] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
   const [currentTab, setCurrentTab] = useState<string>("guest");
+  const [showRegistrationForm, setShowRegistrationForm] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -124,6 +126,15 @@ const PlayerJoin = () => {
           });
           
           setCurrentTab("registered");
+        } else {
+          // User exists but no registered player record found
+          toast({
+            title: "Login Failed",
+            description: "This account is not registered as a player.",
+            variant: "destructive",
+          });
+          
+          await supabase.auth.signOut();
         }
       }
     } catch (error: any) {
@@ -157,6 +168,13 @@ const PlayerJoin = () => {
         variant: "destructive",
       });
     }
+  };
+
+  const handlePlayerRegistrationSuccess = (name: string) => {
+    setPlayerName(name);
+    setIsRegistered(true);
+    setShowRegistrationForm(false);
+    setCurrentTab("registered");
   };
   
   return (
@@ -250,7 +268,7 @@ const PlayerJoin = () => {
               <div className="card-trivia p-6">
                 <div className="text-center mb-4">
                   <h3 className="text-xl font-semibold">Welcome, {playerName}!</h3>
-                  <p className="text-muted-foreground">Your game history will be saved</p>
+                  <p className="text-muted-foreground text-sm">Your game history will be saved</p>
                 </div>
                 
                 <form onSubmit={handleSubmit} className="space-y-6">
@@ -290,55 +308,75 @@ const PlayerJoin = () => {
                 </form>
               </div>
             ) : (
-              <div className="card-trivia p-6">
-                <form onSubmit={handleLogin} className="space-y-6">
-                  <div className="space-y-2">
-                    <label htmlFor="email" className="block text-sm font-medium">
-                      Email
-                    </label>
-                    <Input
-                      id="email"
-                      type="email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      placeholder="you@example.com"
-                      className="trivia-input"
-                    />
+              <>
+                {showRegistrationForm ? (
+                  <PlayerRegistrationForm onSuccess={handlePlayerRegistrationSuccess} />
+                ) : (
+                  <div className="card-trivia p-6">
+                    <form onSubmit={handleLogin} className="space-y-6">
+                      <div className="space-y-2">
+                        <label htmlFor="email" className="block text-sm font-medium">
+                          Email
+                        </label>
+                        <Input
+                          id="email"
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="you@example.com"
+                          className="trivia-input"
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <label htmlFor="password" className="block text-sm font-medium">
+                          Password
+                        </label>
+                        <Input
+                          id="password"
+                          type="password"
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          placeholder="••••••••"
+                          className="trivia-input"
+                        />
+                      </div>
+                      
+                      <Button 
+                        type="submit" 
+                        className="btn-trivia w-full"
+                        disabled={isSubmitting}
+                      >
+                        {isSubmitting ? "Signing in..." : "Sign In"}
+                      </Button>
+                      
+                      <div className="text-center">
+                        <p className="text-sm text-muted-foreground">
+                          Don't have a player account?{" "}
+                          <Button 
+                            variant="link" 
+                            className="p-0 h-auto text-primary"
+                            onClick={() => setShowRegistrationForm(true)}
+                          >
+                            Register here
+                          </Button>
+                        </p>
+                      </div>
+                    </form>
                   </div>
-                  
-                  <div className="space-y-2">
-                    <label htmlFor="password" className="block text-sm font-medium">
-                      Password
-                    </label>
-                    <Input
-                      id="password"
-                      type="password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      placeholder="••••••••"
-                      className="trivia-input"
-                    />
-                  </div>
-                  
-                  <Button 
-                    type="submit" 
-                    className="btn-trivia w-full"
-                    disabled={isSubmitting}
-                  >
-                    {isSubmitting ? "Signing in..." : "Sign In"}
-                  </Button>
-                  
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground">
-                      Don't have an account?{" "}
-                      <Link to="/register" className="text-primary hover:underline">
-                        Register here
-                      </Link>
-                    </p>
-                  </div>
-                </form>
-              </div>
+                )}
+              </>
             )}
+            
+            <div className="mt-4 text-center">
+              <Button 
+                variant="link" 
+                className="p-0 h-auto text-sm text-muted-foreground"
+                onClick={() => setCurrentTab("guest")}
+              >
+                ← Play as guest instead
+              </Button>
+            </div>
           </TabsContent>
         </Tabs>
         
@@ -346,6 +384,12 @@ const PlayerJoin = () => {
           <p className="text-sm text-muted-foreground">
             Don't see a game code? Ask the venue to display the trivia screen.
           </p>
+          <div className="mt-2 text-xs text-muted-foreground">
+            <span>Are you a venue owner? </span>
+            <Link to="/login" className="text-primary hover:underline">
+              Login to your venue account
+            </Link>
+          </div>
         </div>
       </div>
     </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/components/ui/use-toast";
-import { Eye, EyeOff, Lock, Mail, History, Trophy } from 'lucide-react';
+import { Eye, EyeOff, Lock, Mail, History, Trophy, Building } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 
 const Login = () => {
@@ -67,9 +67,9 @@ const Login = () => {
           <Link to="/" className="inline-block mb-6">
             <h1 className="text-3xl font-bold text-primary">TrivTap</h1>
           </Link>
-          <h2 className="text-2xl font-bold mb-2">Welcome Back</h2>
+          <h2 className="text-2xl font-bold mb-2">Venue Login</h2>
           <p className="text-muted-foreground">
-            Sign in to your account to manage your trivia games
+            Sign in to your venue account to manage your trivia games
           </p>
         </div>
         
@@ -131,32 +131,43 @@ const Login = () => {
         
         <div className="bg-card border border-border/40 rounded-lg p-5 mb-6">
           <h3 className="text-lg font-semibold mb-3 flex items-center">
-            <Trophy className="mr-2 h-5 w-5 text-primary" />
-            Player Benefits
+            <Building className="mr-2 h-5 w-5 text-primary" />
+            Venue Benefits
           </h3>
           <ul className="space-y-2 text-sm">
             <li className="flex items-start">
-              <History className="h-4 w-4 mr-2 mt-0.5 text-primary" />
-              <span>Track your game history and total points across all games</span>
+              <Trophy className="h-4 w-4 mr-2 mt-0.5 text-primary" />
+              <span>Create and host engaging trivia games for your customers</span>
             </li>
             <li className="flex items-start">
-              <Trophy className="h-4 w-4 mr-2 mt-0.5 text-primary" />
-              <span>See your rankings compared to other players</span>
+              <History className="h-4 w-4 mr-2 mt-0.5 text-primary" />
+              <span>View analytics on player engagement and game performance</span>
             </li>
             <li className="flex items-start">
               <Lock className="h-4 w-4 mr-2 mt-0.5 text-primary" />
-              <span>Secure your nickname so no one else can use it</span>
+              <span>Customize your trivia content and branding</span>
             </li>
           </ul>
         </div>
         
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-4">
           <p className="text-sm text-muted-foreground">
-            Don't have an account?{" "}
+            Don't have a venue account?{" "}
             <Link to="/register" className="text-primary hover:underline">
               Sign up
             </Link>
           </p>
+          
+          <div className="border-t border-border/40 pt-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              Looking to join games as a player instead?
+            </p>
+            <Button variant="outline" asChild className="w-full">
+              <Link to="/join">
+                Join as a Player
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
     </div>

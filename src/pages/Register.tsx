@@ -67,22 +67,11 @@ const Register = () => {
           });
           
         if (profileError) throw profileError;
-        
-        // Create registered player entry
-        const { error: playerError } = await supabase
-          .from('registered_players')
-          .insert({
-            user_id: authData.user.id,
-            name: name,
-            email: email
-          });
-          
-        if (playerError) throw playerError;
       }
       
       toast({
         title: "Registration Successful",
-        description: "Your account has been created. Welcome to TrivTap!",
+        description: "Your venue account has been created. Welcome to TrivTap!",
       });
       
       navigate('/admin/dashboard');
@@ -109,16 +98,16 @@ const Register = () => {
           <Link to="/" className="inline-block mb-6">
             <h1 className="text-3xl font-bold text-primary">TrivTap</h1>
           </Link>
-          <h2 className="text-2xl font-bold mb-2">Create Your Account</h2>
+          <h2 className="text-2xl font-bold mb-2">Create Your Venue Account</h2>
           <p className="text-muted-foreground">
-            Start hosting engaging trivia games at your venue
+            Register your bar, restaurant, or venue to host engaging trivia games
           </p>
         </div>
         
         <div className="card-trivia p-6">
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="businessName">Business Name</Label>
+              <Label htmlFor="businessName">Business/Venue Name</Label>
               <div className="relative">
                 <Input
                   id="businessName"
@@ -194,18 +183,29 @@ const Register = () => {
               className="btn-trivia w-full"
               disabled={isLoading}
             >
-              {isLoading ? "Creating Account..." : "Create Account"}
+              {isLoading ? "Creating Account..." : "Create Venue Account"}
             </Button>
           </form>
         </div>
         
-        <div className="mt-6 text-center">
+        <div className="mt-6 text-center space-y-4">
           <p className="text-sm text-muted-foreground">
-            Already have an account?{" "}
+            Already have a venue account?{" "}
             <Link to="/login" className="text-primary hover:underline">
               Sign in
             </Link>
           </p>
+          
+          <div className="border-t border-border/40 pt-4">
+            <p className="text-sm text-muted-foreground mb-2">
+              Looking to join games as a player instead?
+            </p>
+            <Button variant="outline" asChild className="w-full">
+              <Link to="/join">
+                Join as a Player
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
