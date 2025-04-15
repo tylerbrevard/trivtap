@@ -1,19 +1,17 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
-import { Crown, Trophy, Medal, Star, Clock, Wifi, Image, FileText } from 'lucide-react';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
+import { useToast } from "@/components/ui/use-toast";
+import { Wifi, Image, FileText, Plus, Trash, Pencil, Check, X } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
-
-interface PlayerScore {
-  name: string;
-  score: number;
-  isRegistered: boolean;
-  correctAnswers: number;
-}
+import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 interface IntermissionSlide {
   id: string;
@@ -27,366 +25,468 @@ interface IntermissionSlide {
 }
 
 const Intermission = () => {
-  const [remainingTime, setRemainingTime] = useState(gameSettings.intermissionDuration);
-  const [playerScores, setPlayerScores] = useState<PlayerScore[]>([]);
-  const [topPlayer, setTopPlayer] = useState<PlayerScore | null>(null);
-  const [intermissionSlides, setIntermissionSlides] = useState<IntermissionSlide[]>([]);
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
+  const [slides, setSlides] = useState<IntermissionSlide[]>([]);
+  const [editingSlide, setEditingSlide] = useState<IntermissionSlide | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
   const navigate = useNavigate();
-  const location = useLocation();
+  const { toast } = useToast();
   
-  // Get intermission data from location state or localStorage
   useEffect(() => {
-    const getPlayerScores = () => {
-      const scores: PlayerScore[] = [];
-      
-      // Find all player scores in localStorage
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        if (key && key.startsWith('playerScore_')) {
-          try {
-            const playerData = JSON.parse(localStorage.getItem(key) || '{}');
-            if (playerData.name && playerData.score !== undefined) {
-              scores.push({
-                name: playerData.name,
-                score: playerData.score,
-                isRegistered: playerData.isRegistered || false,
-                correctAnswers: playerData.correctAnswers || 0
-              });
-            }
-          } catch (e) {
-            console.error('Error parsing player score:', e);
-          }
-        }
-      }
-      
-      // Sort by score (highest first)
-      return scores.sort((a, b) => b.score - a.score);
-    };
-    
     // Load slides from localStorage
-    const loadSlides = () => {
-      const slidesData = localStorage.getItem('intermissionSlides');
-      if (slidesData) {
-        try {
-          const slides = JSON.parse(slidesData);
-          setIntermissionSlides(slides.filter((slide: any) => slide.isActive));
-        } catch (e) {
-          console.error('Error parsing intermission slides:', e);
-          // Create default slides if parsing fails
-          createDefaultSlides();
-        }
-      } else {
-        // Create default slides if none exist
+    const savedSlides = localStorage.getItem('intermissionSlides');
+    if (savedSlides) {
+      try {
+        const parsedSlides = JSON.parse(savedSlides);
+        setSlides(parsedSlides);
+      } catch (e) {
+        console.error('Error parsing intermission slides:', e);
+        // Create default slides if parsing fails
         createDefaultSlides();
       }
-    };
-    
-    const createDefaultSlides = () => {
-      const defaultSlides: IntermissionSlide[] = [
-        {
-          id: 'default-slide-1',
-          title: 'Intermission',
-          content: 'Next question coming up soon...',
-          type: 'text',
-          isActive: true
-        },
-        {
-          id: 'default-slide-2',
-          title: 'WiFi Information',
-          content: 'Connect to our WiFi',
-          type: 'wifi',
-          wifiName: 'Venue WiFi',
-          wifiPassword: 'guest1234',
-          isActive: true
-        },
-        {
-          id: 'default-slide-3',
-          title: 'Featured Image',
-          content: 'Check out our sponsors',
-          type: 'image',
-          imageUrl: 'https://placehold.co/600x400?text=Sponsor+Image',
-          isActive: true
-        },
-        {
-          id: 'default-slide-4',
-          title: 'Special Announcement',
-          content: '<h3>Drink Specials</h3><p>All cocktails $2 off during happy hour!</p>',
-          type: 'html',
-          isActive: true
-        }
-      ];
-      
-      setIntermissionSlides(defaultSlides);
-      localStorage.setItem('intermissionSlides', JSON.stringify(defaultSlides));
-    };
-    
-    const loadScores = () => {
-      const scores = getPlayerScores();
-      setPlayerScores(scores);
-      setTopPlayer(scores.length > 0 ? scores[0] : null);
-      
-      // If no players, create a dummy player for testing
-      if (process.env.NODE_ENV === 'development' && scores.length === 0) {
-        const dummyPlayer = {
-          name: 'Test Player',
-          score: 500,
-          isRegistered: true,
-          correctAnswers: 5
-        };
-        setPlayerScores([dummyPlayer]);
-        setTopPlayer(dummyPlayer);
+    } else {
+      // Create default slides if none exist
+      createDefaultSlides();
+    }
+  }, []);
+  
+  const createDefaultSlides = () => {
+    const defaultSlides: IntermissionSlide[] = [
+      {
+        id: 'default-slide-1',
+        title: 'Intermission',
+        content: 'Next question coming up soon...',
+        type: 'text',
+        isActive: true
+      },
+      {
+        id: 'default-slide-2',
+        title: 'WiFi Information',
+        content: 'Connect to our WiFi',
+        type: 'wifi',
+        wifiName: 'Venue WiFi',
+        wifiPassword: 'guest1234',
+        isActive: true
+      },
+      {
+        id: 'default-slide-3',
+        title: 'Featured Image',
+        content: 'Check out our sponsors',
+        type: 'image',
+        imageUrl: 'https://placehold.co/600x400?text=Sponsor+Image',
+        isActive: true
+      },
+      {
+        id: 'default-slide-4',
+        title: 'Special Announcement',
+        content: '<h3>Drink Specials</h3><p>All cocktails $2 off during happy hour!</p>',
+        type: 'html',
+        isActive: true
       }
-    };
+    ];
     
-    // Load initial data
-    loadScores();
-    loadSlides();
+    setSlides(defaultSlides);
+    saveSlides(defaultSlides);
+  };
+  
+  const saveSlides = (slidesToSave: IntermissionSlide[]) => {
+    localStorage.setItem('intermissionSlides', JSON.stringify(slidesToSave));
     
-    // Set up interval to refresh data
-    const refreshInterval = setInterval(loadScores, 1000);
-    
-    // Get current slide index from game state
+    // Save current slide index to game state
     const gameState = localStorage.getItem('gameState');
     if (gameState) {
       try {
         const parsedState = JSON.parse(gameState);
-        if (parsedState.slidesIndex !== undefined) {
-          setCurrentSlideIndex(parsedState.slidesIndex);
-        }
+        parsedState.slidesIndex = 0; // Reset to first slide when saving
+        localStorage.setItem('gameState', JSON.stringify(parsedState));
       } catch (e) {
-        console.error('Error parsing game state for slides:', e);
+        console.error('Error updating game state for slides:', e);
       }
     }
-    
-    return () => clearInterval(refreshInterval);
-  }, []);
+  };
   
-  // Setup timer
-  useEffect(() => {
-    const timerInterval = setInterval(() => {
-      setRemainingTime(prev => {
-        if (prev <= 1) {
-          clearInterval(timerInterval);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+  const handleAddSlide = () => {
+    const newSlide: IntermissionSlide = {
+      id: `slide-${Date.now()}`,
+      title: 'New Slide',
+      content: 'Add your content here...',
+      type: 'text',
+      isActive: true
+    };
     
-    return () => clearInterval(timerInterval);
-  }, []);
+    setEditingSlide(newSlide);
+    setIsEditing(true);
+  };
   
-  // Auto navigate when timer runs out
-  useEffect(() => {
-    if (remainingTime === 0) {
-      navigate('/display');
+  const handleEditSlide = (slide: IntermissionSlide) => {
+    setEditingSlide({ ...slide });
+    setIsEditing(true);
+  };
+  
+  const handleDeleteSlide = (id: string) => {
+    const updatedSlides = slides.filter(slide => slide.id !== id);
+    setSlides(updatedSlides);
+    saveSlides(updatedSlides);
+    
+    toast({
+      title: "Slide deleted",
+      description: "The intermission slide has been removed.",
+    });
+  };
+  
+  const handleToggleActive = (id: string, isActive: boolean) => {
+    const updatedSlides = slides.map(slide => 
+      slide.id === id ? { ...slide, isActive } : slide
+    );
+    setSlides(updatedSlides);
+    saveSlides(updatedSlides);
+  };
+  
+  const handleSaveSlide = () => {
+    if (!editingSlide) return;
+    
+    const existingSlideIndex = slides.findIndex(s => s.id === editingSlide.id);
+    let updatedSlides;
+    
+    if (existingSlideIndex >= 0) {
+      // Update existing slide
+      updatedSlides = [...slides];
+      updatedSlides[existingSlideIndex] = editingSlide;
+    } else {
+      // Add new slide
+      updatedSlides = [...slides, editingSlide];
     }
-  }, [remainingTime, navigate]);
-  
-  const getProgressPercent = () => {
-    return (remainingTime / gameSettings.intermissionDuration) * 100;
-  };
-  
-  const getTopPlayerTrophyIcon = () => {
-    return <Crown className="h-12 w-12 text-yellow-500" />;
-  };
-  
-  const formatTime = (seconds: number) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-  
-  const renderCurrentSlide = () => {
-    if (intermissionSlides.length === 0) {
-      return (
-        <div className="text-center p-6 bg-muted rounded-lg">
-          <p className="text-lg font-medium">No intermission slides available</p>
-        </div>
-      );
-    }
     
-    const slideIndex = currentSlideIndex % intermissionSlides.length;
-    const slide = intermissionSlides[slideIndex];
+    setSlides(updatedSlides);
+    saveSlides(updatedSlides);
+    setIsEditing(false);
+    setEditingSlide(null);
+    
+    toast({
+      title: existingSlideIndex >= 0 ? "Slide updated" : "Slide added",
+      description: `The intermission slide has been ${existingSlideIndex >= 0 ? 'updated' : 'added'}.`,
+    });
+  };
+  
+  const handleCancelEdit = () => {
+    setIsEditing(false);
+    setEditingSlide(null);
+  };
+  
+  const renderSlideIcon = (type: string) => {
+    switch (type) {
+      case 'wifi': return <Wifi className="h-5 w-5 text-blue-500" />;
+      case 'image': return <Image className="h-5 w-5 text-green-500" />;
+      case 'html': return <FileText className="h-5 w-5 text-purple-500" />;
+      default: return <FileText className="h-5 w-5 text-orange-500" />;
+    }
+  };
+  
+  const handleOnDragEnd = (result: any) => {
+    if (!result.destination) return;
+    
+    const items = Array.from(slides);
+    const [reorderedItem] = items.splice(result.source.index, 1);
+    items.splice(result.destination.index, 0, reorderedItem);
+    
+    setSlides(items);
+    saveSlides(items);
+  };
+  
+  const handleTestDisplay = () => {
+    // Navigate to display screen for testing
+    navigate('/display');
+  };
+  
+  const renderEditForm = () => {
+    if (!editingSlide) return null;
     
     return (
-      <Card className="mb-6 animate-fade-in">
-        <CardContent className="p-6">
-          <div className="flex items-center mb-4">
-            <h2 className="text-2xl font-bold">{slide.title}</h2>
-            {slide.type === 'wifi' && <Wifi className="ml-2 h-5 w-5 text-blue-500" />}
-            {slide.type === 'image' && <Image className="ml-2 h-5 w-5 text-green-500" />}
-            {slide.type === 'text' && <FileText className="ml-2 h-5 w-5 text-orange-500" />}
-          </div>
-          
-          {slide.type === 'text' && (
-            <p className="whitespace-pre-line">{slide.content}</p>
-          )}
-          
-          {slide.type === 'html' && (
-            <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: slide.content }} />
-          )}
-          
-          {slide.type === 'wifi' && (
-            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
-              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Network Name:</p>
-                  <p className="font-medium text-lg">{slide.wifiName}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground mb-1">Password:</p>
-                  <p className="font-medium text-lg">{slide.wifiPassword}</p>
-                </div>
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>{editingSlide.id.startsWith('slide-') ? 'Add New Slide' : 'Edit Slide'}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="slide-title">Title</Label>
+                <Input 
+                  id="slide-title" 
+                  value={editingSlide.title} 
+                  onChange={(e) => setEditingSlide({...editingSlide, title: e.target.value})}
+                />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="slide-type">Type</Label>
+                <Select 
+                  value={editingSlide.type} 
+                  onValueChange={(value: any) => setEditingSlide({...editingSlide, type: value})}
+                >
+                  <SelectTrigger id="slide-type">
+                    <SelectValue placeholder="Select type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="text">Text</SelectItem>
+                    <SelectItem value="html">HTML</SelectItem>
+                    <SelectItem value="image">Image</SelectItem>
+                    <SelectItem value="wifi">WiFi</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          )}
-          
-          {slide.type === 'image' && slide.imageUrl && (
-            <div className="mt-4 flex justify-center">
-              <img 
-                src={slide.imageUrl} 
-                alt={slide.title} 
-                className="max-w-full max-h-[300px] object-contain rounded-md"
-                onError={(e) => {
-                  const target = e.currentTarget as HTMLImageElement;
-                  target.src = 'https://placehold.co/600x400?text=Image+Error';
-                }}
+            
+            {editingSlide.type === 'wifi' && (
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="wifi-name">WiFi Name</Label>
+                  <Input 
+                    id="wifi-name" 
+                    value={editingSlide.wifiName || ''} 
+                    onChange={(e) => setEditingSlide({...editingSlide, wifiName: e.target.value})}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="wifi-password">WiFi Password</Label>
+                  <Input 
+                    id="wifi-password" 
+                    value={editingSlide.wifiPassword || ''} 
+                    onChange={(e) => setEditingSlide({...editingSlide, wifiPassword: e.target.value})}
+                  />
+                </div>
+              </div>
+            )}
+            
+            {editingSlide.type === 'image' && (
+              <div className="space-y-2">
+                <Label htmlFor="image-url">Image URL</Label>
+                <Input 
+                  id="image-url" 
+                  value={editingSlide.imageUrl || ''} 
+                  onChange={(e) => setEditingSlide({...editingSlide, imageUrl: e.target.value})}
+                />
+                {editingSlide.imageUrl && (
+                  <div className="mt-2 p-2 border rounded">
+                    <img 
+                      src={editingSlide.imageUrl} 
+                      alt="Preview" 
+                      className="max-h-[200px] object-contain mx-auto"
+                      onError={(e) => {
+                        const target = e.currentTarget as HTMLImageElement;
+                        target.src = 'https://placehold.co/600x400?text=Image+URL+Error';
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="space-y-2">
+              <Label htmlFor="slide-content">Content</Label>
+              <Textarea 
+                id="slide-content" 
+                value={editingSlide.content} 
+                onChange={(e) => setEditingSlide({...editingSlide, content: e.target.value})}
+                rows={editingSlide.type === 'html' ? 5 : 3}
+                className={editingSlide.type === 'html' ? 'font-mono text-sm' : ''}
               />
+              
+              {editingSlide.type === 'html' && (
+                <div className="mt-2">
+                  <Label>HTML Preview</Label>
+                  <div 
+                    className="mt-1 p-4 border rounded bg-white prose max-w-none" 
+                    dangerouslySetInnerHTML={{ __html: editingSlide.content }}
+                  />
+                </div>
+              )}
             </div>
-          )}
+            
+            <div className="flex justify-end gap-2 mt-4">
+              <Button variant="outline" onClick={handleCancelEdit}>
+                <X className="mr-2 h-4 w-4" />
+                Cancel
+              </Button>
+              <Button onClick={handleSaveSlide}>
+                <Check className="mr-2 h-4 w-4" />
+                Save Slide
+              </Button>
+            </div>
+          </div>
         </CardContent>
       </Card>
     );
   };
   
   return (
-    <div className="min-h-screen bg-background p-6 flex flex-col">
-      {/* Header with timer */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-3xl font-bold">Intermission</h1>
-        <div className="flex items-center gap-2 text-lg font-semibold">
-          <Clock className="h-5 w-5" />
-          <span>{formatTime(remainingTime)}</span>
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h1 className="text-3xl font-bold">Intermission Slides</h1>
+        <div className="space-x-2">
+          <Button variant="outline" onClick={handleTestDisplay}>
+            Test on Display
+          </Button>
+          <Button onClick={handleAddSlide}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Slide
+          </Button>
         </div>
       </div>
       
-      <Progress value={getProgressPercent()} className="h-2 mb-8" />
+      <p className="text-muted-foreground">
+        Create and manage slides that will be shown during the intermission period between questions.
+        These slides will rotate on the display screen during gameplay.
+      </p>
       
-      {/* Current Intermission Slide */}
-      {renderCurrentSlide()}
+      {isEditing && renderEditForm()}
       
-      {/* Top Winner Highlight */}
-      {topPlayer && (
-        <div className="mb-8 animate-fade-in">
-          <div className="relative">
-            <div className="absolute -top-6 left-1/2 transform -translate-x-1/2 bg-yellow-500 text-background font-bold py-1 px-4 rounded-full z-10">
-              ROUND LEADER
-            </div>
-            <Card className="bg-gradient-to-r from-yellow-100 to-amber-50 border-yellow-300 overflow-hidden">
-              <div className="absolute top-0 right-0 w-24 h-24 -mr-8 -mt-8 bg-yellow-400 rounded-full opacity-20"></div>
-              <div className="absolute bottom-0 left-0 w-16 h-16 -ml-6 -mb-6 bg-yellow-400 rounded-full opacity-20"></div>
-              
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h2 className="text-2xl font-bold text-yellow-900">{topPlayer.name}</h2>
-                    <p className="text-yellow-700 font-medium">
-                      {topPlayer.correctAnswers} correct answers
+      {!isEditing && (
+        <DragDropContext onDragEnd={handleOnDragEnd}>
+          <Droppable droppableId="slides">
+            {(provided) => (
+              <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-4">
+                {slides.length > 0 ? (
+                  slides.map((slide, index) => (
+                    <Draggable key={slide.id} draggableId={slide.id} index={index}>
+                      {(provided) => (
+                        <div
+                          ref={provided.innerRef}
+                          {...provided.draggableProps}
+                          {...provided.dragHandleProps}
+                          className={`border rounded-lg p-4 ${slide.isActive ? 'bg-card' : 'bg-muted/50 opacity-60'}`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              {renderSlideIcon(slide.type)}
+                              <span className="font-medium">{slide.title}</span>
+                              <span className="text-xs bg-primary/20 text-primary px-2 py-0.5 rounded-full">
+                                {slide.type.toUpperCase()}
+                              </span>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <div className="flex items-center gap-2">
+                                <Switch 
+                                  checked={slide.isActive}
+                                  onCheckedChange={(checked) => handleToggleActive(slide.id, checked)}
+                                  id={`active-${slide.id}`}
+                                />
+                                <Label htmlFor={`active-${slide.id}`} className="text-sm">
+                                  {slide.isActive ? 'Active' : 'Inactive'}
+                                </Label>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button variant="ghost" size="icon" onClick={() => handleEditSlide(slide)}>
+                                  <Pencil className="h-4 w-4" />
+                                </Button>
+                                <Button variant="ghost" size="icon" onClick={() => handleDeleteSlide(slide.id)}>
+                                  <Trash className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          <div className="mt-2">
+                            {slide.type === 'text' && (
+                              <p className="text-sm text-muted-foreground">{slide.content}</p>
+                            )}
+                            
+                            {slide.type === 'html' && (
+                              <div className="text-sm text-muted-foreground overflow-hidden whitespace-nowrap text-ellipsis">
+                                {slide.content.replace(/<[^>]*>/g, '')}
+                              </div>
+                            )}
+                            
+                            {slide.type === 'image' && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>Image URL:</span>
+                                <span className="overflow-hidden whitespace-nowrap text-ellipsis">
+                                  {slide.imageUrl}
+                                </span>
+                              </div>
+                            )}
+                            
+                            {slide.type === 'wifi' && (
+                              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                                <span>WiFi:</span>
+                                <span>{slide.wifiName} / {slide.wifiPassword}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </Draggable>
+                  ))
+                ) : (
+                  <div className="text-center py-12 border rounded-lg">
+                    <p className="text-muted-foreground">
+                      No intermission slides found. Click "Add Slide" to create your first slide.
                     </p>
-                    {topPlayer.isRegistered && (
-                      <span className="inline-flex items-center mt-1 text-xs bg-yellow-200 text-yellow-800 px-2 py-0.5 rounded-full">
-                        <Star className="h-3 w-3 mr-1" />
-                        Registered Player
-                      </span>
-                    )}
                   </div>
-                  
-                  <div className="flex flex-col items-center">
-                    {getTopPlayerTrophyIcon()}
-                    <div className="text-3xl font-bold text-yellow-700 mt-2">
-                      {topPlayer.score}
-                    </div>
-                    <div className="text-xs font-medium text-yellow-600">
-                      POINTS
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
+                )}
+                {provided.placeholder}
+              </div>
+            )}
+          </Droppable>
+        </DragDropContext>
       )}
       
-      {/* Player scores list */}
-      <div className="bg-card border rounded-lg p-4 flex-1">
-        <h2 className="text-xl font-bold mb-4 flex items-center">
-          <Trophy className="mr-2 h-5 w-5 text-primary" />
-          Current Standings
-        </h2>
-        
-        <div className="space-y-3">
-          {playerScores.length > 0 ? (
-            playerScores.slice(0, 10).map((player, index) => (
-              <div key={player.name + index} className="animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-6 text-center font-semibold text-muted-foreground">
-                      {index + 1}
-                    </div>
-                    
-                    {index < 3 && (
-                      <div>
-                        {index === 0 ? (
-                          <Crown className="h-5 w-5 text-yellow-500" />
-                        ) : index === 1 ? (
-                          <Medal className="h-5 w-5 text-gray-400" />
-                        ) : (
-                          <Medal className="h-5 w-5 text-amber-700" />
-                        )}
-                      </div>
-                    )}
-                    
-                    <div className="font-medium">
-                      {player.name}
-                      {player.isRegistered && (
-                        <span className="ml-2 inline-flex items-center text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                          <Star className="h-3 w-3 mr-0.5" />
-                          Registered
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="font-bold text-lg">
-                    {player.score}
-                  </div>
-                </div>
-                {index < playerScores.length - 1 && <Separator className="mt-3" />}
+      <div className="border-t pt-6">
+        <h2 className="text-xl font-bold mb-2">Settings</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Intermission Duration</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <Input 
+                  type="number" 
+                  min="5"
+                  max="300"
+                  value={gameSettings.intermissionDuration}
+                  onChange={(e) => {
+                    const newSettings = { 
+                      ...gameSettings, 
+                      intermissionDuration: Math.max(5, Math.min(300, parseInt(e.target.value) || 30)) 
+                    };
+                    localStorage.setItem('gameSettings', JSON.stringify(newSettings));
+                    // Force a refresh of the global settings
+                    window.dispatchEvent(new Event('gameSettingsChanged'));
+                  }}
+                  className="w-24"
+                />
+                <span>seconds</span>
               </div>
-            ))
-          ) : (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground mb-3">
-                No players have joined yet
-              </p>
-              <p className="text-sm text-muted-foreground">
-                Players can join at any time by entering the game code on their device
-              </p>
-            </div>
-          )}
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader>
+              <CardTitle>Slide Rotation</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-4">
+                <Input 
+                  type="number"
+                  min="3"
+                  max="30" 
+                  value={gameSettings.slideRotationTime || 10}
+                  onChange={(e) => {
+                    const newSettings = { 
+                      ...gameSettings, 
+                      slideRotationTime: Math.max(3, Math.min(30, parseInt(e.target.value) || 10)) 
+                    };
+                    localStorage.setItem('gameSettings', JSON.stringify(newSettings));
+                    // Force a refresh of the global settings
+                    window.dispatchEvent(new Event('gameSettingsChanged'));
+                  }}
+                  className="w-24"
+                />
+                <span>seconds per slide</span>
+              </div>
+            </CardContent>
+          </Card>
         </div>
-      </div>
-      
-      {/* Admin controls */}
-      <div className="mt-6 flex justify-end">
-        <Button 
-          variant="outline" 
-          onClick={() => navigate('/display')}
-        >
-          Skip Intermission
-        </Button>
       </div>
     </div>
   );
