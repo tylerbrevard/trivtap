@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { QrCode, Clock } from 'lucide-react';
+import { QrCode, Clock, Wifi } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
@@ -580,33 +580,43 @@ const DisplayScreen = () => {
                 <p className="text-xl mb-6 whitespace-pre-line">{currentSlide.content}</p>
               )}
               
+              {currentSlide.type === 'html' && (
+                <div className="prose max-w-none mx-auto" dangerouslySetInnerHTML={{ __html: currentSlide.content }} />
+              )}
+              
               {currentSlide.type === 'wifi' && (
-                <div className="bg-muted p-4 rounded-md">
-                  <p className="text-lg font-medium">WiFi Details</p>
-                  <div className="flex justify-center gap-8 mt-2">
+                <div className="bg-muted p-6 rounded-md">
+                  <div className="flex items-center justify-center mb-4">
+                    <Wifi className="h-8 w-8 text-primary mr-2" />
+                    <p className="text-lg font-medium">WiFi Connection</p>
+                  </div>
+                  <div className="flex justify-center gap-8 mt-4">
                     <div>
                       <p className="text-sm text-muted-foreground">WiFi Name</p>
-                      <p className="font-medium">{currentSlide.wifiName}</p>
+                      <p className="text-xl font-medium">{currentSlide.wifiName}</p>
                     </div>
                     <div>
                       <p className="text-sm text-muted-foreground">Password</p>
-                      <p className="font-medium">{currentSlide.wifiPassword}</p>
+                      <p className="text-xl font-medium">{currentSlide.wifiPassword}</p>
                     </div>
                   </div>
                 </div>
               )}
               
-              {currentSlide.type === 'image' && (
+              {currentSlide.type === 'image' && currentSlide.imageUrl && (
                 <div className="mt-4">
                   <img 
                     src={currentSlide.imageUrl} 
                     alt={currentSlide.title}
-                    className="max-w-full max-h-[300px] object-contain mx-auto"
+                    className="max-w-full max-h-[300px] object-contain mx-auto rounded"
                     onError={(e) => {
-                      const target = e.currentTarget;
+                      const target = e.currentTarget as HTMLImageElement;
                       target.src = 'https://placehold.co/600x400?text=Image+URL+Error';
                     }}
                   />
+                  {currentSlide.content && (
+                    <p className="mt-4 text-lg">{currentSlide.content}</p>
+                  )}
                 </div>
               )}
             </div>

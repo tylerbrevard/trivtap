@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
-import { Crown, Trophy, Medal, Star, Clock } from 'lucide-react';
+import { Crown, Trophy, Medal, Star, Clock, Wifi, Image, FileText } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 
 interface PlayerScore {
@@ -15,11 +15,22 @@ interface PlayerScore {
   correctAnswers: number;
 }
 
+interface IntermissionSlide {
+  id: string;
+  title: string;
+  content: string;
+  type: 'text' | 'image' | 'wifi' | 'html';
+  isActive: boolean;
+  wifiName?: string;
+  wifiPassword?: string;
+  imageUrl?: string;
+}
+
 const Intermission = () => {
   const [remainingTime, setRemainingTime] = useState(gameSettings.intermissionDuration);
   const [playerScores, setPlayerScores] = useState<PlayerScore[]>([]);
   const [topPlayer, setTopPlayer] = useState<PlayerScore | null>(null);
-  const [intermissionSlides, setIntermissionSlides] = useState<any[]>([]);
+  const [intermissionSlides, setIntermissionSlides] = useState<IntermissionSlide[]>([]);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
@@ -62,19 +73,52 @@ const Intermission = () => {
           setIntermissionSlides(slides.filter((slide: any) => slide.isActive));
         } catch (e) {
           console.error('Error parsing intermission slides:', e);
-          setIntermissionSlides([]);
+          // Create default slides if parsing fails
+          createDefaultSlides();
         }
       } else {
-        // Create default slide if none exist
-        const defaultSlide = {
-          id: 'default-slide',
+        // Create default slides if none exist
+        createDefaultSlides();
+      }
+    };
+    
+    const createDefaultSlides = () => {
+      const defaultSlides: IntermissionSlide[] = [
+        {
+          id: 'default-slide-1',
           title: 'Intermission',
           content: 'Next question coming up soon...',
+          type: 'text',
           isActive: true
-        };
-        setIntermissionSlides([defaultSlide]);
-        localStorage.setItem('intermissionSlides', JSON.stringify([defaultSlide]));
-      }
+        },
+        {
+          id: 'default-slide-2',
+          title: 'WiFi Information',
+          content: 'Connect to our WiFi',
+          type: 'wifi',
+          wifiName: 'Venue WiFi',
+          wifiPassword: 'guest1234',
+          isActive: true
+        },
+        {
+          id: 'default-slide-3',
+          title: 'Featured Image',
+          content: 'Check out our sponsors',
+          type: 'image',
+          imageUrl: 'https://placehold.co/600x400?text=Sponsor+Image',
+          isActive: true
+        },
+        {
+          id: 'default-slide-4',
+          title: 'Special Announcement',
+          content: '<h3>Drink Specials</h3><p>All cocktails $2 off during happy hour!</p>',
+          type: 'html',
+          isActive: true
+        }
+      ];
+      
+      setIntermissionSlides(defaultSlides);
+      localStorage.setItem('intermissionSlides', JSON.stringify(defaultSlides));
     };
     
     const loadScores = () => {
@@ -169,10 +213,49 @@ const Intermission = () => {
     return (
       <Card className="mb-6 animate-fade-in">
         <CardContent className="p-6">
-          <h2 className="text-2xl font-bold mb-4">{slide.title}</h2>
-          <div className="prose max-w-none"
-            dangerouslySetInnerHTML={{ __html: slide.content }}
-          />
+          <div className="flex items-center mb-4">
+            <h2 className="text-2xl font-bold">{slide.title}</h2>
+            {slide.type === 'wifi' && <Wifi className="ml-2 h-5 w-5 text-blue-500" />}
+            {slide.type === 'image' && <Image className="ml-2 h-5 w-5 text-green-500" />}
+            {slide.type === 'text' && <FileText className="ml-2 h-5 w-5 text-orange-500" />}
+          </div>
+          
+          {slide.type === 'text' && (
+            <p className="whitespace-pre-line">{slide.content}</p>
+          )}
+          
+          {slide.type === 'html' && (
+            <div className="prose max-w-none" dangerouslySetInnerHTML={{ __html: slide.content }} />
+          )}
+          
+          {slide.type === 'wifi' && (
+            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+              <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Network Name:</p>
+                  <p className="font-medium text-lg">{slide.wifiName}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">Password:</p>
+                  <p className="font-medium text-lg">{slide.wifiPassword}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {slide.type === 'image' && slide.imageUrl && (
+            <div className="mt-4 flex justify-center">
+              <img 
+                src={slide.imageUrl} 
+                alt={slide.title} 
+                className="max-w-full max-h-[300px] object-contain rounded-md"
+                onError={(e) => {
+                  const target = e.currentTarget as HTMLImageElement;
+                  target.src = 'https://placehold.co/600x400?text=Image+Error';
+                }}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
     );
@@ -286,10 +369,10 @@ const Intermission = () => {
           ) : (
             <div className="text-center py-8">
               <p className="text-muted-foreground mb-3">
-                Waiting for players to join...
+                No players have joined yet
               </p>
               <p className="text-sm text-muted-foreground">
-                Players can join by entering the game code on their device
+                Players can join at any time by entering the game code on their device
               </p>
             </div>
           )}

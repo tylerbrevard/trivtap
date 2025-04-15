@@ -66,7 +66,7 @@ const QuestionLibrary = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {categories.map(category => (
-                <CategoryQuestions key={category.id} category={category} />
+                <CategoryQuestions key={category.id} categoryId={category.id} categoryName={category.name} />
               ))}
             </div>
           )}
@@ -78,7 +78,7 @@ const QuestionLibrary = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {buckets.map(bucket => (
-                <BucketQuestions key={bucket.id} bucket={bucket} />
+                <BucketQuestions key={bucket.id} bucketId={bucket.id} bucketName={bucket.name} />
               ))}
             </div>
           )}
