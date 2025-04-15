@@ -742,7 +742,7 @@ const DisplayScreen = () => {
     <div className="min-h-screen bg-background flex flex-col">
       <header className="p-4 border-b border-border">
         <div className="flex justify-between items-center">
-          <h1 className="text-2xl font-bold text-primary">TriviaPulse</h1>
+          <h1 className="text-2xl font-bold text-primary">TrivTap</h1>
           <div className="flex items-center gap-4">
             <div className="bg-primary/20 text-primary px-3 py-1 rounded-full">
               Display #{id || 'Default'}
@@ -769,7 +769,7 @@ const DisplayScreen = () => {
             </div>
           </div>
         )}
-        <p>Powered by TriviaPulse</p>
+        <p>Powered by TrivTap</p>
       </footer>
     </div>
   );
