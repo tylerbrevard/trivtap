@@ -26,6 +26,7 @@ export const useGameSync = ({
   const [lastStateChange, setLastStateChange] = useState<number>(Date.now());
   const [forcePause, setForcePause] = useState(false);
   const [slidesIndex, setSlidesIndex] = useState(0);
+  const [slideTimer, setSlideTimer] = useState(gameSettings.slideRotationTime);
 
   // Update game state handler
   const handleUpdateGameState = useCallback((
@@ -72,6 +73,7 @@ export const useGameSync = ({
         
         if (gameState.slidesIndex !== undefined) {
           setSlidesIndex(gameState.slidesIndex);
+          setSlideTimer(gameSettings.slideRotationTime); // Reset slide timer when changing slides
         }
         
         setLastStateChange(gameState.timestamp);
@@ -117,15 +119,66 @@ export const useGameSync = ({
     // Handle intermission slide cycling
     if (currentState === 'intermission' && autoSync && !forcePause) {
       timerId = window.setTimeout(() => {
-        // The slide cycling is handled in gameStateUtils.cycleIntermissionSlide
-        // which is called from autoSyncGameState
-      }, gameSettings.intermissionDuration * 1000);
+        // Check if we need to update the slide
+        if (slideTimer <= 0) {
+          // Get slides from localStorage
+          const storedSlides = localStorage.getItem('intermissionSlides');
+          if (storedSlides) {
+            try {
+              const slides = JSON.parse(storedSlides);
+              const activeSlides = slides.filter((slide: any) => slide.isActive);
+              
+              if (activeSlides.length > 1) {
+                // Calculate next slide index
+                const nextSlideIndex = (slidesIndex + 1) % activeSlides.length;
+                console.log(`Rotating to slide ${nextSlideIndex} of ${activeSlides.length}`);
+                
+                // Update slide index in state and localStorage
+                setSlidesIndex(nextSlideIndex);
+                
+                // Update in localStorage
+                const gameState = localStorage.getItem('gameState');
+                if (gameState) {
+                  const parsedState = JSON.parse(gameState);
+                  parsedState.slidesIndex = nextSlideIndex;
+                  localStorage.setItem('gameState', JSON.stringify(parsedState));
+                }
+                
+                // Reset timer
+                setSlideTimer(gameSettings.slideRotationTime);
+              } else {
+                console.log('Only one active slide, not rotating');
+              }
+            } catch (e) {
+              console.error('Error parsing intermission slides:', e);
+            }
+          }
+        } else {
+          // Just update the timer
+          setSlideTimer(slideTimer - 1);
+        }
+      }, 1000);
     }
     
     return () => {
       if (timerId) clearTimeout(timerId);
     };
-  }, [currentState, timeLeft, questionIndex, questionCounter, forcePause, autoSync, totalQuestions, slidesIndex]);
+  }, [currentState, timeLeft, questionIndex, questionCounter, forcePause, autoSync, totalQuestions, slidesIndex, slideTimer]);
+
+  // Listen for game settings changes
+  useEffect(() => {
+    const handleSettingsChange = () => {
+      console.log('Game settings changed, updating values');
+      // If the slide rotation time changed, update our timer
+      setSlideTimer(gameSettings.slideRotationTime);
+    };
+    
+    window.addEventListener('gameSettingsChanged', handleSettingsChange);
+    
+    return () => {
+      window.removeEventListener('gameSettingsChanged', handleSettingsChange);
+    };
+  }, []);
 
   // Toggle pause function
   const togglePause = useCallback(() => {

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -8,9 +7,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/components/ui/use-toast";
-import { Wifi, Image, FileText, Plus, Trash, Pencil, Check, X } from 'lucide-react';
-import { gameSettings } from '@/utils/gameSettings';
+import { useToast } from "@/hooks/use-toast";
+import { Wifi, Image, FileText, Plus, Trash, Pencil, Check, X, Clock, Play, AlertCircle, EyeOff } from 'lucide-react';
+import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
 interface IntermissionSlide {
@@ -32,7 +31,6 @@ const Intermission = () => {
   const { toast } = useToast();
   
   useEffect(() => {
-    // Load slides from localStorage
     const savedSlides = localStorage.getItem('intermissionSlides');
     if (savedSlides) {
       try {
@@ -40,11 +38,9 @@ const Intermission = () => {
         setSlides(parsedSlides);
       } catch (e) {
         console.error('Error parsing intermission slides:', e);
-        // Create default slides if parsing fails
         createDefaultSlides();
       }
     } else {
-      // Create default slides if none exist
       createDefaultSlides();
     }
   }, []);
@@ -91,12 +87,11 @@ const Intermission = () => {
   const saveSlides = (slidesToSave: IntermissionSlide[]) => {
     localStorage.setItem('intermissionSlides', JSON.stringify(slidesToSave));
     
-    // Save current slide index to game state
     const gameState = localStorage.getItem('gameState');
     if (gameState) {
       try {
         const parsedState = JSON.parse(gameState);
-        parsedState.slidesIndex = 0; // Reset to first slide when saving
+        parsedState.slidesIndex = 0;
         localStorage.setItem('gameState', JSON.stringify(parsedState));
       } catch (e) {
         console.error('Error updating game state for slides:', e);
@@ -148,11 +143,9 @@ const Intermission = () => {
     let updatedSlides;
     
     if (existingSlideIndex >= 0) {
-      // Update existing slide
       updatedSlides = [...slides];
       updatedSlides[existingSlideIndex] = editingSlide;
     } else {
-      // Add new slide
       updatedSlides = [...slides, editingSlide];
     }
     
@@ -193,8 +186,18 @@ const Intermission = () => {
   };
   
   const handleTestDisplay = () => {
-    // Navigate to display screen for testing
     navigate('/display');
+  };
+  
+  const handleSlideRotationChange = (value: string) => {
+    const rotationTime = parseInt(value, 10);
+    if (!isNaN(rotationTime) && rotationTime > 0) {
+      updateGameSetting('slideRotationTime', rotationTime);
+      toast({
+        title: "Setting Updated",
+        description: `Slides will now rotate every ${rotationTime} seconds.`,
+      });
+    }
   };
   
   const renderEditForm = () => {
@@ -318,13 +321,16 @@ const Intermission = () => {
     );
   };
   
+  const activeSlideCount = slides.filter(slide => slide.isActive).length;
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Intermission Slides</h1>
         <div className="space-x-2">
           <Button variant="outline" onClick={handleTestDisplay}>
-            Test on Display
+            <Play className="mr-2 h-4 w-4" />
+            Test Display
           </Button>
           <Button onClick={handleAddSlide}>
             <Plus className="mr-2 h-4 w-4" />
@@ -337,6 +343,18 @@ const Intermission = () => {
         Create and manage slides that will be shown during the intermission period between questions.
         These slides will rotate on the display screen during gameplay.
       </p>
+      
+      {activeSlideCount <= 1 && (
+        <div className="bg-amber-100 border border-amber-300 rounded-lg p-4 text-amber-800 mb-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-5 w-5" />
+            <span className="font-semibold">Only {activeSlideCount} active slide</span>
+          </div>
+          <p className="text-sm mt-1">
+            You need at least 2 active slides for rotation to work. Activate more slides or create new ones.
+          </p>
+        </div>
+      )}
       
       {isEditing && renderEditForm()}
       
@@ -434,35 +452,11 @@ const Intermission = () => {
         <h2 className="text-xl font-bold mb-2">Settings</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <Card>
-            <CardHeader>
-              <CardTitle>Intermission Duration</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-center gap-4">
-                <Input 
-                  type="number" 
-                  min="5"
-                  max="300"
-                  value={gameSettings.intermissionDuration}
-                  onChange={(e) => {
-                    const newSettings = { 
-                      ...gameSettings, 
-                      intermissionDuration: Math.max(5, Math.min(300, parseInt(e.target.value) || 30)) 
-                    };
-                    localStorage.setItem('gameSettings', JSON.stringify(newSettings));
-                    // Force a refresh of the global settings
-                    window.dispatchEvent(new Event('gameSettingsChanged'));
-                  }}
-                  className="w-24"
-                />
-                <span>seconds</span>
-              </div>
-            </CardContent>
-          </Card>
-          
-          <Card>
-            <CardHeader>
-              <CardTitle>Slide Rotation</CardTitle>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center">
+                <Clock className="mr-2 h-5 w-5 text-primary" />
+                Slide Rotation
+              </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex items-center gap-4">
@@ -470,19 +464,38 @@ const Intermission = () => {
                   type="number"
                   min="3"
                   max="30" 
-                  value={gameSettings.slideRotationTime || 10}
-                  onChange={(e) => {
-                    const newSettings = { 
-                      ...gameSettings, 
-                      slideRotationTime: Math.max(3, Math.min(30, parseInt(e.target.value) || 10)) 
-                    };
-                    localStorage.setItem('gameSettings', JSON.stringify(newSettings));
-                    // Force a refresh of the global settings
-                    window.dispatchEvent(new Event('gameSettingsChanged'));
-                  }}
+                  value={gameSettings.slideRotationTime}
+                  onChange={(e) => handleSlideRotationChange(e.target.value)}
                   className="w-24"
                 />
                 <span>seconds per slide</span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-2">
+                How long each slide appears before rotating to the next one
+              </p>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center">
+                <EyeOff className="mr-2 h-5 w-5 text-primary" />
+                Hide/Show Slides
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="show-intermission" className="flex flex-col space-y-1">
+                  <span>Show Intermission Slides</span>
+                  <span className="font-normal text-sm text-muted-foreground">
+                    Toggle intermission slides on or off
+                  </span>
+                </Label>
+                <Switch 
+                  id="show-intermission"
+                  checked={gameSettings.showIntermission}
+                  onCheckedChange={(checked) => updateGameSetting('showIntermission', checked)}
+                />
               </div>
             </CardContent>
           </Card>

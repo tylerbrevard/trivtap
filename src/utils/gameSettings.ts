@@ -11,7 +11,7 @@ export type GameSettings = {
   leaderboardFrequency: number;
   autoProgress: boolean;
   showIntermission: boolean;
-  slideRotationTime: number; // Added this property
+  slideRotationTime: number;
 };
 
 // Create the settings object matching our type
@@ -19,7 +19,7 @@ export const gameSettings: GameSettings = {
   questionDuration: 20, // seconds
   answerRevealDuration: 5, // seconds
   intermissionFrequency: 5, // show intermission after every 5 questions by default (changed from 10)
-  intermissionDuration: 8, // seconds
+  intermissionDuration: 30, // seconds - total duration of intermission (updated from 8 to 30)
   leaderboardFrequency: 10, // show leaderboard after every 10 questions
   autoProgress: true, // automatically progress through questions
   showIntermission: true, // show intermission slides
@@ -34,6 +34,9 @@ export const updateGameSetting = (key: keyof GameSettings, value: number | boole
     // Store in localStorage for persistence
     localStorage.setItem('gameSettings', JSON.stringify(gameSettings));
     console.log(`Updated game setting: ${key} = ${value}`);
+    
+    // Dispatch event to notify other components of the change
+    window.dispatchEvent(new Event('gameSettingsChanged'));
   }
 };
 
@@ -59,6 +62,12 @@ const initializeSettings = () => {
     }
   }
 };
+
+// Listen for settings changes
+window.addEventListener('gameSettingsChanged', () => {
+  console.log('Game settings changed event detected');
+  // This allows components to react to settings changes without reloading
+});
 
 // Run initialization
 initializeSettings();
