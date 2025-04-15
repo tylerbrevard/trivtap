@@ -17,7 +17,7 @@ import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
 interface CategoryQuestionsProps {
   categoryId: string;
   categoryName: string;
-  onClose: () => void;
+  onClose?: () => void; // Made optional for use in list view
 }
 
 const CategoryQuestions: React.FC<CategoryQuestionsProps> = ({
@@ -80,9 +80,12 @@ const CategoryQuestions: React.FC<CategoryQuestionsProps> = ({
               }
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={onClose}>
-            Back to Categories
-          </Button>
+          {/* Only show the back button if onClose is provided */}
+          {onClose && (
+            <Button variant="outline" onClick={onClose}>
+              Back to Categories
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-4">
           <div className="relative flex-1">

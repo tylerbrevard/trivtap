@@ -39,6 +39,12 @@ const QuestionLibrary = () => {
     loadData();
   }, []);
   
+  // Dummy onClose function since we're viewing in a list context
+  const handleClose = () => {
+    // No-op in this context, but satisfies the type requirement
+    console.log('Close requested, but ignored in list view');
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -66,7 +72,12 @@ const QuestionLibrary = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {categories.map(category => (
-                <CategoryQuestions key={category.id} categoryId={category.id} categoryName={category.name} />
+                <CategoryQuestions 
+                  key={category.id} 
+                  categoryId={category.id} 
+                  categoryName={category.name} 
+                  onClose={handleClose}
+                />
               ))}
             </div>
           )}
@@ -78,7 +89,12 @@ const QuestionLibrary = () => {
           ) : (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {buckets.map(bucket => (
-                <BucketQuestions key={bucket.id} bucketId={bucket.id} bucketName={bucket.name} />
+                <BucketQuestions 
+                  key={bucket.id} 
+                  bucketId={bucket.id} 
+                  bucketName={bucket.name} 
+                  onClose={handleClose}
+                />
               ))}
             </div>
           )}

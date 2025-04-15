@@ -17,7 +17,7 @@ import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
 interface BucketQuestionsProps {
   bucketId: string;
   bucketName: string;
-  onClose: () => void;
+  onClose?: () => void; // Made optional for use in list view
 }
 
 const BucketQuestions: React.FC<BucketQuestionsProps> = ({
@@ -82,9 +82,12 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
               }
             </CardDescription>
           </div>
-          <Button variant="outline" onClick={onClose}>
-            Back to Buckets
-          </Button>
+          {/* Only show the back button if onClose is provided */}
+          {onClose && (
+            <Button variant="outline" onClick={onClose}>
+              Back to Buckets
+            </Button>
+          )}
         </div>
         <div className="flex items-center gap-2 mt-4">
           <div className="relative flex-1">
