@@ -11,6 +11,7 @@ export type GameSettings = {
   leaderboardFrequency: number;
   autoProgress: boolean;
   showIntermission: boolean;
+  slideRotationTime: number; // Added this property
 };
 
 // Create the settings object matching our type
@@ -22,6 +23,7 @@ export const gameSettings: GameSettings = {
   leaderboardFrequency: 10, // show leaderboard after every 10 questions
   autoProgress: true, // automatically progress through questions
   showIntermission: true, // show intermission slides
+  slideRotationTime: 10, // seconds per slide rotation
 };
 
 // Helper function to update a specific setting
