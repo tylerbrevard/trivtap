@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,14 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { supabase } from "@/integrations/supabase/client";
 import { fetchCategories, getOrCreateCategory } from "@/utils/importUtils";
-import { addImportedQuestionsToCollection, exportQuestionsToJson, getCurrentUserId, getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
+import { 
+  addImportedQuestionsToCollection, 
+  exportQuestionsToJson,
+  exportQuestionsToCSV, 
+  getCurrentUserId, 
+  getStaticQuestions, 
+  StaticQuestion
+} from "@/utils/staticQuestions";
 import DuplicateQuestionRemover from "@/components/DuplicateQuestionRemover";
 
 const ImportPage = () => {
@@ -22,6 +30,7 @@ const ImportPage = () => {
   const [importResults, setImportResults] = useState<{ success: boolean; message: string } | null>(null);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | undefined>(undefined);
+  const [exportFormat, setExportFormat] = useState<'json' | 'csv'>('csv');
   const { toast } = useToast();
   
   useEffect(() => {
@@ -172,19 +181,31 @@ const ImportPage = () => {
   
   const handleExportQuestions = async () => {
     try {
-      const jsonString = await exportQuestionsToJson();
+      let content: string;
+      let fileType: string;
+      let fileName: string;
+      
+      if (exportFormat === 'json') {
+        content = await exportQuestionsToJson();
+        fileType = 'application/json';
+        fileName = 'trivia_questions.json';
+      } else {
+        content = await exportQuestionsToCSV();
+        fileType = 'text/csv';
+        fileName = 'trivia_questions.csv';
+      }
       
       const element = document.createElement('a');
-      const file = new Blob([jsonString], {type: 'application/json'});
+      const file = new Blob([content], {type: fileType});
       element.href = URL.createObjectURL(file);
-      element.download = 'trivia_questions.json';
+      element.download = fileName;
       document.body.appendChild(element);
       element.click();
       document.body.removeChild(element);
       
       toast({
         title: "Export Successful",
-        description: "Questions exported successfully!",
+        description: `Questions exported successfully as ${exportFormat.toUpperCase()}!`,
         variant: "default",
       });
     } catch (error) {
@@ -356,14 +377,29 @@ const ImportPage = () => {
                   )}
                 </Button>
                 
-                <Button 
-                  variant="outline" 
-                  className="flex-1"
-                  onClick={handleExportQuestions}
-                >
-                  <Save className="mr-2 h-4 w-4" />
-                  Export Collection
-                </Button>
+                <div className="flex-1 flex gap-2">
+                  <Select 
+                    defaultValue="csv" 
+                    onValueChange={(value) => setExportFormat(value as 'json' | 'csv')}
+                  >
+                    <SelectTrigger className="w-[110px]">
+                      <SelectValue placeholder="Format" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="csv">CSV</SelectItem>
+                      <SelectItem value="json">JSON</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  
+                  <Button 
+                    variant="outline" 
+                    className="flex-1"
+                    onClick={handleExportQuestions}
+                  >
+                    <Save className="mr-2 h-4 w-4" />
+                    Export Collection
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>

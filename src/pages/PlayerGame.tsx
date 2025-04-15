@@ -6,7 +6,7 @@ import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
-import { baseStaticQuestions, getRandomQuestions, formatQuestionsForGame } from '@/utils/staticQuestions';
+import { baseStaticQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion } from '@/utils/staticQuestions';
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);

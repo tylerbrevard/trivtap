@@ -1,4 +1,4 @@
-import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions } from './importUtils';
+import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions, convertQuestionsToCSV } from './importUtils';
 import { supabase } from "@/integrations/supabase/client";
 
 // Collection of static trivia questions to reduce database usage
@@ -259,6 +259,17 @@ export const exportQuestionsToJson = async (): Promise<string> => {
   } catch (error) {
     console.error('Error exporting questions to JSON:', error);
     throw new Error('Failed to export questions to JSON.');
+  }
+};
+
+// Function to export all questions to CSV format
+export const exportQuestionsToCSV = async (): Promise<string> => {
+  try {
+    const allQuestions = await getStaticQuestions();
+    return convertQuestionsToCSV(allQuestions);
+  } catch (error) {
+    console.error('Error exporting questions to CSV:', error);
+    throw new Error('Failed to export questions to CSV.');
   }
 };
 

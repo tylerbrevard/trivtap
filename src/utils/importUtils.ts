@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 // Define question type
@@ -155,6 +154,43 @@ export const associateQuestionsWithBucket = async (questionIds: string[], bucket
   } catch (error) {
     console.error('Error in associateQuestionsWithBucket:', error);
     throw error;
+  }
+};
+
+// Function to convert questions to CSV format
+export const convertQuestionsToCSV = (questions: any[]): string => {
+  try {
+    const csvRows = [];
+    
+    // Add header row
+    csvRows.push('question,category,option1,option2,option3,option4,correctAnswer,difficulty');
+    
+    // Add data rows
+    questions.forEach(question => {
+      const questionText = question.question || question.text;
+      const options = [...question.options];
+      
+      // Fill options array with empty strings if not enough options (ensuring 4 options)
+      while (options.length < 4) {
+        options.push('');
+      }
+      
+      // Escape commas in all fields
+      const escapedQuestion = questionText.replace(/,/g, '\\,');
+      const escapedCategory = question.category.replace(/,/g, '\\,');
+      const escapedOptions = options.map((opt: string) => opt.replace(/,/g, '\\,'));
+      const escapedCorrectAnswer = question.correctAnswer.replace(/,/g, '\\,');
+      
+      // Create and add the CSV row
+      csvRows.push(
+        `${escapedQuestion},${escapedCategory},${escapedOptions[0]},${escapedOptions[1]},${escapedOptions[2]},${escapedOptions[3]},${escapedCorrectAnswer},${question.difficulty}`
+      );
+    });
+    
+    return csvRows.join('\n');
+  } catch (error) {
+    console.error('Error converting questions to CSV:', error);
+    throw new Error('Failed to convert questions to CSV format');
   }
 };
 

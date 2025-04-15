@@ -19,6 +19,8 @@ const Intermission = () => {
   const [remainingTime, setRemainingTime] = useState(gameSettings.intermissionDuration);
   const [playerScores, setPlayerScores] = useState<PlayerScore[]>([]);
   const [topPlayer, setTopPlayer] = useState<PlayerScore | null>(null);
+  const [intermissionSlides, setIntermissionSlides] = useState<any[]>([]);
+  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const navigate = useNavigate();
   const location = useLocation();
   
@@ -27,6 +29,7 @@ const Intermission = () => {
     const getPlayerScores = () => {
       const scores: PlayerScore[] = [];
       
+      // Find all player scores in localStorage
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
         if (key && key.startsWith('playerScore_')) {
@@ -46,19 +49,73 @@ const Intermission = () => {
         }
       }
       
+      // Sort by score (highest first)
       return scores.sort((a, b) => b.score - a.score);
+    };
+    
+    // Load slides from localStorage
+    const loadSlides = () => {
+      const slidesData = localStorage.getItem('intermissionSlides');
+      if (slidesData) {
+        try {
+          const slides = JSON.parse(slidesData);
+          setIntermissionSlides(slides.filter((slide: any) => slide.isActive));
+        } catch (e) {
+          console.error('Error parsing intermission slides:', e);
+          setIntermissionSlides([]);
+        }
+      } else {
+        // Create default slide if none exist
+        const defaultSlide = {
+          id: 'default-slide',
+          title: 'Intermission',
+          content: 'Next question coming up soon...',
+          isActive: true
+        };
+        setIntermissionSlides([defaultSlide]);
+        localStorage.setItem('intermissionSlides', JSON.stringify([defaultSlide]));
+      }
     };
     
     const loadScores = () => {
       const scores = getPlayerScores();
       setPlayerScores(scores);
       setTopPlayer(scores.length > 0 ? scores[0] : null);
+      
+      // If no players, create a dummy player for testing
+      if (process.env.NODE_ENV === 'development' && scores.length === 0) {
+        const dummyPlayer = {
+          name: 'Test Player',
+          score: 500,
+          isRegistered: true,
+          correctAnswers: 5
+        };
+        setPlayerScores([dummyPlayer]);
+        setTopPlayer(dummyPlayer);
+      }
     };
     
+    // Load initial data
     loadScores();
-    const intervalId = setInterval(loadScores, 1000);
+    loadSlides();
     
-    return () => clearInterval(intervalId);
+    // Set up interval to refresh data
+    const refreshInterval = setInterval(loadScores, 1000);
+    
+    // Get current slide index from game state
+    const gameState = localStorage.getItem('gameState');
+    if (gameState) {
+      try {
+        const parsedState = JSON.parse(gameState);
+        if (parsedState.slidesIndex !== undefined) {
+          setCurrentSlideIndex(parsedState.slidesIndex);
+        }
+      } catch (e) {
+        console.error('Error parsing game state for slides:', e);
+      }
+    }
+    
+    return () => clearInterval(refreshInterval);
   }, []);
   
   // Setup timer
@@ -97,6 +154,30 @@ const Intermission = () => {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
   
+  const renderCurrentSlide = () => {
+    if (intermissionSlides.length === 0) {
+      return (
+        <div className="text-center p-6 bg-muted rounded-lg">
+          <p className="text-lg font-medium">No intermission slides available</p>
+        </div>
+      );
+    }
+    
+    const slideIndex = currentSlideIndex % intermissionSlides.length;
+    const slide = intermissionSlides[slideIndex];
+    
+    return (
+      <Card className="mb-6 animate-fade-in">
+        <CardContent className="p-6">
+          <h2 className="text-2xl font-bold mb-4">{slide.title}</h2>
+          <div className="prose max-w-none"
+            dangerouslySetInnerHTML={{ __html: slide.content }}
+          />
+        </CardContent>
+      </Card>
+    );
+  };
+  
   return (
     <div className="min-h-screen bg-background p-6 flex flex-col">
       {/* Header with timer */}
@@ -109,6 +190,9 @@ const Intermission = () => {
       </div>
       
       <Progress value={getProgressPercent()} className="h-2 mb-8" />
+      
+      {/* Current Intermission Slide */}
+      {renderCurrentSlide()}
       
       {/* Top Winner Highlight */}
       {topPlayer && (
@@ -160,49 +244,54 @@ const Intermission = () => {
         </h2>
         
         <div className="space-y-3">
-          {playerScores.slice(0, 10).map((player, index) => (
-            <div key={player.name + index} className="animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-6 text-center font-semibold text-muted-foreground">
-                    {index + 1}
-                  </div>
-                  
-                  {index < 3 && (
-                    <div>
-                      {index === 0 ? (
-                        <Crown className="h-5 w-5 text-yellow-500" />
-                      ) : index === 1 ? (
-                        <Medal className="h-5 w-5 text-gray-400" />
-                      ) : (
-                        <Medal className="h-5 w-5 text-amber-700" />
+          {playerScores.length > 0 ? (
+            playerScores.slice(0, 10).map((player, index) => (
+              <div key={player.name + index} className="animate-fade-in" style={{ animationDelay: `${index * 100}ms` }}>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-6 text-center font-semibold text-muted-foreground">
+                      {index + 1}
+                    </div>
+                    
+                    {index < 3 && (
+                      <div>
+                        {index === 0 ? (
+                          <Crown className="h-5 w-5 text-yellow-500" />
+                        ) : index === 1 ? (
+                          <Medal className="h-5 w-5 text-gray-400" />
+                        ) : (
+                          <Medal className="h-5 w-5 text-amber-700" />
+                        )}
+                      </div>
+                    )}
+                    
+                    <div className="font-medium">
+                      {player.name}
+                      {player.isRegistered && (
+                        <span className="ml-2 inline-flex items-center text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
+                          <Star className="h-3 w-3 mr-0.5" />
+                          Registered
+                        </span>
                       )}
                     </div>
-                  )}
+                  </div>
                   
-                  <div className="font-medium">
-                    {player.name}
-                    {player.isRegistered && (
-                      <span className="ml-2 inline-flex items-center text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded-full">
-                        <Star className="h-3 w-3 mr-0.5" />
-                        Registered
-                      </span>
-                    )}
+                  <div className="font-bold text-lg">
+                    {player.score}
                   </div>
                 </div>
-                
-                <div className="font-bold text-lg">
-                  {player.score}
-                </div>
+                {index < playerScores.length - 1 && <Separator className="mt-3" />}
               </div>
-              {index < playerScores.length - 1 && <Separator className="mt-3" />}
+            ))
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-3">
+                Waiting for players to join...
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Players can join by entering the game code on their device
+              </p>
             </div>
-          ))}
-          
-          {playerScores.length === 0 && (
-            <p className="text-center text-muted-foreground py-6">
-              No players have joined yet.
-            </p>
           )}
         </div>
       </div>
