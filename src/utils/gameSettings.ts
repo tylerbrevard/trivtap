@@ -36,7 +36,8 @@ export const updateGameSetting = (key: keyof GameSettings, value: number | boole
     console.log(`Updated game setting: ${key} = ${value}`);
     
     // Dispatch event to notify other components of the change
-    window.dispatchEvent(new Event('gameSettingsChanged'));
+    const event = new CustomEvent('gameSettingsChanged', { detail: { key, value } });
+    window.dispatchEvent(event);
   }
 };
 
@@ -64,8 +65,8 @@ const initializeSettings = () => {
 };
 
 // Listen for settings changes
-window.addEventListener('gameSettingsChanged', () => {
-  console.log('Game settings changed event detected');
+window.addEventListener('gameSettingsChanged', (e: Event) => {
+  console.log('Game settings changed event detected', (e as CustomEvent).detail);
   // This allows components to react to settings changes without reloading
 });
 

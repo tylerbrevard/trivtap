@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { updateGameState, moveToNextQuestion, autoSyncGameState, listenForGameStateChanges } from '@/utils/gameStateUtils';
 import { gameSettings } from '@/utils/gameSettings';
@@ -141,17 +140,28 @@ export const useGameSync = ({
                 if (gameState) {
                   const parsedState = JSON.parse(gameState);
                   parsedState.slidesIndex = nextSlideIndex;
+                  parsedState.timestamp = Date.now();
                   localStorage.setItem('gameState', JSON.stringify(parsedState));
+                  
+                  // Dispatch custom event for other tabs to pick up
+                  window.dispatchEvent(new CustomEvent('gameStateChanged'));
                 }
                 
                 // Reset timer
                 setSlideTimer(gameSettings.slideRotationTime);
               } else {
                 console.log('Only one active slide, not rotating');
+                // Still update the timer to keep the useEffect running
+                setSlideTimer(slideTimer - 1);
               }
             } catch (e) {
               console.error('Error parsing intermission slides:', e);
+              // Still update the timer to keep the useEffect running
+              setSlideTimer(slideTimer - 1);
             }
+          } else {
+            // No slides found, still update timer
+            setSlideTimer(slideTimer - 1);
           }
         } else {
           // Just update the timer
@@ -167,10 +177,12 @@ export const useGameSync = ({
 
   // Listen for game settings changes
   useEffect(() => {
-    const handleSettingsChange = () => {
-      console.log('Game settings changed, updating values');
+    const handleSettingsChange = (e: Event) => {
+      console.log('Game settings changed, updating values', (e as CustomEvent).detail);
       // If the slide rotation time changed, update our timer
-      setSlideTimer(gameSettings.slideRotationTime);
+      if ((e as CustomEvent).detail?.key === 'slideRotationTime') {
+        setSlideTimer(gameSettings.slideRotationTime);
+      }
     };
     
     window.addEventListener('gameSettingsChanged', handleSettingsChange);

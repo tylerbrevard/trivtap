@@ -1,5 +1,4 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -75,7 +74,16 @@ const buckets = [
 
 const Displays = () => {
   const { toast } = useToast();
-  const [displays, setDisplays] = useState(initialDisplays);
+  const [displays, setDisplays] = useState(() => {
+    // Try to load displays from localStorage first
+    const savedDisplays = localStorage.getItem('trivia-displays');
+    return savedDisplays ? JSON.parse(savedDisplays) : initialDisplays;
+  });
+  
+  // Save displays to localStorage whenever they change
+  useEffect(() => {
+    localStorage.setItem('trivia-displays', JSON.stringify(displays));
+  }, [displays]);
   
   const handleCopyLink = (displayId: string) => {
     // In a real app, this would copy the actual URL
@@ -144,7 +152,7 @@ const Displays = () => {
     // Show toast notification
     toast({
       title: "Display Deleted",
-      description: `The display has been deleted.`,
+      description: `The display has been removed.`,
     });
   };
   
