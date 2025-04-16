@@ -21,6 +21,7 @@ import ImportPage from "./pages/ImportPage";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import ContactUs from "./pages/ContactUs";
+import SiteAdmin from "./pages/SiteAdmin";
 
 const queryClient = new QueryClient();
 
@@ -51,6 +52,7 @@ const App = () => (
             <Route path="displays" element={<Displays />} />
             <Route path="settings" element={<Settings />} />
             <Route path="import" element={<ImportPage />} />
+            <Route path="site-admin" element={<SiteAdmin />} />
           </Route>
           
           {/* Catch-all Route */}

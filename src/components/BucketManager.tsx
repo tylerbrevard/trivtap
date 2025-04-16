@@ -8,6 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Textarea } from "@/components/ui/textarea";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from 'lucide-react';
+import { getStaticQuestions } from "@/utils/staticQuestions";
 
 // Interface for bucket data
 interface Bucket {
@@ -33,17 +34,44 @@ const BucketManager = () => {
     if (storedBuckets) {
       setBuckets(JSON.parse(storedBuckets));
     } else {
-      // Initialize with default bucket
+      // Initialize with default bucket - we'll update the count below
       const defaultBucket: Bucket = {
         id: 'default',
         name: 'Default Bucket',
         description: 'Default questions available to all customers',
-        questionCount: 15, // Use the count from your static questions
+        questionCount: 0, // This will be updated
         isDefault: true
       };
       setBuckets([defaultBucket]);
       localStorage.setItem('trivia-buckets', JSON.stringify([defaultBucket]));
     }
+    
+    // Get accurate question count for the default bucket
+    const updateDefaultBucketCount = async () => {
+      try {
+        const allQuestions = await getStaticQuestions();
+        console.log(`Found ${allQuestions.length} total questions`);
+        
+        // Update the default bucket question count
+        setBuckets(prevBuckets => {
+          const updatedBuckets = prevBuckets.map(bucket => {
+            if (bucket.isDefault) {
+              return { ...bucket, questionCount: allQuestions.length };
+            }
+            return bucket;
+          });
+          
+          // Save to localStorage
+          localStorage.setItem('trivia-buckets', JSON.stringify(updatedBuckets));
+          
+          return updatedBuckets;
+        });
+      } catch (error) {
+        console.error("Error updating default bucket count:", error);
+      }
+    };
+    
+    updateDefaultBucketCount();
   }, []);
   
   // Save buckets to localStorage whenever they change
@@ -241,6 +269,7 @@ const BucketManager = () => {
                   <Button 
                     variant="outline"
                     onClick={() => startEditBucket(bucket)}
+                    disabled={bucket.isDefault}
                   >
                     <Edit className="mr-2 h-4 w-4" />
                     Edit

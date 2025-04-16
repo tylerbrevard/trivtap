@@ -171,6 +171,19 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
     // Get all available questions from localStorage
     const storedQuestions = getAllAvailableQuestions(userId);
     
+    // Check the default bucket for all available questions
+    const defaultBucketStr = localStorage.getItem('trivia-buckets');
+    let defaultBucket = null;
+    
+    if (defaultBucketStr) {
+      const buckets = JSON.parse(defaultBucketStr);
+      defaultBucket = buckets.find(b => b.isDefault);
+    }
+    
+    // Log this for debugging purposes
+    console.log(`Default bucket has ${defaultBucket?.questionCount || 'unknown'} questions`);
+    console.log(`Stored questions count: ${storedQuestions.length}`);
+    
     // Ensure base questions are always included
     let allQuestions = [...baseStaticQuestions];
     
@@ -184,10 +197,36 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
       }
     });
     
+    console.log(`Total questions after combining: ${allQuestions.length}`);
+    
+    // Update the default bucket question count if needed
+    if (defaultBucket && defaultBucket.questionCount !== allQuestions.length) {
+      updateDefaultBucketCount(allQuestions.length);
+    }
+    
     return allQuestions;
   } catch (error) {
     console.error("Error getting static questions:", error);
     return baseStaticQuestions; // Fallback to base questions on error
+  }
+};
+
+// Function to update default bucket question count
+const updateDefaultBucketCount = (count: number) => {
+  try {
+    const bucketsStr = localStorage.getItem('trivia-buckets');
+    if (bucketsStr) {
+      const buckets = JSON.parse(bucketsStr);
+      const defaultBucketIndex = buckets.findIndex(b => b.isDefault);
+      
+      if (defaultBucketIndex >= 0) {
+        buckets[defaultBucketIndex].questionCount = count;
+        localStorage.setItem('trivia-buckets', JSON.stringify(buckets));
+        console.log(`Updated default bucket question count to ${count}`);
+      }
+    }
+  } catch (error) {
+    console.error("Error updating default bucket count:", error);
   }
 };
 
@@ -242,6 +281,9 @@ export const addImportedQuestionsToCollection = async (newQuestions: any[]): Pro
     
     // Save questions to localStorage
     saveQuestionsToLocalStorage(importedQuestions, userId);
+    
+    // Update default bucket question count
+    getStaticQuestions(); // This will trigger the count update
     
     // Return success message with number of questions added
     return `Successfully added ${importedQuestions.length} questions to the collection.`;
@@ -314,10 +356,61 @@ export const removeQuestionFromCollection = async (questionId: string): Promise<
     // Save updated questions back to localStorage
     localStorage.setItem('trivia_questions', JSON.stringify(existingData));
     
+    // Update default bucket question count after removing
+    getStaticQuestions(); // This will trigger the count update
+    
     console.log(`Successfully removed question with ID ${questionId}`);
     return true;
   } catch (error) {
     console.error('Error removing question from collection:', error);
     throw error;
+  }
+};
+
+// Function to clear all imported questions but keep base ones
+export const clearImportedQuestions = async (): Promise<boolean> => {
+  try {
+    // Only keep base questions in storage
+    const userId = await getCurrentUserId();
+    const storageKey = userId || 'default';
+    
+    const existingDataString = localStorage.getItem('trivia_questions');
+    let existingData = {};
+    
+    if (existingDataString) {
+      existingData = JSON.parse(existingDataString);
+    }
+    
+    // Reset to only base questions
+    existingData[storageKey] = [];
+    localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+    
+    // Re-initialize with base questions
+    saveQuestionsToLocalStorage(baseStaticQuestions);
+    
+    // Update default bucket question count
+    updateDefaultBucketCount(baseStaticQuestions.length);
+    
+    console.log("Successfully cleared all imported questions");
+    return true;
+  } catch (error) {
+    console.error('Error clearing imported questions:', error);
+    return false;
+  }
+};
+
+// Function to restore all default questions
+export const restoreDefaultQuestions = async (): Promise<boolean> => {
+  try {
+    saveQuestionsToLocalStorage(baseStaticQuestions);
+    console.log("Successfully restored default questions");
+    
+    // Update default bucket question count
+    updateDefaultBucketCount(baseStaticQuestions.length);
+    
+    return true;
+  } catch (error) {
+    console.error('Error restoring default questions:', error);
+    return false;
   }
 };

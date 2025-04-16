@@ -1,24 +1,49 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
-import { BarChart3, Book, Monitor, Settings as SettingsIcon, PauseCircle, Menu, X, LogOut } from 'lucide-react';
+import { BarChart3, Book, Monitor, Settings as SettingsIcon, PauseCircle, Menu, X, LogOut, ShieldAlert } from 'lucide-react';
 import { Button } from "@/components/ui/button";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
 
 // Mock authentication state
 const useAuth = () => {
   // In a real app, this would check for authentication tokens and validate them
   const [isAuthenticated, setIsAuthenticated] = useState(true); // Default to true for demo
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [user, setUser] = useState<any>(null);
   
-  const logout = () => {
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        setIsAuthenticated(true);
+        setUser(session.user);
+        
+        // Check if admin (for demo, we'll hard-code the admin email)
+        setIsAdmin(session.user.email === 'lyonrt@gmail.com');
+      } else {
+        setIsAuthenticated(false);
+        setUser(null);
+        setIsAdmin(false);
+      }
+    };
+    
+    checkAuth();
+  }, []);
+  
+  const logout = async () => {
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
+    setUser(null);
+    setIsAdmin(false);
   };
   
-  return { isAuthenticated, logout };
+  return { isAuthenticated, isAdmin, user, logout };
 };
 
 const AdminLayout = () => {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated, isAdmin, user, logout } = useAuth();
   const location = useLocation();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const { toast } = useToast();
@@ -43,8 +68,33 @@ const AdminLayout = () => {
     { name: 'Settings', path: '/admin/settings', icon: SettingsIcon },
   ];
   
+  // Add admin link if user is admin
+  if (isAdmin) {
+    navItems.push({
+      name: 'Site Admin',
+      path: '/admin/site-admin',
+      icon: ShieldAlert
+    });
+  }
+  
   return (
     <div className="flex min-h-screen bg-background">
+      {/* Status Bar - Only show if enabled */}
+      {(() => {
+        const statusBarSettings = localStorage.getItem('trivia-status-bar');
+        if (statusBarSettings) {
+          const { enabled, message } = JSON.parse(statusBarSettings);
+          if (enabled) {
+            return (
+              <div className="fixed top-0 left-0 w-full bg-primary text-white z-50 p-2 text-center">
+                {message}
+              </div>
+            );
+          }
+        }
+        return null;
+      })()}
+      
       {/* Mobile sidebar toggle */}
       <div className="fixed top-5 left-5 z-50 md:hidden">
         <Button 
@@ -68,6 +118,19 @@ const AdminLayout = () => {
           <div className="flex items-center justify-center h-16 border-b border-border">
             <h1 className="text-xl font-bold text-primary">TriviaPulse</h1>
           </div>
+          
+          {/* User info */}
+          {user && (
+            <div className="px-4 py-2 border-b border-border">
+              <p className="text-sm font-medium truncate">{user.email}</p>
+              {isAdmin && (
+                <div className="flex items-center mt-1">
+                  <ShieldAlert className="h-3 w-3 text-destructive mr-1" />
+                  <span className="text-xs text-destructive">Admin</span>
+                </div>
+              )}
+            </div>
+          )}
           
           {/* Navigation */}
           <nav className="flex-1 px-2 py-4 space-y-1">
