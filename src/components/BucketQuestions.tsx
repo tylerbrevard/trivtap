@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
+import { getStaticQuestions, StaticQuestion, getImportedQuestions } from "@/utils/staticQuestions";
 
 interface BucketQuestionsProps {
   bucketId: string;
@@ -37,6 +37,7 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
         
         // Get all static questions
         const allQuestions = await getStaticQuestions();
+        console.log(`Fetched ${allQuestions.length} total questions for filtering by bucket`);
         
         // For now, we'll filter by category that matches the bucket name
         // In a real implementation, you'd need to have a proper bucket-question association

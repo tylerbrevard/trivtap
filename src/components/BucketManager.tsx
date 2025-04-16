@@ -27,59 +27,65 @@ const BucketManager = () => {
   const [editingBucketId, setEditingBucketId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [editDescription, setEditDescription] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
   
   // Load buckets from localStorage or initialize with default
   useEffect(() => {
-    const storedBuckets = localStorage.getItem('trivia-buckets');
-    if (storedBuckets) {
-      setBuckets(JSON.parse(storedBuckets));
-    } else {
-      // Initialize with default bucket - we'll update the count below
-      const defaultBucket: Bucket = {
-        id: 'default',
-        name: 'Default Bucket',
-        description: 'Default questions available to all customers',
-        questionCount: 0, // This will be updated
-        isDefault: true
-      };
-      setBuckets([defaultBucket]);
-      localStorage.setItem('trivia-buckets', JSON.stringify([defaultBucket]));
-    }
-    
-    // Get accurate question count for the default bucket
-    const updateDefaultBucketCount = async () => {
+    const loadBuckets = async () => {
+      setIsLoading(true);
+      
+      const storedBuckets = localStorage.getItem('trivia-buckets');
+      let initialBuckets: Bucket[] = [];
+      
+      if (storedBuckets) {
+        initialBuckets = JSON.parse(storedBuckets);
+      } else {
+        // Initialize with default bucket - we'll update the count below
+        const defaultBucket: Bucket = {
+          id: 'default',
+          name: 'Default Bucket',
+          description: 'Default questions available to all customers',
+          questionCount: 0, // This will be updated
+          isDefault: true
+        };
+        initialBuckets = [defaultBucket];
+        localStorage.setItem('trivia-buckets', JSON.stringify(initialBuckets));
+      }
+      
+      setBuckets(initialBuckets);
+      
+      // Get accurate question count for the default bucket
       try {
         const allQuestions = await getStaticQuestions();
-        console.log(`Found ${allQuestions.length} total questions`);
+        console.log(`Found ${allQuestions.length} total questions for bucket count update`);
         
         // Update the default bucket question count
-        setBuckets(prevBuckets => {
-          const updatedBuckets = prevBuckets.map(bucket => {
-            if (bucket.isDefault) {
-              return { ...bucket, questionCount: allQuestions.length };
-            }
-            return bucket;
-          });
-          
-          // Save to localStorage
-          localStorage.setItem('trivia-buckets', JSON.stringify(updatedBuckets));
-          
-          return updatedBuckets;
+        const updatedBuckets = initialBuckets.map(bucket => {
+          if (bucket.isDefault) {
+            return { ...bucket, questionCount: allQuestions.length };
+          }
+          return bucket;
         });
+        
+        // Save to localStorage
+        localStorage.setItem('trivia-buckets', JSON.stringify(updatedBuckets));
+        setBuckets(updatedBuckets);
       } catch (error) {
         console.error("Error updating default bucket count:", error);
+      } finally {
+        setIsLoading(false);
       }
     };
     
-    updateDefaultBucketCount();
+    loadBuckets();
   }, []);
   
   // Save buckets to localStorage whenever they change
   useEffect(() => {
-    if (buckets.length > 0) {
+    if (buckets.length > 0 && !isLoading) {
       localStorage.setItem('trivia-buckets', JSON.stringify(buckets));
     }
-  }, [buckets]);
+  }, [buckets, isLoading]);
   
   const handleAddBucket = () => {
     if (!newBucketName.trim()) {
@@ -189,10 +195,45 @@ const BucketManager = () => {
     setEditingBucketId(null);
   };
   
+  const refreshDefaultBucketCount = async () => {
+    try {
+      const allQuestions = await getStaticQuestions();
+      console.log(`Refreshing default bucket count: ${allQuestions.length} questions found`);
+      
+      const updatedBuckets = buckets.map(bucket => {
+        if (bucket.isDefault) {
+          return { ...bucket, questionCount: allQuestions.length };
+        }
+        return bucket;
+      });
+      
+      setBuckets(updatedBuckets);
+      localStorage.setItem('trivia-buckets', JSON.stringify(updatedBuckets));
+      
+      toast({
+        title: "Bucket Count Updated",
+        description: `Default bucket now shows ${allQuestions.length} questions.`,
+      });
+    } catch (error) {
+      console.error("Error refreshing default bucket count:", error);
+      toast({
+        title: "Error",
+        description: "Failed to refresh bucket question count.",
+        variant: "destructive",
+      });
+    }
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold">Question Buckets</h2>
+        <Button
+          variant="outline"
+          onClick={refreshDefaultBucketCount}
+        >
+          Refresh Default Bucket Count
+        </Button>
       </div>
       
       <Alert>
@@ -203,123 +244,129 @@ const BucketManager = () => {
         </AlertDescription>
       </Alert>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {buckets.map(bucket => (
-          <Card key={bucket.id}>
-            <CardHeader className="pb-2">
-              {editingBucketId === bucket.id ? (
-                <Input 
-                  value={editName}
-                  onChange={(e) => setEditName(e.target.value)}
-                  placeholder="Bucket name"
-                  className="font-semibold"
-                />
-              ) : (
-                <CardTitle className="flex items-center justify-between">
-                  <span>{bucket.name}</span>
-                  {bucket.isDefault && (
-                    <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
-                      Default
-                    </span>
-                  )}
-                </CardTitle>
-              )}
+      {isLoading ? (
+        <div className="flex justify-center items-center py-12">
+          <div className="animate-spin h-8 w-8 border-4 border-primary border-t-transparent rounded-full"></div>
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {buckets.map(bucket => (
+            <Card key={bucket.id}>
+              <CardHeader className="pb-2">
+                {editingBucketId === bucket.id ? (
+                  <Input 
+                    value={editName}
+                    onChange={(e) => setEditName(e.target.value)}
+                    placeholder="Bucket name"
+                    className="font-semibold"
+                  />
+                ) : (
+                  <CardTitle className="flex items-center justify-between">
+                    <span>{bucket.name}</span>
+                    {bucket.isDefault && (
+                      <span className="text-xs bg-primary/20 text-primary px-2 py-1 rounded-full">
+                        Default
+                      </span>
+                    )}
+                  </CardTitle>
+                )}
+                
+                {editingBucketId === bucket.id ? (
+                  <Textarea 
+                    value={editDescription}
+                    onChange={(e) => setEditDescription(e.target.value)}
+                    placeholder="Description (optional)"
+                    className="text-sm text-muted-foreground mt-2"
+                    rows={2}
+                  />
+                ) : (
+                  <CardDescription>
+                    {bucket.description || "No description provided"}
+                  </CardDescription>
+                )}
+              </CardHeader>
               
-              {editingBucketId === bucket.id ? (
-                <Textarea 
-                  value={editDescription}
-                  onChange={(e) => setEditDescription(e.target.value)}
-                  placeholder="Description (optional)"
-                  className="text-sm text-muted-foreground mt-2"
-                  rows={2}
-                />
-              ) : (
-                <CardDescription>
-                  {bucket.description || "No description provided"}
-                </CardDescription>
-              )}
-            </CardHeader>
-            
-            <CardContent>
-              <div className="text-sm">
-                <span className="font-medium">{bucket.questionCount}</span> questions
-              </div>
-            </CardContent>
-            
-            <CardFooter className="flex justify-between">
-              {editingBucketId === bucket.id ? (
-                <div className="flex space-x-2 w-full">
-                  <Button 
-                    variant="outline" 
-                    size="icon"
-                    onClick={cancelEditBucket}
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                  <Button 
-                    className="flex-1"
-                    onClick={() => saveEditBucket(bucket.id)}
-                  >
-                    <Save className="mr-2 h-4 w-4" />
-                    Save Changes
-                  </Button>
+              <CardContent>
+                <div className="text-sm">
+                  <span className="font-medium">{bucket.questionCount}</span> questions
                 </div>
-              ) : (
-                <>
-                  <Button 
-                    variant="outline"
-                    onClick={() => startEditBucket(bucket)}
-                    disabled={bucket.isDefault}
-                  >
-                    <Edit className="mr-2 h-4 w-4" />
-                    Edit
-                  </Button>
-                  <Button 
-                    variant="destructive"
-                    onClick={() => handleDeleteBucket(bucket.id, bucket.isDefault)}
-                    disabled={bucket.isDefault}
-                  >
-                    <Trash className="mr-2 h-4 w-4" />
-                    Delete
-                  </Button>
-                </>
-              )}
+              </CardContent>
+              
+              <CardFooter className="flex justify-between">
+                {editingBucketId === bucket.id ? (
+                  <div className="flex space-x-2 w-full">
+                    <Button 
+                      variant="outline" 
+                      size="icon"
+                      onClick={cancelEditBucket}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                    <Button 
+                      className="flex-1"
+                      onClick={() => saveEditBucket(bucket.id)}
+                    >
+                      <Save className="mr-2 h-4 w-4" />
+                      Save Changes
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <Button 
+                      variant="outline"
+                      onClick={() => startEditBucket(bucket)}
+                      disabled={bucket.isDefault}
+                    >
+                      <Edit className="mr-2 h-4 w-4" />
+                      Edit
+                    </Button>
+                    <Button 
+                      variant="destructive"
+                      onClick={() => handleDeleteBucket(bucket.id, bucket.isDefault)}
+                      disabled={bucket.isDefault}
+                    >
+                      <Trash className="mr-2 h-4 w-4" />
+                      Delete
+                    </Button>
+                  </>
+                )}
+              </CardFooter>
+            </Card>
+          ))}
+          
+          {/* New Bucket Form */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Create New Bucket</CardTitle>
+              <CardDescription>
+                Add a new collection of questions
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                placeholder="Bucket Name"
+                value={newBucketName}
+                onChange={(e) => setNewBucketName(e.target.value)}
+              />
+              <Textarea
+                placeholder="Description (optional)"
+                value={newBucketDescription}
+                onChange={(e) => setNewBucketDescription(e.target.value)}
+                rows={3}
+              />
+            </CardContent>
+            <CardFooter>
+              <Button 
+                onClick={handleAddBucket} 
+                className="w-full"
+              >
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Create Bucket
+              </Button>
             </CardFooter>
           </Card>
-        ))}
-        
-        {/* New Bucket Form */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Bucket</CardTitle>
-            <CardDescription>
-              Add a new collection of questions
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Input
-              placeholder="Bucket Name"
-              value={newBucketName}
-              onChange={(e) => setNewBucketName(e.target.value)}
-            />
-            <Textarea
-              placeholder="Description (optional)"
-              value={newBucketDescription}
-              onChange={(e) => setNewBucketDescription(e.target.value)}
-              rows={3}
-            />
-          </CardContent>
-          <CardFooter>
-            <Button 
-              onClick={handleAddBucket} 
-              className="w-full"
-            >
-              <PlusCircle className="mr-2 h-4 w-4" />
-              Create Bucket
-            </Button>
-          </CardFooter>
-        </Card>
-      </div>
+        </div>
+      )}
     </div>
   );
 };

@@ -1,3 +1,4 @@
+
 import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions, convertQuestionsToCSV } from './importUtils';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -163,13 +164,53 @@ export const getCurrentUserId = async (): Promise<string | undefined> => {
   }
 };
 
+// Check for the presence of imported questions in localStorage
+const hasImportedQuestions = (): boolean => {
+  try {
+    // Check for the presence of imported_questions key
+    const importedQuestionsStr = localStorage.getItem('imported_questions');
+    if (importedQuestionsStr) {
+      const importedQuestions = JSON.parse(importedQuestionsStr);
+      return Array.isArray(importedQuestions) && importedQuestions.length > 0;
+    }
+    return false;
+  } catch (error) {
+    console.error("Error checking for imported questions:", error);
+    return false;
+  }
+};
+
+// Get imported questions from localStorage
+const getImportedQuestions = (): StaticQuestion[] => {
+  try {
+    const importedQuestionsStr = localStorage.getItem('imported_questions');
+    if (importedQuestionsStr) {
+      return JSON.parse(importedQuestionsStr) || [];
+    }
+    return [];
+  } catch (error) {
+    console.error("Error getting imported questions:", error);
+    return [];
+  }
+};
+
 // Get all static questions, combining base questions with user-imported ones
 export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
   try {
     const userId = await getCurrentUserId();
+    console.log(`Getting questions for user: ${userId || 'anonymous'}`);
     
-    // Get all available questions from localStorage
-    const storedQuestions = getAllAvailableQuestions(userId);
+    // Check for imported questions first
+    const hasImported = hasImportedQuestions();
+    console.log(`Has imported questions: ${hasImported}`);
+    
+    // Get stored user questions from localStorage
+    const storedUserQuestions = getQuestionsFromLocalStorage(userId);
+    console.log(`Stored user questions count: ${storedUserQuestions.length}`);
+    
+    // Get stored imported questions
+    const importedQuestions = getImportedQuestions();
+    console.log(`Imported questions count: ${importedQuestions.length}`);
     
     // Check the default bucket for all available questions
     const defaultBucketStr = localStorage.getItem('trivia-buckets');
@@ -180,20 +221,28 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
       defaultBucket = buckets.find(b => b.isDefault);
     }
     
-    // Log this for debugging purposes
-    console.log(`Default bucket has ${defaultBucket?.questionCount || 'unknown'} questions`);
-    console.log(`Stored questions count: ${storedQuestions.length}`);
-    
-    // Ensure base questions are always included
+    // Start with base questions
     let allQuestions = [...baseStaticQuestions];
     
-    // Add stored questions, avoiding duplicates by ID
-    const existingIds = new Set(allQuestions.map(q => q.id));
+    // Add imported questions if available
+    if (hasImported) {
+      // Add imported questions, avoiding duplicates by ID
+      const existingIds = new Set(allQuestions.map(q => q.id));
+      
+      importedQuestions.forEach(question => {
+        if (!existingIds.has(question.id)) {
+          allQuestions.push(question);
+          existingIds.add(question.id);
+        }
+      });
+    }
     
-    storedQuestions.forEach(question => {
-      if (!existingIds.has(question.id)) {
+    // Add user-specific questions, avoiding duplicates
+    const allExistingIds = new Set(allQuestions.map(q => q.id));
+    storedUserQuestions.forEach(question => {
+      if (!allExistingIds.has(question.id)) {
         allQuestions.push(question);
-        existingIds.add(question.id);
+        allExistingIds.add(question.id);
       }
     });
     
@@ -260,8 +309,7 @@ export const formatQuestionsForGame = (questions: StaticQuestion[], defaultTimeL
 // Function to add imported questions to the collection
 export const addImportedQuestionsToCollection = async (newQuestions: any[]): Promise<string> => {
   try {
-    // Get current user ID if available
-    const userId = await getCurrentUserId();
+    console.log(`Adding ${newQuestions.length} questions to the collection`);
     
     // Generate new IDs for the imported questions
     const importedQuestions = newQuestions.map((question, index) => {
@@ -279,11 +327,13 @@ export const addImportedQuestionsToCollection = async (newQuestions: any[]): Pro
       return newQuestion;
     });
     
-    // Save questions to localStorage
-    saveQuestionsToLocalStorage(importedQuestions, userId);
+    // Save to imported_questions in localStorage for admin usage
+    localStorage.setItem('imported_questions', JSON.stringify(importedQuestions));
+    console.log(`Saved ${importedQuestions.length} questions to imported_questions`);
     
     // Update default bucket question count
-    getStaticQuestions(); // This will trigger the count update
+    const allQuestions = await getStaticQuestions();
+    updateDefaultBucketCount(allQuestions.length);
     
     // Return success message with number of questions added
     return `Successfully added ${importedQuestions.length} questions to the collection.`;
@@ -370,26 +420,13 @@ export const removeQuestionFromCollection = async (questionId: string): Promise<
 // Function to clear all imported questions but keep base ones
 export const clearImportedQuestions = async (): Promise<boolean> => {
   try {
-    // Only keep base questions in storage
-    const userId = await getCurrentUserId();
-    const storageKey = userId || 'default';
-    
-    const existingDataString = localStorage.getItem('trivia_questions');
-    let existingData = {};
-    
-    if (existingDataString) {
-      existingData = JSON.parse(existingDataString);
-    }
-    
-    // Reset to only base questions
-    existingData[storageKey] = [];
-    localStorage.setItem('trivia_questions', JSON.stringify(existingData));
-    
-    // Re-initialize with base questions
-    saveQuestionsToLocalStorage(baseStaticQuestions);
+    // Clear imported questions
+    localStorage.removeItem('imported_questions');
+    console.log("Cleared imported_questions from localStorage");
     
     // Update default bucket question count
-    updateDefaultBucketCount(baseStaticQuestions.length);
+    const allQuestions = await getStaticQuestions();
+    updateDefaultBucketCount(allQuestions.length);
     
     console.log("Successfully cleared all imported questions");
     return true;
@@ -402,15 +439,39 @@ export const clearImportedQuestions = async (): Promise<boolean> => {
 // Function to restore all default questions
 export const restoreDefaultQuestions = async (): Promise<boolean> => {
   try {
-    saveQuestionsToLocalStorage(baseStaticQuestions);
-    console.log("Successfully restored default questions");
+    // Get original imported questions from backup if available
+    const originalQuestionsStr = localStorage.getItem('original_imported_questions');
+    if (originalQuestionsStr) {
+      localStorage.setItem('imported_questions', originalQuestionsStr);
+      console.log("Restored original imported questions from backup");
+    } else {
+      console.log("No backup of original imported questions found");
+    }
     
     // Update default bucket question count
-    updateDefaultBucketCount(baseStaticQuestions.length);
+    const allQuestions = await getStaticQuestions();
+    updateDefaultBucketCount(allQuestions.length);
     
+    console.log("Successfully restored default questions");
     return true;
   } catch (error) {
     console.error('Error restoring default questions:', error);
+    return false;
+  }
+};
+
+// Function to backup current imported questions
+export const backupImportedQuestions = (): boolean => {
+  try {
+    const importedQuestionsStr = localStorage.getItem('imported_questions');
+    if (importedQuestionsStr) {
+      localStorage.setItem('original_imported_questions', importedQuestionsStr);
+      console.log("Successfully backed up imported questions");
+      return true;
+    }
+    return false;
+  } catch (error) {
+    console.error('Error backing up imported questions:', error);
     return false;
   }
 };
