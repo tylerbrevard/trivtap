@@ -10,8 +10,9 @@ import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
-import { Loader2, Users, BarChart, Award, MessageSquare, Settings, ShieldAlert } from "lucide-react";
-import { Navigate } from 'react-router-dom';
+import { Loader2, Users, BarChart, Award, MessageSquare, Settings, ShieldAlert, Image } from "lucide-react";
+import { Navigate, useNavigate } from 'react-router-dom';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 // Define types for the components
 interface AdminUser {
@@ -23,7 +24,7 @@ interface AdminUser {
 interface Customer {
   id: string;
   email: string;
-  businessName: string;
+  businessName: string | null;
   gamesPlayed: number;
   currentPlayers: number;
   registeredPlayers: number;
@@ -36,14 +37,27 @@ interface StatusBarSettings {
   message: string;
 }
 
+interface DefaultSlide {
+  id: string;
+  title: string;
+  content: string | null;
+  type: string;
+  imageUrl: string | null;
+  enabled: boolean;
+}
+
 const SiteAdmin = () => {
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [currentTab, setCurrentTab] = useState("customers");
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [newAdminEmail, setNewAdminEmail] = useState("");
+  const [defaultSlides, setDefaultSlides] = useState<DefaultSlide[]>([]);
+  const [selectedSlide, setSelectedSlide] = useState<DefaultSlide | null>(null);
+  const [isEditingSlide, setIsEditingSlide] = useState(false);
   const [statusBar, setStatusBar] = useState<StatusBarSettings>({
     enabled: false,
     message: "Welcome to TriviaPulse! Check out our latest features."
@@ -80,7 +94,8 @@ const SiteAdmin = () => {
           await Promise.all([
             loadCustomers(),
             loadAdminUsers(),
-            loadStatusBarSettings()
+            loadStatusBarSettings(),
+            loadDefaultSlides()
           ]);
         }
       } catch (error) {
@@ -100,65 +115,78 @@ const SiteAdmin = () => {
   
   // Load customers data
   const loadCustomers = async () => {
-    // This would typically fetch from the database
-    // For demo, we'll use mock data
-    const mockCustomers: Customer[] = [
-      {
-        id: "1",
-        email: "pub1@example.com",
-        businessName: "The Thirsty Scholar",
-        gamesPlayed: 23,
-        currentPlayers: 0,
-        registeredPlayers: 145,
-        createdAt: "2024-03-01",
-        lastActive: "2024-04-14"
-      },
-      {
-        id: "2",
-        email: "pub2@example.com",
-        businessName: "Game Night Bar",
-        gamesPlayed: 15,
-        currentPlayers: 12,
-        registeredPlayers: 87,
-        createdAt: "2024-02-15",
-        lastActive: "2024-04-15"
-      },
-      {
-        id: "3",
-        email: "pub3@example.com",
-        businessName: "Trivia Tavern",
-        gamesPlayed: 31,
-        currentPlayers: 8,
-        registeredPlayers: 203,
-        createdAt: "2024-01-12",
-        lastActive: "2024-04-16"
+    try {
+      // Get all profiles with their user data
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('*');
+      
+      if (error) {
+        throw error;
       }
-    ];
-    
-    setCustomers(mockCustomers);
-    
-    // In a real app, you'd fetch from Supabase
-    // const { data, error } = await supabase
-    //   .from('profiles')
-    //   .select('*')
-    //   .order('created_at', { ascending: false });
-    
-    // if (error) {
-    //   console.error("Error loading customers:", error);
-    //   toast({
-    //     title: "Error",
-    //     description: "Failed to load customer data.",
-    //     variant: "destructive",
-    //   });
-    //   return;
-    // }
-    
-    // setCustomers(data || []);
+      
+      // Fetch game counts from games table
+      const { data: games } = await supabase
+        .from('games')
+        .select('*');
+      
+      // Fetch player counts
+      const { data: players } = await supabase
+        .from('players')
+        .select('*');
+      
+      // Fetch registered player counts
+      const { data: registeredPlayers } = await supabase
+        .from('registered_players')
+        .select('*');
+      
+      // Transform data to customer format
+      const customerData: Customer[] = (profiles || []).map(profile => {
+        // Count games for this profile owner
+        const userGames = (games || []).filter(game => {
+          // Assuming some relationship between game and owner
+          // This would need to be adjusted based on actual data structure
+          return true; // Placeholder for actual relation
+        }).length;
+        
+        // Count current active players
+        const activePlayerCount = (players || []).filter(player => {
+          // Filter active players for this profile owner
+          return player.is_active;
+        }).length;
+        
+        // Count registered players for this profile owner
+        const registeredPlayerCount = (registeredPlayers || []).length;
+        
+        // Get user email from auth.users (mock for now)
+        const userEmail = "user@example.com"; // Placeholder
+        
+        return {
+          id: profile.id,
+          email: userEmail,
+          businessName: profile.business_name,
+          gamesPlayed: userGames,
+          currentPlayers: activePlayerCount,
+          registeredPlayers: registeredPlayerCount,
+          createdAt: profile.created_at,
+          lastActive: profile.updated_at
+        };
+      });
+      
+      setCustomers(customerData);
+    } catch (error) {
+      console.error("Error loading customers:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load customer data.",
+        variant: "destructive",
+      });
+    }
   };
   
   // Load admin users
   const loadAdminUsers = async () => {
-    // For demo purposes
+    // For now, we'll just load the hardcoded admin
     const mockAdmins: AdminUser[] = [
       {
         id: "1",
@@ -205,6 +233,38 @@ const SiteAdmin = () => {
     // if (data) {
     //   setStatusBar(data.value);
     // }
+  };
+  
+  // Load default slides
+  const loadDefaultSlides = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('slides')
+        .select('*')
+        .is('owner_id', null);
+      
+      if (error) {
+        throw error;
+      }
+      
+      const formattedSlides: DefaultSlide[] = (data || []).map(slide => ({
+        id: slide.id,
+        title: slide.title,
+        content: slide.content,
+        type: slide.type,
+        imageUrl: slide.image_url,
+        enabled: slide.enabled
+      }));
+      
+      setDefaultSlides(formattedSlides);
+    } catch (error) {
+      console.error("Error loading default slides:", error);
+      toast({
+        title: "Error",
+        description: "Failed to load default slides.",
+        variant: "destructive",
+      });
+    }
   };
   
   // Add new admin
@@ -292,6 +352,11 @@ const SiteAdmin = () => {
     // }
   };
   
+  // Handle clicking on Manage Default Slides
+  const handleManageDefaultSlides = () => {
+    setCurrentTab("settings");
+  };
+  
   // If user is not authorized, redirect to dashboard
   if (!loading && !isAuthorized) {
     return <Navigate to="/admin/dashboard" />;
@@ -343,35 +408,41 @@ const SiteAdmin = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Business</TableHead>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Games Played</TableHead>
-                    <TableHead>Registered Players</TableHead>
-                    <TableHead>Last Active</TableHead>
-                    <TableHead>Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {customers.map((customer) => (
-                    <TableRow key={customer.id}>
-                      <TableCell className="font-medium">{customer.businessName}</TableCell>
-                      <TableCell>{customer.email}</TableCell>
-                      <TableCell>{customer.gamesPlayed}</TableCell>
-                      <TableCell>{customer.registeredPlayers}</TableCell>
-                      <TableCell>{customer.lastActive}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">View</Button>
-                          <Button variant="outline" size="sm">Manage</Button>
-                        </div>
-                      </TableCell>
+              {customers.length === 0 ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground">No customer data available</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Business</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Games Played</TableHead>
+                      <TableHead>Registered Players</TableHead>
+                      <TableHead>Last Active</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                  </TableHeader>
+                  <TableBody>
+                    {customers.map((customer) => (
+                      <TableRow key={customer.id}>
+                        <TableCell className="font-medium">{customer.businessName || "Not specified"}</TableCell>
+                        <TableCell>{customer.email}</TableCell>
+                        <TableCell>{customer.gamesPlayed}</TableCell>
+                        <TableCell>{customer.registeredPlayers}</TableCell>
+                        <TableCell>{new Date(customer.lastActive).toLocaleDateString()}</TableCell>
+                        <TableCell>
+                          <div className="flex space-x-2">
+                            <Button variant="outline" size="sm">View</Button>
+                            <Button variant="outline" size="sm">Manage</Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -536,8 +607,68 @@ const SiteAdmin = () => {
                       Manage default trivia slides for all customers
                     </p>
                   </div>
-                  <Button>Manage Default Slides</Button>
+                  <Button onClick={() => navigate('/admin/intermission')}>
+                    Manage Default Slides
+                  </Button>
                 </div>
+              </div>
+              
+              <div className="space-y-4 border-t pt-4">
+                <div className="flex items-center justify-between mt-4">
+                  <h3 className="text-lg font-medium">Default Slides Library</h3>
+                  <Button variant="outline" size="sm" onClick={loadDefaultSlides}>
+                    Refresh
+                  </Button>
+                </div>
+                
+                {defaultSlides.length === 0 ? (
+                  <div className="text-center py-8 border rounded-md bg-muted/20">
+                    <Image className="h-12 w-12 text-muted-foreground mx-auto mb-2" />
+                    <p className="text-muted-foreground">No default slides available</p>
+                    <Button className="mt-4" size="sm" onClick={() => navigate('/admin/intermission')}>
+                      Create Default Slides
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {defaultSlides.map((slide) => (
+                      <Card key={slide.id} className={!slide.enabled ? "opacity-50" : ""}>
+                        <CardHeader className="pb-2">
+                          <CardTitle className="text-sm font-medium flex justify-between">
+                            <span>{slide.title}</span>
+                            <span className={`text-xs px-2 py-1 rounded-full ${slide.enabled ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
+                              {slide.enabled ? 'Enabled' : 'Disabled'}
+                            </span>
+                          </CardTitle>
+                          <CardDescription>
+                            {slide.type}
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="h-24 overflow-hidden">
+                          {slide.type === 'image' && slide.imageUrl ? (
+                            <div className="w-full h-full bg-muted rounded-md flex items-center justify-center">
+                              <Image className="h-8 w-8 text-muted-foreground" />
+                            </div>
+                          ) : (
+                            <p className="line-clamp-3 text-sm text-muted-foreground">
+                              {slide.content || 'No content'}
+                            </p>
+                          )}
+                        </CardContent>
+                        <CardFooter>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            className="w-full"
+                            onClick={() => navigate(`/admin/intermission?slideId=${slide.id}`)}
+                          >
+                            Edit
+                          </Button>
+                        </CardFooter>
+                      </Card>
+                    ))}
+                  </div>
+                )}
               </div>
               
               <div className="border-t pt-4">
@@ -548,7 +679,7 @@ const SiteAdmin = () => {
                       Manage the default question library
                     </p>
                   </div>
-                  <Button onClick={() => window.location.href = '/admin/import'}>
+                  <Button onClick={() => navigate('/admin/import')}>
                     Import Questions
                   </Button>
                 </div>

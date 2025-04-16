@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Outlet, Link, useLocation, Navigate } from 'react-router-dom';
 import { BarChart3, Book, Monitor, Settings as SettingsIcon, PauseCircle, Menu, X, LogOut, ShieldAlert } from 'lucide-react';
