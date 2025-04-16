@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 
 // Mock display data
 const initialDisplays = [
@@ -64,14 +66,6 @@ const initialDisplays = [
   },
 ];
 
-// Mock bucket data
-const buckets = [
-  { id: "default", name: "Default Bucket", questionCount: 248 },
-  { id: "pub-night", name: "Pub Night Specials", questionCount: 85 },
-  { id: "easy-round", name: "Easy Questions", questionCount: 64 },
-  { id: "hard-round", name: "Challenging Round", questionCount: 42 },
-];
-
 const Displays = () => {
   const { toast } = useToast();
   const [displays, setDisplays] = useState(() => {
@@ -80,10 +74,36 @@ const Displays = () => {
     return savedDisplays ? JSON.parse(savedDisplays) : initialDisplays;
   });
   
+  const [buckets, setBuckets] = useState<{ id: string; name: string; questionCount: number; isDefault?: boolean }[]>([]);
+  const [newDisplayName, setNewDisplayName] = useState('');
+  const [newDisplayBucket, setNewDisplayBucket] = useState('default');
+  const [changeBucketDialogOpen, setChangeBucketDialogOpen] = useState(false);
+  const [selectedDisplay, setSelectedDisplay] = useState<any>(null);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [editDisplayName, setEditDisplayName] = useState('');
+  
   // Save displays to localStorage whenever they change
   useEffect(() => {
     localStorage.setItem('trivia-displays', JSON.stringify(displays));
   }, [displays]);
+  
+  // Load buckets from localStorage
+  useEffect(() => {
+    const storedBuckets = localStorage.getItem('trivia-buckets');
+    if (storedBuckets) {
+      setBuckets(JSON.parse(storedBuckets));
+    } else {
+      // Initialize with default bucket
+      const defaultBucket = { 
+        id: 'default', 
+        name: 'Default Bucket', 
+        questionCount: 15,
+        isDefault: true
+      };
+      setBuckets([defaultBucket]);
+      localStorage.setItem('trivia-buckets', JSON.stringify([defaultBucket]));
+    }
+  }, []);
   
   const handleCopyLink = (displayId: string) => {
     // In a real app, this would copy the actual URL
@@ -156,6 +176,164 @@ const Displays = () => {
     });
   };
   
+  // Handler for creating a new display
+  const handleCreateDisplay = () => {
+    if (!newDisplayName.trim()) {
+      toast({
+        title: "Error",
+        description: "Display name cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Get selected bucket
+    const selectedBucket = buckets.find(b => b.id === newDisplayBucket);
+    if (!selectedBucket) {
+      toast({
+        title: "Error",
+        description: "Please select a valid question bucket.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Create new display
+    const newDisplay = {
+      id: `display-${Date.now()}`,
+      name: newDisplayName.trim(),
+      status: 'inactive',
+      totalQuestions: selectedBucket.questionCount,
+      activePlayers: 0,
+      lastActive: 'Never',
+      isDefault: false,
+      bucket: newDisplayBucket,
+    };
+    
+    setDisplays([...displays, newDisplay]);
+    setNewDisplayName('');
+    
+    toast({
+      title: "Display Created",
+      description: "New display screen has been created successfully.",
+    });
+  };
+  
+  // Handler for opening change bucket dialog
+  const handleOpenChangeBucketDialog = (display: any) => {
+    if (display.isDefault) {
+      toast({
+        title: "Cannot Change Default Display Bucket",
+        description: "The default display's bucket cannot be changed as it uses the default bucket.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setSelectedDisplay(display);
+    setChangeBucketDialogOpen(true);
+  };
+  
+  // Handler for changing display bucket
+  const handleChangeBucket = (bucketId: string) => {
+    if (!selectedDisplay) return;
+    
+    // Update the display's bucket
+    const updatedDisplays = displays.map(display => {
+      if (display.id === selectedDisplay.id) {
+        const selectedBucket = buckets.find(b => b.id === bucketId);
+        return {
+          ...display,
+          bucket: bucketId,
+          totalQuestions: selectedBucket ? selectedBucket.questionCount : 0
+        };
+      }
+      return display;
+    });
+    
+    setDisplays(updatedDisplays);
+    setChangeBucketDialogOpen(false);
+    setSelectedDisplay(null);
+    
+    toast({
+      title: "Bucket Changed",
+      description: "The display's question bucket has been updated.",
+    });
+  };
+  
+  // Handler for opening edit display dialog
+  const handleOpenEditDialog = (display: any) => {
+    if (display.isDefault) {
+      toast({
+        title: "Cannot Edit Default Display",
+        description: "The default display cannot be modified.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setSelectedDisplay(display);
+    setEditDisplayName(display.name);
+    setEditDialogOpen(true);
+  };
+  
+  // Handler for saving display edits
+  const handleSaveDisplayEdit = () => {
+    if (!selectedDisplay) return;
+    
+    if (!editDisplayName.trim()) {
+      toast({
+        title: "Error",
+        description: "Display name cannot be empty.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Update the display's name
+    const updatedDisplays = displays.map(display => {
+      if (display.id === selectedDisplay.id) {
+        return {
+          ...display,
+          name: editDisplayName.trim()
+        };
+      }
+      return display;
+    });
+    
+    setDisplays(updatedDisplays);
+    setEditDialogOpen(false);
+    setSelectedDisplay(null);
+    
+    toast({
+      title: "Display Updated",
+      description: "The display name has been updated.",
+    });
+  };
+  
+  // Handler for toggling display status
+  const handleToggleDisplayStatus = (displayId: string, currentStatus: string) => {
+    // Update the display's status
+    const updatedDisplays = displays.map(display => {
+      if (display.id === displayId) {
+        const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
+        return {
+          ...display,
+          status: newStatus,
+          lastActive: newStatus === 'active' ? 'Now' : display.lastActive
+        };
+      }
+      return display;
+    });
+    
+    setDisplays(updatedDisplays);
+    
+    toast({
+      title: "Display Status Updated",
+      description: `The display is now ${currentStatus === 'active' ? 'inactive' : 'active'}.`,
+    });
+  };
+  
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -177,7 +355,7 @@ const Displays = () => {
                     ID: {display.id}
                     {display.isDefault && (
                       <div className="mt-1">
-                        <Badge variant="outline">Default</Badge>
+                        <span className="inline-block px-2 py-1 text-xs font-medium bg-primary/10 text-primary rounded">Default</span>
                       </div>
                     )}
                   </CardDescription>
@@ -189,21 +367,21 @@ const Displays = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleOpenEditDialog(display)}>
                       <Edit className="mr-2 h-4 w-4" />
                       Edit
                     </DropdownMenuItem>
-                    <DropdownMenuItem>
+                    <DropdownMenuItem onClick={() => handleOpenChangeBucketDialog(display)}>
                       <FolderOpen className="mr-2 h-4 w-4" />
                       Change Bucket
                     </DropdownMenuItem>
                     {display.status === 'active' ? (
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleToggleDisplayStatus(display.id, 'active')}>
                         <Pause className="mr-2 h-4 w-4" />
                         Pause Display
                       </DropdownMenuItem>
                     ) : (
-                      <DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleToggleDisplayStatus(display.id, 'inactive')}>
                         <Play className="mr-2 h-4 w-4" />
                         Activate Display
                       </DropdownMenuItem>
@@ -298,12 +476,20 @@ const Displays = () => {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <label className="text-sm font-medium">Display Name</label>
-            <Input placeholder="e.g., Main Bar TV, Back Room, etc." />
+            <Input 
+              placeholder="e.g., Main Bar TV, Back Room, etc." 
+              value={newDisplayName}
+              onChange={(e) => setNewDisplayName(e.target.value)}
+            />
           </div>
           
           <div className="space-y-2">
             <label className="text-sm font-medium">Question Bucket</label>
-            <Select defaultValue="default">
+            <Select 
+              defaultValue="default"
+              value={newDisplayBucket}
+              onValueChange={setNewDisplayBucket}
+            >
               <SelectTrigger>
                 <SelectValue placeholder="Select bucket" />
               </SelectTrigger>
@@ -325,7 +511,7 @@ const Displays = () => {
           </Alert>
         </CardContent>
         <CardFooter>
-          <Button className="w-full btn-trivia">Create Display</Button>
+          <Button className="w-full btn-trivia" onClick={handleCreateDisplay}>Create Display</Button>
         </CardFooter>
       </Card>
 
@@ -373,6 +559,80 @@ const Displays = () => {
           </div>
         </CardContent>
       </Card>
+      
+      {/* Change Bucket Dialog */}
+      <Dialog open={changeBucketDialogOpen} onOpenChange={setChangeBucketDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Change Question Bucket</DialogTitle>
+            <DialogDescription>
+              Select a different bucket of questions for this display
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Display: {selectedDisplay?.name}</label>
+              <Select 
+                defaultValue={selectedDisplay?.bucket}
+                onValueChange={handleChangeBucket}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select bucket" />
+                </SelectTrigger>
+                <SelectContent>
+                  {buckets.map((bucket) => (
+                    <SelectItem key={bucket.id} value={bucket.id}>
+                      {bucket.name} ({bucket.questionCount} questions)
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setChangeBucketDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={() => handleChangeBucket(selectedDisplay?.bucket)}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      
+      {/* Edit Display Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Display</DialogTitle>
+            <DialogDescription>
+              Update the name of this display
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="py-4">
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Display Name</label>
+              <Input 
+                value={editDisplayName}
+                onChange={(e) => setEditDisplayName(e.target.value)}
+                placeholder="Enter display name"
+              />
+            </div>
+          </div>
+          
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={handleSaveDisplayEdit}>
+              Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

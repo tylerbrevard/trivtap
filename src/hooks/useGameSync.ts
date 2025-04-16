@@ -1,3 +1,4 @@
+
 import { useState, useEffect, useCallback } from 'react';
 import { updateGameState, moveToNextQuestion, autoSyncGameState, listenForGameStateChanges } from '@/utils/gameStateUtils';
 import { gameSettings } from '@/utils/gameSettings';
@@ -26,6 +27,7 @@ export const useGameSync = ({
   const [forcePause, setForcePause] = useState(false);
   const [slidesIndex, setSlidesIndex] = useState(0);
   const [slideTimer, setSlideTimer] = useState(gameSettings.slideRotationTime);
+  const [activeSlides, setActiveSlides] = useState<any[]>([]);
 
   // Update game state handler
   const handleUpdateGameState = useCallback((
@@ -59,6 +61,37 @@ export const useGameSync = ({
     
     return { newQuestionIndex, newQuestionCounter };
   }, [questionIndex, questionCounter, totalQuestions]);
+
+  // Load active slides from localStorage
+  useEffect(() => {
+    const loadActiveSlides = () => {
+      const storedSlides = localStorage.getItem('intermissionSlides');
+      if (storedSlides) {
+        try {
+          const slides = JSON.parse(storedSlides);
+          const filteredActiveSlides = slides.filter((slide: any) => slide.isActive);
+          setActiveSlides(filteredActiveSlides);
+          console.log(`Loaded ${filteredActiveSlides.length} active intermission slides`);
+        } catch (e) {
+          console.error('Error parsing intermission slides:', e);
+          setActiveSlides([]);
+        }
+      }
+    };
+    
+    loadActiveSlides();
+    
+    // Also listen for changes to intermission slides
+    const handleSlidesChanged = () => {
+      loadActiveSlides();
+    };
+    
+    window.addEventListener('intermissionSlidesChanged', handleSlidesChanged);
+    
+    return () => {
+      window.removeEventListener('intermissionSlidesChanged', handleSlidesChanged);
+    };
+  }, []);
 
   // Listen for game state changes from other windows/tabs
   useEffect(() => {
@@ -120,17 +153,19 @@ export const useGameSync = ({
       timerId = window.setTimeout(() => {
         // Check if we need to update the slide
         if (slideTimer <= 0) {
-          // Get slides from localStorage
+          // Reload active slides to ensure we have the latest
           const storedSlides = localStorage.getItem('intermissionSlides');
           if (storedSlides) {
             try {
               const slides = JSON.parse(storedSlides);
-              const activeSlides = slides.filter((slide: any) => slide.isActive);
+              const activeSlidesList = slides.filter((slide: any) => slide.isActive);
               
-              if (activeSlides.length > 1) {
+              console.log(`Found ${activeSlidesList.length} active slides for rotation`);
+              
+              if (activeSlidesList.length > 1) {
                 // Calculate next slide index
-                const nextSlideIndex = (slidesIndex + 1) % activeSlides.length;
-                console.log(`Rotating to slide ${nextSlideIndex} of ${activeSlides.length}`);
+                const nextSlideIndex = (slidesIndex + 1) % activeSlidesList.length;
+                console.log(`Rotating to slide ${nextSlideIndex} of ${activeSlidesList.length}`);
                 
                 // Update slide index in state and localStorage
                 setSlidesIndex(nextSlideIndex);
@@ -173,7 +208,7 @@ export const useGameSync = ({
     return () => {
       if (timerId) clearTimeout(timerId);
     };
-  }, [currentState, timeLeft, questionIndex, questionCounter, forcePause, autoSync, totalQuestions, slidesIndex, slideTimer]);
+  }, [currentState, timeLeft, questionIndex, questionCounter, forcePause, autoSync, totalQuestions, slidesIndex, slideTimer, activeSlides]);
 
   // Listen for game settings changes
   useEffect(() => {
@@ -231,6 +266,7 @@ export const useGameSync = ({
     lastStateChange,
     forcePause,
     slidesIndex,
+    activeSlides,
     updateGameState: handleUpdateGameState,
     moveToNextQuestion: handleMoveToNext,
     togglePause,
