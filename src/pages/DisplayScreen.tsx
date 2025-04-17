@@ -1,74 +1,25 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
-import { QrCode, Clock, Wifi } from 'lucide-react';
+import { QrCode, Clock, Wifi, Trophy } from 'lucide-react';
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { Progress } from "@/components/ui/progress";
 import { gameSettings } from '@/utils/gameSettings';
 import { useGameSync } from '@/hooks/useGameSync';
 
-const mockQuestions = [
-  {
-    id: '1',
-    text: 'Which planet is known as the Red Planet?',
-    options: ['Venus', 'Mars', 'Jupiter', 'Saturn'],
-    correctAnswer: 'Mars',
-    category: 'Science',
-  },
-  {
-    id: '2',
-    text: 'Who painted the Mona Lisa?',
-    options: ['Vincent van Gogh', 'Leonardo da Vinci', 'Pablo Picasso', 'Michelangelo'],
-    correctAnswer: 'Leonardo da Vinci',
-    category: 'Art',
-  },
-  {
-    id: '3',
-    text: 'In which year did World War II end?',
-    options: ['1943', '1944', '1945', '1946'],
-    correctAnswer: '1945',
-    category: 'History',
-  },
-  {
-    id: '4',
-    text: 'Which of these elements has the chemical symbol \'Au\'?',
-    options: ['Silver', 'Gold', 'Aluminum', 'Argon'],
-    correctAnswer: 'Gold',
-    category: 'Science',
-  },
-  {
-    id: '5',
-    text: 'What is the capital city of Australia?',
-    options: ['Sydney', 'Melbourne', 'Canberra', 'Perth'],
-    correctAnswer: 'Canberra',
-    category: 'Geography',
-  },
-  {
-    id: '6',
-    text: 'Who wrote the novel \'Pride and Prejudice\'?',
-    options: ['Jane Austen', 'Charles Dickens', 'Emily Brontë', 'F. Scott Fitzgerald'],
-    correctAnswer: 'Jane Austen',
-    category: 'Entertainment',
-  },
-  {
-    id: '7',
-    text: 'Which of these is NOT a programming language?',
-    options: ['Python', 'Java', 'Cougar', 'Ruby'],
-    correctAnswer: 'Cougar',
-    category: 'Science',
-  }
-];
-
 const DisplayScreen = () => {
   const { id } = useParams();
   const [players, setPlayers] = useState<any[]>([]);
   const [gameCode, setGameCode] = useState('');
   const [hasGameStarted, setHasGameStarted] = useState(false);
-  const [questions, setQuestions] = useState(mockQuestions);
+  const [questions, setQuestions] = useState<any[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
   const [intermissionSlides, setIntermissionSlides] = useState<any[]>([]);
+  const [roundWinners, setRoundWinners] = useState<any[]>([]);
+  const [dayWinners, setDayWinners] = useState<any[]>([]);
   const { toast } = useToast();
   
   const { 
@@ -109,13 +60,12 @@ const DisplayScreen = () => {
           
         if (bucketsError) {
           console.error('Error fetching default bucket:', bucketsError);
-          setQuestions(mockQuestions);
-          setIsLoadingQuestions(false);
           return;
         }
         
         if (buckets && buckets.length > 0) {
           const defaultBucketId = buckets[0].id;
+          console.log(`Found default bucket: ${defaultBucketId}`);
           
           const { data: bucketQuestions, error: questionsError } = await supabase
             .from('bucket_questions')
@@ -136,8 +86,6 @@ const DisplayScreen = () => {
             
           if (questionsError) {
             console.error('Error fetching questions:', questionsError);
-            setQuestions(mockQuestions);
-            setIsLoadingQuestions(false);
             return;
           }
           
@@ -172,22 +120,35 @@ const DisplayScreen = () => {
               console.log(`Loaded ${formattedQuestions.length} questions from the default bucket`);
               setQuestions(formattedQuestions);
             } else {
-              console.log('No questions in default bucket, using mock questions');
-              setQuestions(mockQuestions);
+              console.log('No questions in default bucket, falling back to static questions');
+              fetchStaticQuestions();
             }
           } else {
-            console.log('No questions found in the default bucket, using mock questions');
-            setQuestions(mockQuestions);
+            console.log('No questions found in the default bucket, falling back to static questions');
+            fetchStaticQuestions();
           }
         } else {
-          console.log('No default bucket found, using mock questions');
-          setQuestions(mockQuestions);
+          console.log('No default bucket found, falling back to static questions');
+          fetchStaticQuestions();
         }
       } catch (error) {
         console.error('Error loading questions:', error);
-        setQuestions(mockQuestions);
+        fetchStaticQuestions();
       } finally {
         setIsLoadingQuestions(false);
+      }
+    };
+    
+    const fetchStaticQuestions = async () => {
+      try {
+        // Import dynamically to avoid circular dependencies
+        const { getStaticQuestions } = await import('@/utils/staticQuestions');
+        const staticQuestions = await getStaticQuestions();
+        console.log(`Loaded ${staticQuestions.length} static questions as fallback`);
+        setQuestions(staticQuestions);
+      } catch (error) {
+        console.error('Error loading static questions:', error);
+        setQuestions([]);
       }
     };
     
@@ -195,17 +156,32 @@ const DisplayScreen = () => {
   }, []);
 
   useEffect(() => {
-    const savedSlides = localStorage.getItem('intermissionSlides');
-    if (savedSlides) {
-      try {
-        const slides = JSON.parse(savedSlides);
-        const activeSlides = slides.filter((slide: any) => slide.isActive);
-        setIntermissionSlides(activeSlides);
-        console.log(`Loaded ${activeSlides.length} active intermission slides`);
-      } catch (error) {
-        console.error('Error loading intermission slides:', error);
+    const loadIntermissionSlides = () => {
+      const savedSlides = localStorage.getItem('intermissionSlides');
+      if (savedSlides) {
+        try {
+          const slides = JSON.parse(savedSlides);
+          const activeSlides = slides.filter((slide: any) => slide.isActive);
+          setIntermissionSlides(activeSlides);
+          console.log(`Loaded ${activeSlides.length} active intermission slides`);
+        } catch (error) {
+          console.error('Error loading intermission slides:', error);
+        }
       }
-    }
+    };
+    
+    loadIntermissionSlides();
+    
+    // Also listen for changes to the slides
+    const handleSlidesChanged = () => {
+      loadIntermissionSlides();
+    };
+    
+    window.addEventListener('intermissionSlidesChanged', handleSlidesChanged);
+    
+    return () => {
+      window.removeEventListener('intermissionSlidesChanged', handleSlidesChanged);
+    };
   }, []);
 
   useEffect(() => {
@@ -223,6 +199,29 @@ const DisplayScreen = () => {
       }
     }
   }, [currentState, lastStateChange]);
+
+  // Track top players for leaderboards
+  useEffect(() => {
+    if (players.length > 0) {
+      // Calculate round winners (top 3 based on current score)
+      const roundTopPlayers = [...players]
+        .sort((a, b) => (b.score || 0) - (a.score || 0))
+        .slice(0, 3)
+        .map(player => ({
+          ...player,
+          isRoundWinner: true
+        }));
+      
+      setRoundWinners(roundTopPlayers);
+      
+      // For day winners, we would normally fetch from storage/database
+      // For now, we'll use the same list but mark them differently
+      setDayWinners(roundTopPlayers.map(player => ({
+        ...player,
+        isDayWinner: true
+      })));
+    }
+  }, [players, currentState]);
 
   useEffect(() => {
     const storedGameCode = localStorage.getItem('persistentGameCode');
@@ -357,7 +356,12 @@ const DisplayScreen = () => {
     }
   };
   
-  const currentQuestion = questions[questionIndex] || mockQuestions[0];
+  const currentQuestion = questions[questionIndex] || { 
+    text: "Loading question...", 
+    options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+    correctAnswer: "Option 1",
+    category: "General"
+  };
   
   const getTimerColor = () => {
     if (timeLeft > gameSettings.questionDuration * 0.6) return 'bg-green-500';
@@ -388,6 +392,65 @@ const DisplayScreen = () => {
     
     const slideIndex = currentSlideIndex % intermissionSlides.length;
     return intermissionSlides[slideIndex];
+  };
+
+  const renderWinnerSlide = () => {
+    return (
+      <div className="flex flex-col items-center justify-center h-full">
+        <div className="mb-8">
+          <Trophy className="h-24 w-24 text-yellow-500 animate-bounce" />
+          <h1 className="text-4xl font-bold text-primary text-center">Winners!</h1>
+        </div>
+        
+        <div className="card-trivia p-8 max-w-2xl w-full">
+          <h2 className="text-3xl font-bold mb-6 text-center">Round Winners</h2>
+          
+          <div className="flex justify-center items-end gap-6 mb-8">
+            {roundWinners.length > 0 ? (
+              roundWinners.map((winner, idx) => (
+                <div key={winner.id} className="flex flex-col items-center">
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-2 border-4 ${
+                    idx === 0 ? 'border-yellow-400' : idx === 1 ? 'border-gray-400' : 'border-amber-700'
+                  }`}>
+                    <span className={`text-3xl font-bold ${
+                      idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-400' : 'text-amber-700'
+                    }`}>{idx + 1}</span>
+                  </div>
+                  <div className="text-center">
+                    <div className={`h-${idx === 0 ? '40' : idx === 1 ? '32' : '24'} ${
+                      idx === 0 
+                        ? 'bg-gradient-to-t from-yellow-600 to-yellow-400' 
+                        : idx === 1 
+                          ? 'bg-gradient-to-t from-gray-600 to-gray-400'
+                          : 'bg-gradient-to-t from-amber-800 to-amber-500'
+                    } w-${idx === 0 ? '32' : '24'} rounded-t-lg flex items-end justify-center pb-4`}>
+                      <span className="text-white font-bold">{winner.score || 0}</span>
+                    </div>
+                    <div className={`${
+                      idx === 0 
+                        ? 'bg-yellow-100 text-yellow-800' 
+                        : idx === 1 
+                          ? 'bg-gray-200 text-gray-800'
+                          : 'bg-amber-100 text-amber-800'
+                    } py-2 px-4 rounded-b-lg`}>
+                      <span className="font-medium">{winner.name}</span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center text-muted-foreground">
+                <p>No winners yet.</p>
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-8 text-center">
+            <p className="text-muted-foreground">Next question coming up soon!</p>
+          </div>
+        </div>
+      </div>
+    );
   };
   
   const renderContent = () => {
@@ -547,6 +610,11 @@ const DisplayScreen = () => {
         );
         
       case 'intermission':
+        // If the showWinnerSlide setting is enabled and we have winners, show winner slide
+        if (gameSettings.showWinnerSlide !== false && roundWinners.length > 0 && currentSlideIndex === 0) {
+          return renderWinnerSlide();
+        }
+      
         const currentSlide = getCurrentIntermissionSlide();
         
         if (!currentSlide) {
@@ -751,7 +819,7 @@ const DisplayScreen = () => {
               Players: {uniquePlayers.length}
             </div>
             <div className="bg-blue-500/20 text-blue-500 px-3 py-1 rounded-full">
-              Auto Progress: {gameSettings.autoProgress ? 'On' : 'Off'}
+              Questions: {questions.length}
             </div>
           </div>
         </div>

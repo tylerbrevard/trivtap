@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -8,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
-import { Wifi, Image, FileText, Plus, Trash, Pencil, Check, X, Clock, Play, AlertCircle, EyeOff } from 'lucide-react';
+import { Wifi, Image, FileText, Plus, Trash, Pencil, Check, X, Clock, Play, AlertCircle, EyeOff, Trophy } from 'lucide-react';
 import { gameSettings, updateGameSetting } from '@/utils/gameSettings';
 import { DragDropContext, Droppable, Draggable } from 'react-beautiful-dnd';
 
@@ -97,6 +98,9 @@ const Intermission = () => {
         console.error('Error updating game state for slides:', e);
       }
     }
+    
+    // Trigger a custom event to notify that slides have changed
+    window.dispatchEvent(new CustomEvent('intermissionSlidesChanged'));
   };
   
   const handleAddSlide = () => {
@@ -186,7 +190,47 @@ const Intermission = () => {
   };
   
   const handleTestDisplay = () => {
-    navigate('/display');
+    // First, we'll set up an intermission state to see all the slides
+    const setTestIntermissionState = () => {
+      const activeSlides = slides.filter(slide => slide.isActive);
+      if (activeSlides.length === 0) {
+        toast({
+          title: "No active slides",
+          description: "Please activate at least one slide to test the display.",
+          variant: "destructive"
+        });
+        return false;
+      }
+      
+      const gameState = {
+        state: 'intermission',
+        questionIndex: 0,
+        timeLeft: 0,
+        questionCounter: 1,
+        timestamp: Date.now(),
+        slidesIndex: 0
+      };
+      
+      localStorage.setItem('gameState', JSON.stringify(gameState));
+      
+      // Trigger a custom event to notify other windows about the state change
+      try {
+        const stateChangeEvent = new CustomEvent('triviaStateChange', { 
+          detail: gameState 
+        });
+        window.dispatchEvent(stateChangeEvent);
+        console.log('Set display to intermission state');
+        return true;
+      } catch (error) {
+        console.error('Error dispatching state change event:', error);
+        return false;
+      }
+    };
+    
+    if (setTestIntermissionState()) {
+      navigate('/display');
+      console.log('Navigating to display with intermission state');
+    }
   };
   
   const handleSlideRotationChange = (value: string) => {
@@ -495,6 +539,30 @@ const Intermission = () => {
                   id="show-intermission"
                   checked={gameSettings.showIntermission}
                   onCheckedChange={(checked) => updateGameSetting('showIntermission', checked)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+          
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="flex items-center">
+                <Trophy className="mr-2 h-5 w-5 text-primary animate-bounce" />
+                Leaderboard
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between">
+                <Label htmlFor="show-leaderboard" className="flex flex-col space-y-1">
+                  <span>Show Winner Leaderboards</span>
+                  <span className="font-normal text-sm text-muted-foreground">
+                    Display round winners and daily champions during intermission
+                  </span>
+                </Label>
+                <Switch 
+                  id="show-leaderboard"
+                  checked={gameSettings.showWinnerSlide !== false} // Default to true if not set
+                  onCheckedChange={(checked) => updateGameSetting('showWinnerSlide', checked)}
                 />
               </div>
             </CardContent>

@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BucketQuestionsProps {
   bucketId: string;
@@ -35,18 +36,82 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
       try {
         setLoading(true);
         
-        // Get all static questions
-        const allQuestions = await getStaticQuestions();
-        console.log(`Fetched ${allQuestions.length} total questions for filtering by bucket`);
-        
-        // For now, we'll filter by category that matches the bucket name
-        // In a real implementation, you'd need to have a proper bucket-question association
-        const bucketQuestions = bucketId === 'default' 
-          ? allQuestions 
-          : allQuestions.filter(q => q.category.toLowerCase() === bucketName.toLowerCase());
-        
-        console.log(`Loaded ${bucketQuestions.length} questions for bucket ${bucketName}`);
-        setQuestions(bucketQuestions);
+        // Check if this is a default bucket
+        if (bucketId === 'default') {
+          // For the default bucket, we'll load questions directly
+          const allQuestions = await getStaticQuestions();
+          console.log(`Fetched ${allQuestions.length} total default questions`);
+          setQuestions(allQuestions);
+        } else {
+          // For non-default buckets, check Supabase first
+          const { data: bucketQuestions, error: questionsError } = await supabase
+            .from('bucket_questions')
+            .select(`
+              question_id,
+              questions:question_id (
+                id, 
+                text, 
+                options, 
+                correct_answer, 
+                categories:category_id (
+                  id,
+                  name
+                )
+              )
+            `)
+            .eq('bucket_id', bucketId);
+            
+          if (questionsError) {
+            console.error('Error fetching bucket questions:', questionsError);
+            // Fallback to filtering by category as before
+            const allQuestions = await getStaticQuestions();
+            const filteredQuestions = allQuestions.filter(q => 
+              q.category.toLowerCase() === bucketName.toLowerCase()
+            );
+            console.log(`Loaded ${filteredQuestions.length} questions for category ${bucketName}`);
+            setQuestions(filteredQuestions);
+            return;
+          }
+          
+          if (bucketQuestions && bucketQuestions.length > 0) {
+            const formattedQuestions = bucketQuestions.map(item => {
+              const question = item.questions;
+              
+              let options: string[] = [];
+              if (question.options) {
+                if (Array.isArray(question.options)) {
+                  options = question.options.map(opt => String(opt));
+                } else if (typeof question.options === 'string') {
+                  try {
+                    const parsedOptions = JSON.parse(question.options);
+                    options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
+                  } catch {
+                    options = [String(question.options)];
+                  }
+                }
+              }
+              
+              return {
+                id: question.id,
+                text: question.text,
+                options: options,
+                correctAnswer: question.correct_answer,
+                category: question.categories ? question.categories.name : bucketName
+              };
+            });
+            
+            console.log(`Loaded ${formattedQuestions.length} questions for bucket ${bucketName}`);
+            setQuestions(formattedQuestions);
+          } else {
+            // Fallback to filtering by category as before
+            const allQuestions = await getStaticQuestions();
+            const filteredQuestions = allQuestions.filter(q => 
+              q.category.toLowerCase() === bucketName.toLowerCase()
+            );
+            console.log(`Loaded ${filteredQuestions.length} questions for category ${bucketName} (fallback method)`);
+            setQuestions(filteredQuestions);
+          }
+        }
       } catch (error) {
         console.error('Error in fetchBucketQuestions:', error);
         toast({
@@ -117,7 +182,7 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
                       {question.category}
                     </Badge>
                     <Badge variant="outline" className="bg-muted hover:bg-muted/80">
-                      {question.difficulty}
+                      {question.difficulty || 'Medium'}
                     </Badge>
                   </div>
                   <DropdownMenu>

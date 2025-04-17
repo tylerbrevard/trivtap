@@ -1,4 +1,3 @@
-
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -85,7 +84,20 @@ export const getNextSlideIndex = (): number => {
 };
 
 /**
- * Moves to the next question
+ * Keeps track of shown questions to avoid repeats until all questions have been shown
+ */
+let shownQuestionIndices: number[] = [];
+
+/**
+ * Resets the shown questions tracking
+ */
+export const resetShownQuestions = () => {
+  shownQuestionIndices = [];
+  console.log('Reset shown questions tracking');
+};
+
+/**
+ * Moves to the next question, avoiding repeats until all questions have been shown
  * @param currentQuestionIndex Current question index
  * @param questionCounter Question counter
  * @param questionDuration Default question duration
@@ -97,8 +109,25 @@ export const moveToNextQuestion = (
   questionDuration: number,
   totalQuestions: number
 ) => {
-  const nextQuestionIndex = (currentQuestionIndex + 1) % totalQuestions;
-  console.log(`Moving to next question: ${nextQuestionIndex} from ${currentQuestionIndex}`);
+  // Add current question to shown list if not already there
+  if (!shownQuestionIndices.includes(currentQuestionIndex)) {
+    shownQuestionIndices.push(currentQuestionIndex);
+  }
+  
+  let nextQuestionIndex: number;
+  
+  // If we've shown all questions, reset the tracking
+  if (shownQuestionIndices.length >= totalQuestions) {
+    console.log('All questions have been shown, resetting question cycle');
+    shownQuestionIndices = [currentQuestionIndex];
+  }
+  
+  // Find a question that hasn't been shown yet
+  do {
+    nextQuestionIndex = Math.floor(Math.random() * totalQuestions);
+  } while (shownQuestionIndices.includes(nextQuestionIndex) && shownQuestionIndices.length < totalQuestions);
+  
+  console.log(`Moving to next question: ${nextQuestionIndex} from ${currentQuestionIndex} (${shownQuestionIndices.length}/${totalQuestions} shown)`);
   
   // Update game state for the next question
   const timestamp = updateGameState(
@@ -195,6 +224,7 @@ export const cycleIntermissionSlide = (
     }
     
     const nextIndex = (currentSlideIndex + 1) % activeSlides.length;
+    console.log(`Cycling to slide ${nextIndex} of ${activeSlides.length}`);
     
     // If we've gone through all slides, move to the next question
     if (nextIndex === 0 && activeSlides.length > 1) {
@@ -248,7 +278,7 @@ export const cycleIntermissionSlide = (
             console.error('Error checking game state before cycling slides:', error);
           }
         }
-      }, gameSettings.intermissionDuration * 1000);
+      }, gameSettings.slideRotationTime * 1000); // Use slide rotation time from settings
     }
   } catch (error) {
     console.error('Error cycling intermission slides:', error);
@@ -302,16 +332,60 @@ export const autoSyncGameState = (
         questionCounter % gameSettings.leaderboardFrequency === 0 && 
         !shouldShowIntermission;
       
+      // Check if we should display the winner slide
+      const shouldShowWinnerSlide = gameSettings.showWinnerSlide !== false && 
+        (shouldShowLeaderboard || shouldShowIntermission);
+      
       console.log('Decision making for next state:', {
         currentQuestionCounter: questionCounter,
         intermissionFrequency: gameSettings.intermissionFrequency,
         shouldShowIntermission,
         leaderboardFrequency: gameSettings.leaderboardFrequency,
         shouldShowLeaderboard,
-        showIntermissionSetting: gameSettings.showIntermission
+        showIntermissionSetting: gameSettings.showIntermission,
+        showWinnerSlideSetting: gameSettings.showWinnerSlide,
+        shouldShowWinnerSlide
       });
       
-      if (shouldShowIntermission && gameSettings.showIntermission) {
+      if (shouldShowWinnerSlide) {
+        console.log('Auto-syncing: Moving to leaderboard for winners');
+        updateGameState(
+          currentQuestionIndex,
+          'leaderboard',
+          0,
+          questionCounter
+        );
+        
+        // After leaderboard, move to intermission if needed or to next question
+        setTimeout(() => {
+          if (shouldShowIntermission && gameSettings.showIntermission) {
+            console.log('Auto-syncing: Moving to intermission after leaderboard');
+            updateGameState(
+              currentQuestionIndex,
+              'intermission',
+              0,
+              questionCounter
+            );
+            
+            // Start cycling through intermission slides
+            setTimeout(() => {
+              cycleIntermissionSlide(
+                currentQuestionIndex,
+                questionCounter,
+                gameSettings
+              );
+            }, gameSettings.slideRotationTime * 1000);
+          } else {
+            moveToNextQuestion(
+              currentQuestionIndex,
+              questionCounter,
+              gameSettings.questionDuration,
+              totalQuestions
+            );
+          }
+        }, 8000); // 8 seconds for leaderboard display
+      }
+      else if (shouldShowIntermission && gameSettings.showIntermission) {
         console.log('Auto-syncing: Moving to intermission');
         updateGameState(
           currentQuestionIndex,
@@ -327,7 +401,7 @@ export const autoSyncGameState = (
             questionCounter,
             gameSettings
           );
-        }, gameSettings.intermissionDuration * 1000);
+        }, gameSettings.slideRotationTime * 1000);
       } 
       else if (shouldShowLeaderboard) {
         console.log('Auto-syncing: Moving to leaderboard');
