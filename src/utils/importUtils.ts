@@ -136,21 +136,65 @@ export const associateQuestionsWithBucket = async (questionIds: string[], bucket
   console.log(`Associating ${questionIds.length} questions with bucket ${bucketId}`);
   
   try {
-    const bucketQuestions = questionIds.map(questionId => ({
-      bucket_id: bucketId,
-      question_id: questionId
-    }));
-    
-    const { error } = await supabase
-      .from('bucket_questions')
-      .insert(bucketQuestions);
+    // First, check if this is a local default bucket or a Supabase bucket
+    if (bucketId === 'default') {
+      // For default bucket, we'll add these to localStorage
+      const existingDataString = localStorage.getItem('trivia_questions');
+      let existingData: Record<string, any[]> = {};
       
-    if (error) {
-      console.error('Error associating questions with bucket:', error);
-      throw new Error(`Failed to associate questions with bucket: ${error.message}`);
+      if (existingDataString) {
+        existingData = JSON.parse(existingDataString);
+      }
+      
+      // Initialize the default array if needed
+      if (!existingData['default']) {
+        existingData['default'] = [];
+      }
+      
+      // Get the questions to add
+      const allQuestions = await getStaticQuestions();
+      const questionsToAdd = allQuestions.filter(q => questionIds.includes(q.id));
+      
+      // Add to default, avoiding duplicates
+      const existingIds = new Set(existingData['default'].map((q: any) => q.id));
+      const newQuestions = questionsToAdd.filter(q => !existingIds.has(q.id));
+      
+      existingData['default'] = [...existingData['default'], ...newQuestions];
+      
+      // Save back to localStorage
+      localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+      console.log(`Added ${newQuestions.length} questions to default bucket in localStorage`);
+      
+      // Update bucket counts
+      const updatedBucketsStr = localStorage.getItem('trivia-buckets');
+      if (updatedBucketsStr) {
+        const updatedBuckets = JSON.parse(updatedBucketsStr);
+        const defaultBucketIndex = updatedBuckets.findIndex((b: any) => b.isDefault);
+        
+        if (defaultBucketIndex >= 0) {
+          updatedBuckets[defaultBucketIndex].questionCount = existingData['default'].length;
+          localStorage.setItem('trivia-buckets', JSON.stringify(updatedBuckets));
+          console.log(`Updated default bucket count to ${existingData['default'].length}`);
+        }
+      }
+    } else {
+      // For Supabase buckets, continue with original logic
+      const bucketQuestions = questionIds.map(questionId => ({
+        bucket_id: bucketId,
+        question_id: questionId
+      }));
+      
+      const { error } = await supabase
+        .from('bucket_questions')
+        .insert(bucketQuestions);
+        
+      if (error) {
+        console.error('Error associating questions with bucket:', error);
+        throw new Error(`Failed to associate questions with bucket: ${error.message}`);
+      }
+      
+      console.log(`Successfully associated ${questionIds.length} questions with bucket ${bucketId}`);
     }
-    
-    console.log(`Successfully associated ${questionIds.length} questions with bucket ${bucketId}`);
   } catch (error) {
     console.error('Error in associateQuestionsWithBucket:', error);
     throw error;

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +9,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle } from 'lucide-react';
 import { getStaticQuestions } from "@/utils/staticQuestions";
 
-// Interface for bucket data
 interface Bucket {
   id: string;
   name: string;
@@ -29,7 +27,6 @@ const BucketManager = () => {
   const [editDescription, setEditDescription] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   
-  // Load buckets from localStorage or initialize with default
   useEffect(() => {
     const loadBuckets = async () => {
       setIsLoading(true);
@@ -40,12 +37,11 @@ const BucketManager = () => {
       if (storedBuckets) {
         initialBuckets = JSON.parse(storedBuckets);
       } else {
-        // Initialize with default bucket - we'll update the count below
         const defaultBucket: Bucket = {
           id: 'default',
           name: 'Default Bucket',
           description: 'Default questions available to all customers',
-          questionCount: 0, // This will be updated
+          questionCount: 0,
           isDefault: true
         };
         initialBuckets = [defaultBucket];
@@ -54,12 +50,10 @@ const BucketManager = () => {
       
       setBuckets(initialBuckets);
       
-      // Get accurate question count for the default bucket
       try {
         const allQuestions = await getStaticQuestions();
         console.log(`Found ${allQuestions.length} total questions for bucket count update`);
         
-        // Update the default bucket question count
         const updatedBuckets = initialBuckets.map(bucket => {
           if (bucket.isDefault) {
             return { ...bucket, questionCount: allQuestions.length };
@@ -67,7 +61,6 @@ const BucketManager = () => {
           return bucket;
         });
         
-        // Save to localStorage
         localStorage.setItem('trivia-buckets', JSON.stringify(updatedBuckets));
         setBuckets(updatedBuckets);
       } catch (error) {
@@ -80,7 +73,6 @@ const BucketManager = () => {
     loadBuckets();
   }, []);
   
-  // Save buckets to localStorage whenever they change
   useEffect(() => {
     if (buckets.length > 0 && !isLoading) {
       localStorage.setItem('trivia-buckets', JSON.stringify(buckets));
@@ -127,7 +119,6 @@ const BucketManager = () => {
     const updatedBuckets = buckets.filter(bucket => bucket.id !== bucketId);
     setBuckets(updatedBuckets);
     
-    // Also update display references to this bucket
     const displaysStr = localStorage.getItem('trivia-displays');
     if (displaysStr) {
       const displays = JSON.parse(displaysStr);
@@ -334,7 +325,6 @@ const BucketManager = () => {
             </Card>
           ))}
           
-          {/* New Bucket Form */}
           <Card>
             <CardHeader>
               <CardTitle>Create New Bucket</CardTitle>

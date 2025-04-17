@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -92,8 +91,7 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
                 }
               }
               
-              // Since the 'difficulty' property doesn't exist on the question type from Supabase,
-              // we'll default to 'medium' without checking
+              // Default to 'medium' difficulty if not present
               const difficulty: 'easy' | 'medium' | 'hard' = 'medium';
               
               return {

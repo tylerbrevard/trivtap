@@ -136,21 +136,94 @@ export const baseStaticQuestions: StaticQuestion[] = [
   }
 ];
 
+// Additional default questions - we'll load these from Supabase for all users
+let additionalDefaultQuestions: StaticQuestion[] = [];
+
 // Initialize local storage with base questions if it doesn't exist yet
-const initializeStorage = () => {
+const initializeStorage = async () => {
   try {
-    if (!localStorage.getItem('trivia_questions')) {
-      // Initialize storage with base questions
-      saveQuestionsToLocalStorage(baseStaticQuestions);
-      console.log("Initialized local storage with base questions");
+    console.log("Initializing question storage...");
+    
+    // First, check if we've already migrated all questions
+    const migratedFlag = localStorage.getItem('trivia_all_questions_migrated');
+    
+    if (!migratedFlag) {
+      console.log("Starting full question migration...");
+      
+      // Load any existing questions from Supabase
+      try {
+        console.log("Fetching all questions from Supabase...");
+        const { data: dbQuestions, error } = await supabase
+          .from('questions')
+          .select(`
+            id, 
+            text, 
+            options, 
+            correct_answer, 
+            categories:category_id (
+              id,
+              name
+            )
+          `);
+          
+        if (error) {
+          console.error("Error fetching questions from database:", error);
+        } else if (dbQuestions && dbQuestions.length > 0) {
+          console.log(`Found ${dbQuestions.length} questions in the database to migrate`);
+          
+          // Format the questions for our system
+          additionalDefaultQuestions = dbQuestions.map(q => {
+            let options: string[] = [];
+            if (q.options) {
+              if (Array.isArray(q.options)) {
+                options = q.options.map(opt => String(opt));
+              } else if (typeof q.options === 'string') {
+                try {
+                  const parsedOptions = JSON.parse(q.options);
+                  options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
+                } catch {
+                  options = [String(q.options)];
+                }
+              }
+            }
+            
+            return {
+              id: q.id,
+              text: q.text,
+              options: options,
+              correctAnswer: q.correct_answer,
+              category: q.categories ? q.categories.name : 'General',
+              difficulty: 'medium' as 'easy' | 'medium' | 'hard'
+            };
+          });
+          
+          console.log(`Successfully migrated ${additionalDefaultQuestions.length} questions from database`);
+        }
+      } catch (dbError) {
+        console.error("Error migrating database questions:", dbError);
+      }
+      
+      // Initialize storage with base questions and additional ones
+      if (!localStorage.getItem('trivia_questions')) {
+        const allDefaultQuestions = [...baseStaticQuestions, ...additionalDefaultQuestions];
+        saveQuestionsToLocalStorage(allDefaultQuestions);
+        console.log(`Initialized local storage with ${allDefaultQuestions.length} questions`);
+      }
+      
+      // Mark as migrated
+      localStorage.setItem('trivia_all_questions_migrated', 'true');
+      console.log("Question migration completed and flagged");
+    } else {
+      // Just make sure base questions are there if storage is empty
+      if (!localStorage.getItem('trivia_questions')) {
+        saveQuestionsToLocalStorage(baseStaticQuestions);
+        console.log("Initialized local storage with base questions (migration already done)");
+      }
     }
   } catch (error) {
     console.error("Error initializing local storage:", error);
   }
 };
-
-// Call initialization on module load
-initializeStorage();
 
 // Get the current user ID if logged in
 export const getCurrentUserId = async (): Promise<string | undefined> => {
@@ -199,6 +272,9 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
     const userId = await getCurrentUserId();
     console.log(`Getting questions for user: ${userId || 'anonymous'}`);
     
+    // First, ensure storage is initialized
+    await initializeStorage();
+    
     // Check for imported questions first
     const hasImported = hasImportedQuestions();
     console.log(`Has imported questions: ${hasImported}`);
@@ -225,8 +301,8 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
     }
     
     // Start with base questions
-    let allQuestions = [...baseStaticQuestions];
-    console.log(`Starting with ${allQuestions.length} base questions`);
+    let allQuestions = [...baseStaticQuestions, ...additionalDefaultQuestions];
+    console.log(`Starting with ${allQuestions.length} default questions`);
     
     // Add imported questions if available
     if (hasImported) {
@@ -355,6 +431,37 @@ export const addImportedQuestionsToCollection = async (newQuestions: any[]): Pro
     // Save to imported_questions in localStorage for admin usage
     localStorage.setItem('imported_questions', JSON.stringify(importedQuestions));
     console.log(`Saved ${importedQuestions.length} questions to imported_questions`);
+    
+    // Also add to the default bucket
+    try {
+      // Get existing questions from default bucket
+      const existingDataString = localStorage.getItem('trivia_questions');
+      let existingData: Record<string, any[]> = {};
+      
+      if (existingDataString) {
+        existingData = JSON.parse(existingDataString);
+      }
+      
+      // Add to default bucket
+      if (!existingData['default']) {
+        existingData['default'] = [];
+      }
+      
+      // Check for duplicates by question text
+      const existingTexts = new Set(existingData['default'].map((q: any) => q.text.toLowerCase()));
+      
+      const newQuestions = importedQuestions.filter(q => 
+        !existingTexts.has(q.text.toLowerCase())
+      );
+      
+      existingData['default'] = [...existingData['default'], ...newQuestions];
+      
+      // Save back
+      localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+      console.log(`Added ${newQuestions.length} new questions to default bucket`);
+    } catch (storageError) {
+      console.error("Error adding to default bucket:", storageError);
+    }
     
     // Update default bucket question count
     const allQuestions = await getStaticQuestions();
@@ -500,3 +607,6 @@ export const backupImportedQuestions = (): boolean => {
     return false;
   }
 };
+
+// Call initialization on module load
+initializeStorage();
