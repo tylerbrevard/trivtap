@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -45,6 +46,8 @@ const DisplayScreen = () => {
   console.log('Available questions:', questions.length);
   console.log('Question counter:', questionCounter);
   console.log('Game settings:', gameSettings);
+  console.log('Current slide index:', currentSlideIndex);
+  console.log('Active intermission slides:', intermissionSlides.length);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -156,6 +159,7 @@ const DisplayScreen = () => {
     fetchQuestions();
   }, []);
 
+  // Load intermission slides
   useEffect(() => {
     const loadIntermissionSlides = () => {
       const savedSlides = localStorage.getItem('intermissionSlides');
@@ -163,8 +167,8 @@ const DisplayScreen = () => {
         try {
           const slides = JSON.parse(savedSlides);
           const activeSlides = slides.filter((slide: any) => slide.isActive);
+          console.log(`Found ${slides.length} total slides, ${activeSlides.length} are active`);
           setIntermissionSlides(activeSlides);
-          console.log(`Loaded ${activeSlides.length} active intermission slides`);
         } catch (error) {
           console.error('Error loading intermission slides:', error);
         }
@@ -184,6 +188,41 @@ const DisplayScreen = () => {
     };
   }, []);
 
+  // Set up slide rotation timer for intermission
+  useEffect(() => {
+    let slideRotationTimer: number | undefined;
+    
+    if (currentState === 'intermission' && intermissionSlides.length > 1) {
+      const rotationTime = gameSettings.slideRotationTime || 10; // Default to 10 seconds if not set
+      console.log(`Setting up slide rotation timer for ${rotationTime} seconds`);
+      
+      slideRotationTimer = window.setTimeout(() => {
+        const nextIndex = (currentSlideIndex + 1) % intermissionSlides.length;
+        setCurrentSlideIndex(nextIndex);
+        console.log(`Rotating to slide ${nextIndex + 1} of ${intermissionSlides.length}`);
+        
+        // Update gameState in localStorage to persist the current slide index
+        const gameStateStr = localStorage.getItem('gameState');
+        if (gameStateStr) {
+          try {
+            const gameState = JSON.parse(gameStateStr);
+            gameState.slidesIndex = nextIndex;
+            localStorage.setItem('gameState', JSON.stringify(gameState));
+          } catch (error) {
+            console.error('Error updating game state with new slide index:', error);
+          }
+        }
+      }, rotationTime * 1000);
+    }
+    
+    return () => {
+      if (slideRotationTimer) {
+        clearTimeout(slideRotationTimer);
+      }
+    };
+  }, [currentState, currentSlideIndex, intermissionSlides.length, gameSettings.slideRotationTime]);
+
+  // Track slide index from game state
   useEffect(() => {
     if (currentState === 'intermission') {
       const currentGameState = localStorage.getItem('gameState');
@@ -191,6 +230,7 @@ const DisplayScreen = () => {
         try {
           const parsedState = JSON.parse(currentGameState);
           if (parsedState.slidesIndex !== undefined) {
+            console.log(`Setting current slide index to ${parsedState.slidesIndex} from game state`);
             setCurrentSlideIndex(parsedState.slidesIndex);
           }
         } catch (error) {
@@ -200,6 +240,7 @@ const DisplayScreen = () => {
     }
   }, [currentState, lastStateChange]);
 
+  // Set up winners
   useEffect(() => {
     if (players.length > 0) {
       const roundTopPlayers = [...players]
@@ -219,6 +260,7 @@ const DisplayScreen = () => {
     }
   }, [players, currentState]);
 
+  // Initialize game code
   useEffect(() => {
     const storedGameCode = localStorage.getItem('persistentGameCode');
     
@@ -258,6 +300,7 @@ const DisplayScreen = () => {
     };
   }, []);
   
+  // Track player joins and scores
   useEffect(() => {
     const checkForPlayerJoins = () => {
       const playerJoinData = localStorage.getItem('playerJoined');
@@ -316,6 +359,7 @@ const DisplayScreen = () => {
     };
   }, [players, toast, gameCode]);
   
+  // Auto-start game timer
   useEffect(() => {
     let timerId: number | undefined;
     

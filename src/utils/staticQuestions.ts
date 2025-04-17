@@ -1,4 +1,3 @@
-
 import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions, convertQuestionsToCSV } from './importUtils';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -212,6 +211,10 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
     const importedQuestions = getImportedQuestions();
     console.log(`Imported questions count: ${importedQuestions.length}`);
     
+    // Get all available questions (e.g., from external sources)
+    const availableQuestions = getAllAvailableQuestions();
+    console.log(`Available questions from other sources: ${availableQuestions.length}`);
+    
     // Check the default bucket for all available questions
     const defaultBucketStr = localStorage.getItem('trivia-buckets');
     let defaultBucket = null;
@@ -223,28 +226,50 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
     
     // Start with base questions
     let allQuestions = [...baseStaticQuestions];
+    console.log(`Starting with ${allQuestions.length} base questions`);
     
     // Add imported questions if available
     if (hasImported) {
       // Add imported questions, avoiding duplicates by ID
       const existingIds = new Set(allQuestions.map(q => q.id));
       
+      let addedCount = 0;
       importedQuestions.forEach(question => {
         if (!existingIds.has(question.id)) {
           allQuestions.push(question);
           existingIds.add(question.id);
+          addedCount++;
         }
       });
+      console.log(`Added ${addedCount} imported questions (avoiding duplicates)`);
+    }
+    
+    // Add available questions, avoiding duplicates
+    if (availableQuestions.length > 0) {
+      const allExistingIds = new Set(allQuestions.map(q => q.id));
+      let addedCount = 0;
+      
+      availableQuestions.forEach(question => {
+        if (!allExistingIds.has(question.id)) {
+          allQuestions.push(question);
+          allExistingIds.add(question.id);
+          addedCount++;
+        }
+      });
+      console.log(`Added ${addedCount} available questions (avoiding duplicates)`);
     }
     
     // Add user-specific questions, avoiding duplicates
     const allExistingIds = new Set(allQuestions.map(q => q.id));
+    let addedUserCount = 0;
     storedUserQuestions.forEach(question => {
       if (!allExistingIds.has(question.id)) {
         allQuestions.push(question);
         allExistingIds.add(question.id);
+        addedUserCount++;
       }
     });
+    console.log(`Added ${addedUserCount} user-specific questions (avoiding duplicates)`);
     
     console.log(`Total questions after combining: ${allQuestions.length}`);
     

@@ -35,6 +35,7 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
     const fetchBucketQuestions = async () => {
       try {
         setLoading(true);
+        console.log(`Fetching questions for bucket: ${bucketId} (${bucketName})`);
         
         // Check if this is a default bucket
         if (bucketId === 'default') {
