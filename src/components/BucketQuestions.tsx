@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -90,13 +91,24 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
                 }
               }
               
+              // Ensure difficulty is one of the allowed values
+              let difficulty: 'easy' | 'medium' | 'hard' = 'medium';
+              
+              // If a difficulty value exists, try to use it if valid
+              if (question.difficulty) {
+                const lowerDifficulty = String(question.difficulty).toLowerCase();
+                if (['easy', 'medium', 'hard'].includes(lowerDifficulty)) {
+                  difficulty = lowerDifficulty as 'easy' | 'medium' | 'hard';
+                }
+              }
+              
               return {
                 id: question.id,
                 text: question.text,
                 options: options,
                 correctAnswer: question.correct_answer,
                 category: question.categories ? question.categories.name : bucketName,
-                difficulty: 'medium' // Default to medium difficulty if not specified
+                difficulty: difficulty // Now properly typed
               };
             });
             
