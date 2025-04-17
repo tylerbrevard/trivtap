@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 // Define question type
@@ -150,6 +151,9 @@ export const associateQuestionsWithBucket = async (questionIds: string[], bucket
       if (!existingData['default']) {
         existingData['default'] = [];
       }
+      
+      // Import the getStaticQuestions function directly from staticQuestions to avoid circular dependency
+      const { getStaticQuestions } = await import('./staticQuestions');
       
       // Get the questions to add
       const allQuestions = await getStaticQuestions();
