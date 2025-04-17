@@ -1,3 +1,4 @@
+
 import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions, convertQuestionsToCSV } from './importUtils';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -208,6 +209,42 @@ const initializeStorage = async () => {
         const allDefaultQuestions = [...baseStaticQuestions, ...additionalDefaultQuestions];
         saveQuestionsToLocalStorage(allDefaultQuestions);
         console.log(`Initialized local storage with ${allDefaultQuestions.length} questions`);
+      }
+      
+      // Check if there are imported questions
+      const importedQuestionsStr = localStorage.getItem('imported_questions');
+      if (importedQuestionsStr) {
+        try {
+          const importedQuestions = JSON.parse(importedQuestionsStr);
+          if (Array.isArray(importedQuestions) && importedQuestions.length > 0) {
+            console.log(`Found ${importedQuestions.length} imported questions to add to default bucket`);
+            
+            // Get existing data
+            const existingDataString = localStorage.getItem('trivia_questions');
+            let existingData: Record<string, any[]> = {};
+            
+            if (existingDataString) {
+              existingData = JSON.parse(existingDataString);
+            }
+            
+            // Initialize default array if needed
+            if (!existingData['default']) {
+              existingData['default'] = [];
+            }
+            
+            // Add imported questions to default, avoiding duplicates
+            const existingIds = new Set(existingData['default'].map((q: any) => q.id));
+            const newQuestions = importedQuestions.filter(q => !existingIds.has(q.id));
+            
+            existingData['default'] = [...existingData['default'], ...newQuestions];
+            
+            // Save back to localStorage
+            localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+            console.log(`Added ${newQuestions.length} imported questions to default bucket`);
+          }
+        } catch (error) {
+          console.error("Error migrating imported questions:", error);
+        }
       }
       
       // Mark as migrated

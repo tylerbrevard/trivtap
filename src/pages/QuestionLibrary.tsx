@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -24,7 +25,8 @@ import {
   StaticQuestion, 
   getCurrentUserId, 
   removeQuestionFromCollection,
-  baseStaticQuestions
+  baseStaticQuestions,
+  getAllAvailableQuestions
 } from '@/utils/staticQuestions';
 import { 
   Dialog, 
@@ -106,9 +108,19 @@ const QuestionLibrary = () => {
     if (filter === 'all') {
       return allQuestions;
     } else if (filter === 'user') {
+      // Show questions that aren't from the base set
       return allQuestions.filter(q => !baseStaticQuestions.some(bq => bq.id === q.id));
     } else if (filter === 'default') {
-      return allQuestions.filter(q => baseStaticQuestions.some(bq => bq.id === q.id));
+      // Modified: Include all imported questions and base questions
+      // We consider any question that's available to all users as a default question,
+      // not just the initial baseStaticQuestions
+      return allQuestions.filter(q => {
+        // Check if it's a base static question OR if it has a system-generated ID 
+        // (like imported_*, which are the imported questions)
+        return q.id.startsWith('imported_') || 
+               q.id.startsWith('q') || 
+               baseStaticQuestions.some(bq => bq.id === q.id);
+      });
     }
     return allQuestions;
   }, [allQuestions, filter]);

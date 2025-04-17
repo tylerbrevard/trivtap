@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
+import { getStaticQuestions, StaticQuestion, getAllAvailableQuestions } from "@/utils/staticQuestions";
 import { supabase } from "@/integrations/supabase/client";
 
 interface BucketQuestionsProps {
@@ -38,9 +39,9 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
         
         // Check if this is a default bucket
         if (bucketId === 'default') {
-          // For the default bucket, we'll load all questions without filtering
-          const allQuestions = await getStaticQuestions();
-          console.log(`Fetched ${allQuestions.length} total default questions for DEFAULT bucket`);
+          // For the default bucket, we'll load ALL available questions, including imported ones
+          const allQuestions = await getAllAvailableQuestions();
+          console.log(`Fetched ${allQuestions.length} total questions for DEFAULT bucket`);
           setQuestions(allQuestions);
         } else {
           // For non-default buckets, check Supabase first
