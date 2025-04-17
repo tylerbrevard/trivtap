@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -37,9 +38,9 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
         
         // Check if this is a default bucket
         if (bucketId === 'default') {
-          // For the default bucket, we'll load questions directly
+          // For the default bucket, we'll load all questions without filtering
           const allQuestions = await getStaticQuestions();
-          console.log(`Fetched ${allQuestions.length} total default questions`);
+          console.log(`Fetched ${allQuestions.length} total default questions for DEFAULT bucket`);
           setQuestions(allQuestions);
         } else {
           // For non-default buckets, check Supabase first
@@ -90,7 +91,6 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
                 }
               }
               
-              // Ensure difficulty is one of the allowed values
               // Since the 'difficulty' property doesn't exist on the question type from Supabase,
               // we'll default to 'medium' without checking
               const difficulty: 'easy' | 'medium' | 'hard' = 'medium';

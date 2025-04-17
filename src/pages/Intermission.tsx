@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -99,7 +98,6 @@ const Intermission = () => {
       }
     }
     
-    // Trigger a custom event to notify that slides have changed
     window.dispatchEvent(new CustomEvent('intermissionSlidesChanged'));
   };
   
@@ -190,7 +188,6 @@ const Intermission = () => {
   };
   
   const handleTestDisplay = () => {
-    // First, we'll set up an intermission state to see all the slides
     const setTestIntermissionState = () => {
       const activeSlides = slides.filter(slide => slide.isActive);
       if (activeSlides.length === 0) {
@@ -213,7 +210,6 @@ const Intermission = () => {
       
       localStorage.setItem('gameState', JSON.stringify(gameState));
       
-      // Trigger a custom event to notify other windows about the state change
       try {
         const stateChangeEvent = new CustomEvent('triviaStateChange', { 
           detail: gameState 
@@ -228,7 +224,7 @@ const Intermission = () => {
     };
     
     if (setTestIntermissionState()) {
-      navigate('/display');
+      navigate('/display/default');
       console.log('Navigating to display with intermission state');
     }
   };

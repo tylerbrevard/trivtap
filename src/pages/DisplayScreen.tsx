@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -60,6 +59,7 @@ const DisplayScreen = () => {
           
         if (bucketsError) {
           console.error('Error fetching default bucket:', bucketsError);
+          fetchStaticQuestions();
           return;
         }
         
@@ -86,6 +86,7 @@ const DisplayScreen = () => {
             
           if (questionsError) {
             console.error('Error fetching questions:', questionsError);
+            fetchStaticQuestions();
             return;
           }
           
@@ -116,11 +117,12 @@ const DisplayScreen = () => {
               };
             });
             
+            console.log(`Loaded ${formattedQuestions.length} questions from database bucket`);
+            
             if (formattedQuestions.length > 0) {
-              console.log(`Loaded ${formattedQuestions.length} questions from the default bucket`);
               setQuestions(formattedQuestions);
             } else {
-              console.log('No questions in default bucket, falling back to static questions');
+              console.log('No questions in Supabase default bucket, falling back to static questions');
               fetchStaticQuestions();
             }
           } else {
@@ -141,10 +143,9 @@ const DisplayScreen = () => {
     
     const fetchStaticQuestions = async () => {
       try {
-        // Import dynamically to avoid circular dependencies
         const { getStaticQuestions } = await import('@/utils/staticQuestions');
         const staticQuestions = await getStaticQuestions();
-        console.log(`Loaded ${staticQuestions.length} static questions as fallback`);
+        console.log(`Loaded ${staticQuestions.length} static questions as fallback - ALL questions`);
         setQuestions(staticQuestions);
       } catch (error) {
         console.error('Error loading static questions:', error);
@@ -172,7 +173,6 @@ const DisplayScreen = () => {
     
     loadIntermissionSlides();
     
-    // Also listen for changes to the slides
     const handleSlidesChanged = () => {
       loadIntermissionSlides();
     };
@@ -200,10 +200,8 @@ const DisplayScreen = () => {
     }
   }, [currentState, lastStateChange]);
 
-  // Track top players for leaderboards
   useEffect(() => {
     if (players.length > 0) {
-      // Calculate round winners (top 3 based on current score)
       const roundTopPlayers = [...players]
         .sort((a, b) => (b.score || 0) - (a.score || 0))
         .slice(0, 3)
@@ -214,8 +212,6 @@ const DisplayScreen = () => {
       
       setRoundWinners(roundTopPlayers);
       
-      // For day winners, we would normally fetch from storage/database
-      // For now, we'll use the same list but mark them differently
       setDayWinners(roundTopPlayers.map(player => ({
         ...player,
         isDayWinner: true
@@ -610,7 +606,6 @@ const DisplayScreen = () => {
         );
         
       case 'intermission':
-        // If the showWinnerSlide setting is enabled and we have winners, show winner slide
         if (gameSettings.showWinnerSlide !== false && roundWinners.length > 0 && currentSlideIndex === 0) {
           return renderWinnerSlide();
         }
