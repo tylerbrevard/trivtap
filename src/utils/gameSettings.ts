@@ -1,4 +1,3 @@
-
 // Game settings that are shared across components
 // These would ideally come from a database in a real app
 
@@ -12,6 +11,7 @@ export type GameSettings = {
   autoProgress: boolean;
   showIntermission: boolean;
   slideRotationTime: number;
+  showWinnerSlide: boolean; // Added this property
 };
 
 // Create the settings object matching our type
@@ -24,6 +24,7 @@ export const gameSettings: GameSettings = {
   autoProgress: true, // automatically progress through questions
   showIntermission: true, // show intermission slides
   slideRotationTime: 10, // seconds per slide rotation
+  showWinnerSlide: true, // show winner leaderboard slide during intermission
 };
 
 // Helper function to update a specific setting

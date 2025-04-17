@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -96,7 +95,8 @@ const BucketQuestions: React.FC<BucketQuestionsProps> = ({
                 text: question.text,
                 options: options,
                 correctAnswer: question.correct_answer,
-                category: question.categories ? question.categories.name : bucketName
+                category: question.categories ? question.categories.name : bucketName,
+                difficulty: 'medium' // Default to medium difficulty if not specified
               };
             });
             
