@@ -12,7 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { getStaticQuestions, StaticQuestion, getImportedQuestions } from "@/utils/staticQuestions";
+import { getStaticQuestions, StaticQuestion } from "@/utils/staticQuestions";
 
 interface BucketQuestionsProps {
   bucketId: string;
