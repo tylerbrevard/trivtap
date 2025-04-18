@@ -165,7 +165,6 @@ const DisplayScreen = () => {
       if (savedSlides) {
         try {
           const slides = JSON.parse(savedSlides);
-          // Changed this line to filter by "isActive" instead of looking for a specific property
           const activeSlides = slides.filter((slide: any) => slide.isActive === true);
           console.log(`Found ${slides.length} total slides, ${activeSlides.length} are active`);
           setIntermissionSlides(activeSlides);
@@ -193,7 +192,7 @@ const DisplayScreen = () => {
     let slideRotationTimer: number | undefined;
     
     if (currentState === 'intermission' && intermissionSlides.length > 1) {
-      const rotationTime = gameSettings.slideRotationTime || 10; // Default to 10 seconds if not set
+      const rotationTime = gameSettings.slideRotationTime || 10;
       console.log(`Setting up slide rotation timer for ${rotationTime} seconds`);
       
       slideRotationTimer = window.setTimeout(() => {
@@ -201,7 +200,6 @@ const DisplayScreen = () => {
         setCurrentSlideIndex(nextIndex);
         console.log(`Rotating to slide ${nextIndex + 1} of ${intermissionSlides.length}`);
         
-        // Update gameState in localStorage to persist the current slide index
         const gameStateStr = localStorage.getItem('gameState');
         if (gameStateStr) {
           try {
@@ -425,19 +423,96 @@ const DisplayScreen = () => {
     });
   };
   
-  // Update the getCurrentIntermissionSlide function to ensure it works properly
   const getCurrentIntermissionSlide = () => {
     if (intermissionSlides.length === 0) {
       return null;
     }
     
-    // Make sure we don't go out of bounds
     const slideIndex = currentSlideIndex % intermissionSlides.length;
     console.log(`Getting slide at index ${slideIndex} of ${intermissionSlides.length} active slides`);
     return intermissionSlides[slideIndex];
   };
 
-  // Update the renderContent switch case for intermission
+  const renderWinnerSlide = () => {
+    return (
+      <div className="flex flex-col items-center justify-center h-full text-center">
+        <h1 className="text-4xl font-bold mb-8 text-primary">Round Winners</h1>
+        
+        {roundWinners.length > 0 ? (
+          <div className="w-full max-w-2xl">
+            <div className="flex justify-center items-end gap-4 mb-8">
+              {roundWinners.length > 1 && (
+                <div className="flex flex-col items-center">
+                  <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-gray-400">
+                    <span className="text-3xl font-bold text-gray-400">2</span>
+                  </div>
+                  <div className="text-center">
+                    <div className="h-40 bg-gradient-to-t from-gray-600 to-gray-400 w-24 rounded-t-lg flex items-end justify-center pb-4">
+                      <span className="text-white font-bold">{roundWinners[1].score || 0}</span>
+                    </div>
+                    <div className="bg-gray-200 text-gray-800 py-2 px-4 rounded-b-lg">
+                      <span className="font-medium">{roundWinners[1].name}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {roundWinners.length > 0 && (
+                <div className="flex flex-col items-center -mt-8">
+                  <div className="w-24 h-24 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-yellow-400">
+                    <span className="text-4xl font-bold text-yellow-400">1</span>
+                  </div>
+                  <div className="text-center">
+                    <div className="h-52 bg-gradient-to-t from-yellow-600 to-yellow-400 w-32 rounded-t-lg flex items-end justify-center pb-4">
+                      <span className="text-white font-bold">{roundWinners[0].score || 0}</span>
+                    </div>
+                    <div className="bg-yellow-100 text-yellow-800 py-2 px-4 rounded-b-lg">
+                      <span className="font-medium">{roundWinners[0].name}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {roundWinners.length > 2 && (
+                <div className="flex flex-col items-center">
+                  <div className="w-20 h-20 bg-card rounded-full flex items-center justify-center mb-2 border-4 border-amber-700">
+                    <span className="text-3xl font-bold text-amber-700">3</span>
+                  </div>
+                  <div className="text-center">
+                    <div className="h-32 bg-gradient-to-t from-amber-800 to-amber-500 w-24 rounded-t-lg flex items-end justify-center pb-4">
+                      <span className="text-white font-bold">{roundWinners[2].score || 0}</span>
+                    </div>
+                    <div className="bg-amber-100 text-amber-800 py-2 px-4 rounded-b-lg">
+                      <span className="font-medium">{roundWinners[2].name}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+            
+            <div className="card-trivia p-6 mt-4">
+              <h2 className="text-2xl font-semibold mb-4">Congratulations!</h2>
+              <p className="text-lg">Let's give a round of applause to our top players!</p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center text-muted-foreground">
+            <p>No players have joined yet.</p>
+          </div>
+        )}
+        
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+            <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+            <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
+              Force Next Question
+            </Button>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const renderContent = () => {
     switch (currentState) {
       case 'join':

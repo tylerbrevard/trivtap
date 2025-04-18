@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface StaticQuestion {
@@ -890,8 +889,21 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
     
     const userId = session.session.user.id;
     
+    // Check if the user_questions table exists
+    const { error: tableCheckError } = await supabase
+      .from('questions')
+      .select('id')
+      .limit(1);
+      
+    // If there's an error accessing the questions table, return empty array
+    if (tableCheckError) {
+      console.log('Error checking for questions table:', tableCheckError);
+      return [];
+    }
+    
+    // Try to query user questions from the questions table with user_id filter instead
     const { data, error } = await supabase
-      .from('user_questions')
+      .from('questions')
       .select(`
         id,
         text,
@@ -1237,4 +1249,42 @@ export const getAllAvailableQuestions = async (userId?: string): Promise<StaticQ
     console.error('Error retrieving all available questions:', error);
     return baseStaticQuestions;
   }
+};
+
+/**
+ * Gets a random subset of questions from all available questions
+ * @param count Number of questions to get
+ * @returns Random questions
+ */
+export const getRandomQuestions = async (count: number = 15): Promise<StaticQuestion[]> => {
+  try {
+    const allQuestions = await getAllAvailableQuestions();
+    
+    if (allQuestions.length <= count) {
+      return allQuestions;
+    }
+    
+    // Shuffle array and take the first 'count' elements
+    const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
+    return shuffled.slice(0, count);
+  } catch (error) {
+    console.error('Error getting random questions:', error);
+    return baseStaticQuestions.slice(0, count);
+  }
+};
+
+/**
+ * Format questions for game display with timer settings
+ * @param questions Questions to format
+ * @param defaultTimeLimit Default time limit per question
+ * @returns Formatted questions
+ */
+export const formatQuestionsForGame = (
+  questions: StaticQuestion[],
+  defaultTimeLimit: number = 20
+): StaticQuestion[] => {
+  return questions.map(question => ({
+    ...question,
+    timeLimit: question.timeLimit || defaultTimeLimit
+  }));
 };

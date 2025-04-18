@@ -6,7 +6,7 @@ import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
-import { baseStaticQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion, getAllAvailableQuestions } from '@/utils/staticQuestions';
+import { baseStaticQuestions, getAllAvailableQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion } from '@/utils/staticQuestions';
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -39,7 +39,6 @@ const PlayerGame = () => {
       try {
         setLoading(true);
         
-        // Use getAllAvailableQuestions instead of getRandomQuestions to load all questions
         const allQuestions = await getAllAvailableQuestions();
         const formattedQuestions = formatQuestionsForGame(allQuestions, gameSettings.questionDuration);
         
@@ -57,7 +56,6 @@ const PlayerGame = () => {
             setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
             setIsAnswerRevealed(parsedState.state === 'answer');
             
-            // Reset "Time's Up" message when receiving a new question state
             if (parsedState.state === 'question' && parsedState.timeLeft > 0) {
               setShowTimeUp(false);
             }
@@ -74,7 +72,6 @@ const PlayerGame = () => {
     
     loadQuestions();
     
-    // Register player on display screen
     const notifyDisplayAboutPlayer = () => {
       const storedName = sessionStorage.getItem('playerName');
       const storedGameId = sessionStorage.getItem('gameId');
@@ -89,7 +86,6 @@ const PlayerGame = () => {
         }));
         console.log('Notified display about player:', storedName);
         
-        // Broadcast a custom event for display screens in other windows
         const playerJoinedEvent = new CustomEvent('playerJoined', { 
           detail: { 
             name: storedName, 
@@ -102,7 +98,6 @@ const PlayerGame = () => {
       }
     };
     
-    // Call immediately and then periodically to ensure display screens are aware of this player
     notifyDisplayAboutPlayer();
     const notifyInterval = setInterval(notifyDisplayAboutPlayer, 5000);
     
@@ -206,7 +201,6 @@ const PlayerGame = () => {
             setPendingPoints(0);
             setPendingCorrect(false);
             
-            // Clear "Time's Up" message when changing to a new question
             setShowTimeUp(false);
           } 
           else if (newGameState === 'question') {
@@ -214,20 +208,17 @@ const PlayerGame = () => {
             
             if (parsedState.timeLeft > 0) {
               setAnsweredCorrectly(null);
-              setShowTimeUp(false); // Clear "Time's Up" if timer is running
+              setShowTimeUp(false);
             } else if (parsedState.timeLeft === 0 && !isAnswerRevealed) {
-              // Show "Time's Up" only when time is 0 and answer is not revealed
               setShowTimeUp(true);
             }
           }
           
-          // When changing to answer state, reveal the correct/incorrect status
           if (newGameState === 'answer' && !isAnswerRevealed) {
             console.log('Changing to answer state');
             setIsAnswerRevealed(true);
             setTimeLeft(0);
             
-            // Apply pending points and update answer status
             if (pendingPoints > 0 && pendingCorrect) {
               setScore(prevScore => prevScore + pendingPoints);
               setCorrectAnswers(prev => prev + 1);
@@ -251,7 +242,6 @@ const PlayerGame = () => {
                 variant: "default",
               });
               
-              // Reset pending values
               setPendingPoints(0);
               setPendingCorrect(false);
             } else if (hasSelectedAnswer) {
@@ -273,7 +263,6 @@ const PlayerGame = () => {
             setPendingPoints(0);
             setPendingCorrect(false);
             
-            // Only show "Time's Up" if timeLeft is 0 in question state
             setShowTimeUp(parsedState.timeLeft === 0);
           }
           
@@ -285,7 +274,7 @@ const PlayerGame = () => {
             setIsAnswerRevealed(false);
             setPendingPoints(0);
             setPendingCorrect(false);
-            setShowTimeUp(false); // Clear "Time's Up" when in intermission or leaderboard
+            setShowTimeUp(false);
           }
         } catch (error) {
           console.error('Error parsing game state', error);
@@ -323,7 +312,6 @@ const PlayerGame = () => {
           setPendingPoints(0);
           setPendingCorrect(false);
           
-          // Clear "Time's Up" message when changing to a new question
           setShowTimeUp(false);
         }
         
@@ -332,17 +320,15 @@ const PlayerGame = () => {
           
           if (gameState.timeLeft > 0) {
             setAnsweredCorrectly(null);
-            setShowTimeUp(false); // Clear "Time's Up" if timer is running
+            setShowTimeUp(false);
           } else if (gameState.timeLeft === 0 && !isAnswerRevealed) {
-            // Show "Time's Up" when answering period has ended
             setShowTimeUp(true);
           }
         } else if (gameState.state === 'answer') {
           setIsAnswerRevealed(true);
           setTimeLeft(0);
-          setShowTimeUp(false); // Clear "Time's Up" message in answer state
+          setShowTimeUp(false);
           
-          // Apply pending points
           if (pendingPoints > 0 && pendingCorrect) {
             setScore(prevScore => prevScore + pendingPoints);
             setCorrectAnswers(prev => prev + 1);
@@ -378,7 +364,7 @@ const PlayerGame = () => {
             });
           }
         } else if (gameState.state === 'intermission' || gameState.state === 'leaderboard') {
-          setShowTimeUp(false); // Clear "Time's Up" in intermission or leaderboard
+          setShowTimeUp(false);
         }
       }
     });
@@ -392,12 +378,10 @@ const PlayerGame = () => {
       
       if (isCorrect) {
         const pointsEarned = 100 + (timeLeft * 10);
-        // Instead of applying points immediately, store them for later
         setPendingPoints(pointsEarned);
         setPendingCorrect(true);
         console.log('Stored pending points:', pointsEarned);
       } else {
-        // Just mark that we selected an answer, but don't reveal result yet
         console.log('Answer selected, but result hidden until reveal');
       }
       
@@ -409,7 +393,6 @@ const PlayerGame = () => {
     const updateGameHistory = async () => {
       if (isRegistered && registeredPlayerId && currentGameState === 'leaderboard' && questions.length > 0) {
         try {
-          // Check if we already recorded this game
           const gameHistoryKey = `game_history_${gameId}_${registeredPlayerId}`;
           const historyRecorded = localStorage.getItem(gameHistoryKey) === 'true';
           
@@ -457,7 +440,7 @@ const PlayerGame = () => {
   const handleForceSync = () => {
     setLastGameStateTimestamp(0);
     setFailedSyncAttempts(0);
-    setShowTimeUp(false); // Reset time's up message when forcing sync
+    setShowTimeUp(false);
     toast({
       title: "Syncing",
       description: "Forced sync with game state",
