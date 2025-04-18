@@ -1,5 +1,4 @@
-
-import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, getAllAvailableQuestions, convertQuestionsToCSV } from './importUtils';
+import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, convertQuestionsToCSV } from './importUtils';
 import { supabase } from "@/integrations/supabase/client";
 
 // Collection of static trivia questions to reduce database usage
@@ -395,6 +394,28 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
   } catch (error) {
     console.error("Error getting static questions:", error);
     return baseStaticQuestions; // Fallback to base questions on error
+  }
+};
+
+// Make sure to export the getAllAvailableQuestions function
+export const getAllAvailableQuestions = async (): Promise<StaticQuestion[]> => {
+  try {
+    // Check for imported questions in localStorage
+    const importedQuestionsStr = localStorage.getItem('imported_questions');
+    let importedQuestions: StaticQuestion[] = [];
+    
+    if (importedQuestionsStr) {
+      try {
+        importedQuestions = JSON.parse(importedQuestionsStr) || [];
+      } catch (error) {
+        console.error("Error parsing imported questions:", error);
+      }
+    }
+    
+    return importedQuestions;
+  } catch (error) {
+    console.error("Error getting all available questions:", error);
+    return [];
   }
 };
 
