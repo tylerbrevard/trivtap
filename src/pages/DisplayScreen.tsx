@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -20,6 +19,7 @@ const DisplayScreen = () => {
   const [intermissionSlides, setIntermissionSlides] = useState<any[]>([]);
   const [roundWinners, setRoundWinners] = useState<any[]>([]);
   const [dayWinners, setDayWinners] = useState<any[]>([]);
+  const [displayedQuestionCount, setDisplayedQuestionCount] = useState(0);
   const { toast } = useToast();
   
   const { 
@@ -124,6 +124,7 @@ const DisplayScreen = () => {
             
             if (formattedQuestions.length > 0) {
               setQuestions(formattedQuestions);
+              setDisplayedQuestionCount(formattedQuestions.length);
             } else {
               console.log('No questions in Supabase default bucket, falling back to static questions');
               fetchStaticQuestions();
@@ -150,16 +151,17 @@ const DisplayScreen = () => {
         const staticQuestions = await getStaticQuestions();
         console.log(`Loaded ${staticQuestions.length} static questions as fallback - ALL questions`);
         setQuestions(staticQuestions);
+        setDisplayedQuestionCount(staticQuestions.length);
       } catch (error) {
         console.error('Error loading static questions:', error);
         setQuestions([]);
+        setDisplayedQuestionCount(0);
       }
     };
     
     fetchQuestions();
   }, []);
 
-  // Load intermission slides
   useEffect(() => {
     const loadIntermissionSlides = () => {
       const savedSlides = localStorage.getItem('intermissionSlides');
@@ -188,7 +190,6 @@ const DisplayScreen = () => {
     };
   }, []);
 
-  // Set up slide rotation timer for intermission
   useEffect(() => {
     let slideRotationTimer: number | undefined;
     
@@ -221,7 +222,6 @@ const DisplayScreen = () => {
     };
   }, [currentState, currentSlideIndex, intermissionSlides.length, gameSettings.slideRotationTime]);
 
-  // Track slide index from game state
   useEffect(() => {
     if (currentState === 'intermission') {
       const currentGameState = localStorage.getItem('gameState');
@@ -239,7 +239,6 @@ const DisplayScreen = () => {
     }
   }, [currentState, lastStateChange]);
 
-  // Set up winners
   useEffect(() => {
     if (players.length > 0) {
       const roundTopPlayers = [...players]
@@ -259,47 +258,6 @@ const DisplayScreen = () => {
     }
   }, [players, currentState]);
 
-  // Initialize game code
-  useEffect(() => {
-    const storedGameCode = localStorage.getItem('persistentGameCode');
-    
-    if (storedGameCode) {
-      console.log('Using existing game code:', storedGameCode);
-      setGameCode(storedGameCode);
-    } else {
-      const generateGameCode = () => {
-        const characters = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-        let result = '';
-        for (let i = 0; i < 4; i++) {
-          result += characters.charAt(Math.floor(Math.random() * characters.length));
-        }
-        return result;
-      };
-      
-      const newCode = generateGameCode();
-      setGameCode(newCode);
-      localStorage.setItem('persistentGameCode', newCode);
-      console.log('Generated new game code:', newCode);
-    }
-    
-    const sessionCode = storedGameCode || localStorage.getItem('persistentGameCode');
-    sessionStorage.setItem('activeGameCode', sessionCode);
-    localStorage.setItem('activeGameCode', sessionCode);
-    
-    const playerKeys = Object.keys(localStorage).filter(key => key.startsWith('playerScore_'));
-    playerKeys.forEach(key => localStorage.removeItem(key));
-    if (localStorage.getItem('playerJoined')) {
-      localStorage.removeItem('playerJoined');
-    }
-    
-    return () => {
-      if (process.env.NODE_ENV === 'development') {
-        console.log('Cleaning up development test data');
-      }
-    };
-  }, []);
-  
-  // Track player joins and scores
   useEffect(() => {
     const checkForPlayerJoins = () => {
       const playerJoinData = localStorage.getItem('playerJoined');
@@ -358,7 +316,6 @@ const DisplayScreen = () => {
     };
   }, [players, toast, gameCode]);
   
-  // Auto-start game timer
   useEffect(() => {
     let timerId: number | undefined;
     
@@ -395,7 +352,6 @@ const DisplayScreen = () => {
     }
   };
   
-  // Make sure we have a valid current question, even if the questionIndex is out of bounds
   const getCurrentQuestion = () => {
     if (!questions.length) {
       return { 
@@ -406,7 +362,6 @@ const DisplayScreen = () => {
       };
     }
     
-    // Ensure we have a valid index (could be out of range if questions array changed)
     const safeIndex = questionIndex < questions.length ? questionIndex : 0;
     return questions[safeIndex] || { 
       text: "Loading question...", 
@@ -896,7 +851,7 @@ const DisplayScreen = () => {
               Players: {uniquePlayers.length}
             </div>
             <div className="bg-blue-500/20 text-blue-500 px-3 py-1 rounded-full">
-              Questions: {questions.length}
+              Questions: {displayedQuestionCount}
             </div>
           </div>
         </div>
