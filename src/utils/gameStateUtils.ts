@@ -117,14 +117,23 @@ export const moveToNextQuestion = (
   let nextQuestionIndex: number;
   
   // If we've shown all questions, reset the tracking
-  if (shownQuestionIndices.length >= totalQuestions) {
-    console.log('All questions have been shown, resetting question cycle');
+  if (shownQuestionIndices.length >= totalQuestions || shownQuestionIndices.length >= 1000) {
+    console.log('All questions have been shown or reached limit, resetting question cycle');
     shownQuestionIndices = [currentQuestionIndex];
   }
   
   // Find a question that hasn't been shown yet
+  let attemptsCounter = 0;
   do {
     nextQuestionIndex = Math.floor(Math.random() * totalQuestions);
+    attemptsCounter++;
+    
+    // Prevent infinite loops with a reasonable attempt limit
+    if (attemptsCounter > 100) {
+      console.log('Exceeded attempt limit, using a random question');
+      nextQuestionIndex = Math.floor(Math.random() * totalQuestions);
+      break;
+    }
   } while (shownQuestionIndices.includes(nextQuestionIndex) && shownQuestionIndices.length < totalQuestions);
   
   console.log(`Moving to next question: ${nextQuestionIndex} from ${currentQuestionIndex} (${shownQuestionIndices.length}/${totalQuestions} shown)`);

@@ -6,7 +6,7 @@ import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
-import { baseStaticQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion } from '@/utils/staticQuestions';
+import { baseStaticQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion, getAllAvailableQuestions } from '@/utils/staticQuestions';
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -39,12 +39,12 @@ const PlayerGame = () => {
       try {
         setLoading(true);
         
-        // Use the static questions instead of loading from the database
-        const randomQuestions = await getRandomQuestions(15);
-        const formattedQuestions = formatQuestionsForGame(randomQuestions, gameSettings.questionDuration);
+        // Use getAllAvailableQuestions instead of getRandomQuestions to load all questions
+        const allQuestions = await getAllAvailableQuestions();
+        const formattedQuestions = formatQuestionsForGame(allQuestions, gameSettings.questionDuration);
         
         if (formattedQuestions.length > 0) {
-          console.log(`Loaded ${formattedQuestions.length} questions from static source for player view`);
+          console.log(`Loaded ${formattedQuestions.length} questions from all sources for player view`);
           setQuestions(formattedQuestions);
           
           const gameState = localStorage.getItem('gameState');

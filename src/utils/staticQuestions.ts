@@ -1,7 +1,5 @@
-import { saveQuestionsToLocalStorage, getQuestionsFromLocalStorage, convertQuestionsToCSV } from './importUtils';
 import { supabase } from "@/integrations/supabase/client";
 
-// Collection of static trivia questions to reduce database usage
 export interface StaticQuestion {
   id: string;
   text: string;
@@ -12,659 +10,879 @@ export interface StaticQuestion {
   timeLimit?: number;
 }
 
-// Base set of static questions that will always be available
 export const baseStaticQuestions: StaticQuestion[] = [
   {
-    id: "q1",
-    text: "What is the capital of France?",
-    options: ["London", "Berlin", "Paris", "Madrid"],
-    correctAnswer: "Paris",
-    category: "Geography",
-    difficulty: "easy"
+    id: '1',
+    text: 'What is the capital of France?',
+    options: ['Berlin', 'Madrid', 'Paris', 'Rome'],
+    correctAnswer: 'Paris',
+    category: 'Geography',
+    difficulty: 'easy',
   },
   {
-    id: "q2",
-    text: "Who painted the Mona Lisa?",
-    options: ["Vincent Van Gogh", "Leonardo da Vinci", "Pablo Picasso", "Michelangelo"],
-    correctAnswer: "Leonardo da Vinci",
-    category: "Art",
-    difficulty: "easy"
+    id: '2',
+    text: 'What is 2 + 2?',
+    options: ['3', '4', '5', '6'],
+    correctAnswer: '4',
+    category: 'Math',
+    difficulty: 'easy',
   },
   {
-    id: "q3",
-    text: "Which planet is known as the Red Planet?",
-    options: ["Venus", "Jupiter", "Mars", "Saturn"],
-    correctAnswer: "Mars",
-    category: "Science",
-    difficulty: "easy"
+    id: '3',
+    text: 'Which planet is known as the Red Planet?',
+    options: ['Earth', 'Mars', 'Jupiter', 'Venus'],
+    correctAnswer: 'Mars',
+    category: 'Science',
+    difficulty: 'medium',
   },
   {
-    id: "q4",
-    text: "In which year did World War II end?",
-    options: ["1943", "1945", "1947", "1950"],
-    correctAnswer: "1945",
-    category: "History",
-    difficulty: "easy"
+    id: '4',
+    text: 'Who wrote Hamlet?',
+    options: ['Shakespeare', 'Dickens', 'Austen', 'Chaucer'],
+    correctAnswer: 'Shakespeare',
+    category: 'Literature',
+    difficulty: 'medium',
   },
   {
-    id: "q5",
-    text: "What is the largest ocean on Earth?",
-    options: ["Atlantic Ocean", "Indian Ocean", "Arctic Ocean", "Pacific Ocean"],
-    correctAnswer: "Pacific Ocean",
-    category: "Geography",
-    difficulty: "easy"
+    id: '5',
+    text: 'What year did World War II end?',
+    options: ['1943', '1944', '1945', '1946'],
+    correctAnswer: '1945',
+    category: 'History',
+    difficulty: 'hard',
   },
   {
-    id: "q6",
-    text: "Who wrote 'Romeo and Juliet'?",
-    options: ["Charles Dickens", "William Shakespeare", "Jane Austen", "Mark Twain"],
-    correctAnswer: "William Shakespeare",
-    category: "Literature",
-    difficulty: "easy"
+    id: '6',
+    text: 'What is the chemical symbol for gold?',
+    options: ['Au', 'Ag', 'Fe', 'Cu'],
+    correctAnswer: 'Au',
+    category: 'Science',
+    difficulty: 'medium',
   },
   {
-    id: "q7",
-    text: "What is the chemical symbol for gold?",
-    options: ["Go", "Gd", "Au", "Ag"],
-    correctAnswer: "Au",
-    category: "Science",
-    difficulty: "medium"
+    id: '7',
+    text: 'Which country is known as the Land of the Rising Sun?',
+    options: ['China', 'South Korea', 'Japan', 'Vietnam'],
+    correctAnswer: 'Japan',
+    category: 'Geography',
+    difficulty: 'medium',
   },
   {
-    id: "q8",
-    text: "Which country won the 2018 FIFA World Cup?",
-    options: ["Brazil", "Germany", "France", "Argentina"],
-    correctAnswer: "France",
-    category: "Sports",
-    difficulty: "medium"
+    id: '8',
+    text: 'Who painted the Mona Lisa?',
+    options: ['Michelangelo', 'Leonardo da Vinci', 'Raphael', 'Donatello'],
+    correctAnswer: 'Leonardo da Vinci',
+    category: 'Art',
+    difficulty: 'medium',
   },
   {
-    id: "q9",
-    text: "What is the square root of 144?",
-    options: ["12", "14", "18", "24"],
-    correctAnswer: "12",
-    category: "Mathematics",
-    difficulty: "medium"
+    id: '9',
+    text: 'What is the largest ocean on Earth?',
+    options: ['Atlantic', 'Indian', 'Arctic', 'Pacific'],
+    correctAnswer: 'Pacific',
+    category: 'Geography',
+    difficulty: 'easy',
   },
   {
-    id: "q10",
-    text: "Who discovered penicillin?",
-    options: ["Marie Curie", "Alexander Fleming", "Louis Pasteur", "Joseph Lister"],
-    correctAnswer: "Alexander Fleming",
-    category: "Science",
-    difficulty: "medium"
+    id: '10',
+    text: 'In what year did the Titanic sink?',
+    options: ['1910', '1912', '1914', '1916'],
+    correctAnswer: '1912',
+    category: 'History',
+    difficulty: 'medium',
   },
   {
-    id: "q11",
-    text: "Which element has the chemical symbol 'O'?",
-    options: ["Gold", "Oxygen", "Osmium", "Oganesson"],
-    correctAnswer: "Oxygen",
-    category: "Science",
-    difficulty: "easy"
+    id: '11',
+    text: 'What is the capital of Australia?',
+    options: ['Sydney', 'Melbourne', 'Canberra', 'Perth'],
+    correctAnswer: 'Canberra',
+    category: 'Geography',
+    difficulty: 'medium',
   },
   {
-    id: "q12",
-    text: "In what year was the first iPhone released?",
-    options: ["2005", "2007", "2009", "2010"],
-    correctAnswer: "2007",
-    category: "Technology",
-    difficulty: "medium"
+    id: '12',
+    text: 'What is the value of pi (π) to two decimal places?',
+    options: ['3.14', '3.16', '3.12', '3.18'],
+    correctAnswer: '3.14',
+    category: 'Math',
+    difficulty: 'easy',
   },
   {
-    id: "q13",
-    text: "What is the capital of Japan?",
-    options: ["Beijing", "Seoul", "Tokyo", "Bangkok"],
-    correctAnswer: "Tokyo",
-    category: "Geography",
-    difficulty: "easy"
+    id: '13',
+    text: 'Which gas do plants absorb from the atmosphere?',
+    options: ['Oxygen', 'Carbon Dioxide', 'Nitrogen', 'Hydrogen'],
+    correctAnswer: 'Carbon Dioxide',
+    category: 'Science',
+    difficulty: 'easy',
   },
   {
-    id: "q14",
-    text: "Who was the first person to step on the moon?",
-    options: ["Buzz Aldrin", "Yuri Gagarin", "Neil Armstrong", "John Glenn"],
-    correctAnswer: "Neil Armstrong",
-    category: "Space",
-    difficulty: "easy"
+    id: '14',
+    text: 'Who is the author of "Pride and Prejudice"?',
+    options: ['Jane Austen', 'Charlotte Brontë', 'Emily Brontë', 'Louisa May Alcott'],
+    correctAnswer: 'Jane Austen',
+    category: 'Literature',
+    difficulty: 'medium',
   },
   {
-    id: "q15",
-    text: "What is the largest mammal in the world?",
-    options: ["Elephant", "Blue Whale", "Giraffe", "Polar Bear"],
-    correctAnswer: "Blue Whale",
-    category: "Animals",
-    difficulty: "easy"
-  }
+    id: '15',
+    text: 'What is the currency of Japan?',
+    options: ['Yuan', 'Won', 'Ringgit', 'Yen'],
+    correctAnswer: 'Yen',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '16',
+    text: 'What is the largest planet in our solar system?',
+    options: ['Earth', 'Mars', 'Saturn', 'Jupiter'],
+    correctAnswer: 'Jupiter',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '17',
+    text: 'Who developed the theory of relativity?',
+    options: ['Isaac Newton', 'Albert Einstein', 'Galileo Galilei', 'Stephen Hawking'],
+    correctAnswer: 'Albert Einstein',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '18',
+    text: 'Which famous scientist formulated the laws of motion and universal gravitation?',
+    options: ['Marie Curie', 'Isaac Newton', 'Albert Einstein', 'Nikola Tesla'],
+    correctAnswer: 'Isaac Newton',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '19',
+    text: 'What is the chemical symbol for water?',
+    options: ['H2O', 'CO2', 'NaCl', 'O2'],
+    correctAnswer: 'H2O',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '20',
+    text: 'Which gas do humans breathe in from the atmosphere?',
+    options: ['Carbon Dioxide', 'Oxygen', 'Nitrogen', 'Hydrogen'],
+    correctAnswer: 'Oxygen',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '21',
+    text: 'What is the smallest country in the world?',
+    options: ['Monaco', 'Nauru', 'San Marino', 'Vatican City'],
+    correctAnswer: 'Vatican City',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '22',
+    text: 'Which mountain is the highest above sea level?',
+    options: ['Mount Kilimanjaro', 'Mount Everest', 'Mount McKinley', 'Mount Fuji'],
+    correctAnswer: 'Mount Everest',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '23',
+    text: 'What is the capital city of Canada?',
+    options: ['Toronto', 'Vancouver', 'Montreal', 'Ottawa'],
+    correctAnswer: 'Ottawa',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '24',
+    text: 'Which river is the longest in the world?',
+    options: ['Amazon', 'Nile', 'Yangtze', 'Mississippi'],
+    correctAnswer: 'Nile',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '25',
+    text: 'What is the name of the largest desert in the world?',
+    options: ['Sahara', 'Arctic', 'Antarctic', 'Arabian'],
+    correctAnswer: 'Antarctic',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '26',
+    text: 'What is 12 x 12?',
+    options: ['144', '124', '134', '154'],
+    correctAnswer: '144',
+    category: 'Math',
+    difficulty: 'easy',
+  },
+  {
+    id: '27',
+    text: 'Solve for x: 2x + 5 = 15',
+    options: ['x = 10', 'x = 5', 'x = 20', 'x = 2'],
+    correctAnswer: 'x = 5',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '28',
+    text: 'What is the square root of 81?',
+    options: ['7', '8', '9', '10'],
+    correctAnswer: '9',
+    category: 'Math',
+    difficulty: 'easy',
+  },
+  {
+    id: '29',
+    text: 'If a train travels 120 miles in 2 hours, what is its average speed?',
+    options: ['40 mph', '50 mph', '60 mph', '70 mph'],
+    correctAnswer: '60 mph',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '30',
+    text: 'What is the area of a circle with a radius of 5 units? (Use π = 3.14)',
+    options: ['78.5', '31.4', '15.7', '157'],
+    correctAnswer: '78.5',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '31',
+    text: 'Who wrote "Romeo and Juliet"?',
+    options: ['Charles Dickens', 'William Shakespeare', 'Jane Austen', 'Mark Twain'],
+    correctAnswer: 'William Shakespeare',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '32',
+    text: 'Which novel opens with the line, "It is a truth universally acknowledged..."?',
+    options: ['Pride and Prejudice', 'Jane Eyre', 'Emma', 'Sense and Sensibility'],
+    correctAnswer: 'Pride and Prejudice',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '33',
+    text: 'Who is the author of "To Kill a Mockingbird"?',
+    options: ['Harper Lee', 'George Orwell', 'J.D. Salinger', 'F. Scott Fitzgerald'],
+    correctAnswer: 'Harper Lee',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '34',
+    text: 'Which book features the character Jay Gatsby?',
+    options: ['The Catcher in the Rye', 'The Great Gatsby', 'A Farewell to Arms', 'Brave New World'],
+    correctAnswer: 'The Great Gatsby',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '35',
+    text: 'Who wrote "1984"?',
+    options: ['Aldous Huxley', 'George Orwell', 'Ray Bradbury', 'Ernest Hemingway'],
+    correctAnswer: 'George Orwell',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '36',
+    text: 'In which year did the French Revolution begin?',
+    options: ['1776', '1789', '1804', '1815'],
+    correctAnswer: '1789',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '37',
+    text: 'Who was the first President of the United States?',
+    options: ['Thomas Jefferson', 'John Adams', 'George Washington', 'Benjamin Franklin'],
+    correctAnswer: 'George Washington',
+    category: 'History',
+    difficulty: 'easy',
+  },
+  {
+    id: '38',
+    text: 'Which war is known as "The War to End All Wars"?',
+    options: ['World War I', 'World War II', 'The Civil War', 'The Cold War'],
+    correctAnswer: 'World War I',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '39',
+    text: 'Who was the leader of the Soviet Union during World War II?',
+    options: ['Vladimir Lenin', 'Leon Trotsky', 'Joseph Stalin', 'Nikita Khrushchev'],
+    correctAnswer: 'Joseph Stalin',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '40',
+    text: 'In what year did the Berlin Wall fall?',
+    options: ['1985', '1989', '1991', '1995'],
+    correctAnswer: '1989',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '41',
+    text: 'What is the chemical symbol for oxygen?',
+    options: ['O', 'Ox', 'O2', 'Og'],
+    correctAnswer: 'O',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '42',
+    text: 'Which planet is closest to the Sun?',
+    options: ['Venus', 'Mars', 'Mercury', 'Earth'],
+    correctAnswer: 'Mercury',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '43',
+    text: 'What is the speed of light in a vacuum?',
+    options: ['300,000 km/s', '150,000 km/s', '450,000 km/s', '200,000 km/s'],
+    correctAnswer: '300,000 km/s',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '44',
+    text: 'What is the hardest natural substance on Earth?',
+    options: ['Iron', 'Diamond', 'Gold', 'Quartz'],
+    correctAnswer: 'Diamond',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '45',
+    text: 'Which element has the atomic number 1?',
+    options: ['Oxygen', 'Hydrogen', 'Helium', 'Carbon'],
+    correctAnswer: 'Hydrogen',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '46',
+    text: 'What is the capital of Italy?',
+    options: ['Milan', 'Venice', 'Rome', 'Naples'],
+    correctAnswer: 'Rome',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '47',
+    text: 'Which country is home to the Eiffel Tower?',
+    options: ['Spain', 'Italy', 'Germany', 'France'],
+    correctAnswer: 'France',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '48',
+    text: 'What is the name of the sea between Europe and Africa?',
+    options: ['Atlantic Ocean', 'Mediterranean Sea', 'Indian Ocean', 'Arctic Sea'],
+    correctAnswer: 'Mediterranean Sea',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '49',
+    text: 'Which continent is known as the "Land Down Under"?',
+    options: ['Africa', 'South America', 'Australia', 'Antarctica'],
+    correctAnswer: 'Australia',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '50',
+    text: 'What is the capital of Brazil?',
+    options: ['Rio de Janeiro', 'São Paulo', 'Brasília', 'Salvador'],
+    correctAnswer: 'Brasília',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '51',
+    text: 'Solve for x: 3x - 7 = 14',
+    options: ['x = 3', 'x = 7', 'x = 21', 'x = 14'],
+    correctAnswer: 'x = 7',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '52',
+    text: 'What is the value of 7! (7 factorial)?',
+    options: ['5040', '720', '120', '362880'],
+    correctAnswer: '5040',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '53',
+    text: 'If a rectangle has a length of 8 units and a width of 6 units, what is its area?',
+    options: ['14', '28', '48', '56'],
+    correctAnswer: '48',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '54',
+    text: 'What is the next number in the Fibonacci sequence: 1, 1, 2, 3, 5, 8, ?',
+    options: ['10', '11', '12', '13'],
+    correctAnswer: '13',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '55',
+    text: 'What is the result of 25 ÷ 0?',
+    options: ['0', '25', 'Undefined', '1'],
+    correctAnswer: 'Undefined',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '56',
+    text: 'Who wrote "The Odyssey"?',
+    options: ['Homer', 'Virgil', 'Sophocles', 'Plato'],
+    correctAnswer: 'Homer',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '57',
+    text: 'Which play features the character Hamlet?',
+    options: ['Macbeth', 'Othello', 'Hamlet', 'King Lear'],
+    correctAnswer: 'Hamlet',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '58',
+    text: 'Who is the author of "The Lord of the Rings"?',
+    options: ['J.K. Rowling', 'C.S. Lewis', 'J.R.R. Tolkien', 'George R.R. Martin'],
+    correctAnswer: 'J.R.R. Tolkien',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '59',
+    text: 'Which novel is set in the fictional town of Maycomb, Alabama?',
+    options: ['The Color Purple', 'Beloved', 'To Kill a Mockingbird', 'The Help'],
+    correctAnswer: 'To Kill a Mockingbird',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '60',
+    text: 'Who wrote "The Divine Comedy"?',
+    options: ['Geoffrey Chaucer', 'Dante Alighieri', 'Giovanni Boccaccio', 'Francesco Petrarch'],
+    correctAnswer: 'Dante Alighieri',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '61',
+    text: 'In which year did the United States declare independence?',
+    options: ['1775', '1776', '1783', '1789'],
+    correctAnswer: '1776',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '62',
+    text: 'Who was the Queen of England during the Elizabethan era?',
+    options: ['Queen Victoria', 'Queen Mary I', 'Queen Elizabeth I', 'Queen Anne'],
+    correctAnswer: 'Queen Elizabeth I',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '63',
+    text: 'Which event marked the beginning of World War II?',
+    options: ['Invasion of Poland', 'Attack on Pearl Harbor', 'Battle of Stalingrad', 'Signing of the Treaty of Versailles'],
+    correctAnswer: 'Invasion of Poland',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '64',
+    text: 'Who led the civil rights movement in the United States during the 1950s and 1960s?',
+    options: ['Malcolm X', 'Rosa Parks', 'Martin Luther King Jr.', 'Nelson Mandela'],
+    correctAnswer: 'Martin Luther King Jr.',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '65',
+    text: 'In what year did the Cold War officially end?',
+    options: ['1985', '1989', '1991', '1995'],
+    correctAnswer: '1991',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '66',
+    text: 'What is the chemical symbol for nitrogen?',
+    options: ['Ni', 'Ne', 'Na', 'N'],
+    correctAnswer: 'N',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '67',
+    text: 'Which planet is known as the "Morning Star" or "Evening Star"?',
+    options: ['Mars', 'Jupiter', 'Venus', 'Saturn'],
+    correctAnswer: 'Venus',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '68',
+    text: 'What force keeps planets in orbit around the Sun?',
+    options: ['Electromagnetism', 'Gravity', 'Nuclear Force', 'Friction'],
+    correctAnswer: 'Gravity',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '69',
+    text: 'What is the name for a group of stars that form a recognizable pattern?',
+    options: ['Galaxy', 'Nebula', 'Constellation', 'Asteroid'],
+    correctAnswer: 'Constellation',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '70',
+    text: 'Which scientist is famous for his work on radioactivity?',
+    options: ['Isaac Newton', 'Marie Curie', 'Albert Einstein', 'Nikola Tesla'],
+    correctAnswer: 'Marie Curie',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '71',
+    text: 'What is the capital of Spain?',
+    options: ['Barcelona', 'Seville', 'Madrid', 'Valencia'],
+    correctAnswer: 'Madrid',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '72',
+    text: 'Which country is known for the Great Barrier Reef?',
+    options: ['Brazil', 'Australia', 'Indonesia', 'Mexico'],
+    correctAnswer: 'Australia',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '73',
+    text: 'What is the name of the mountain range that separates Europe from Asia?',
+    options: ['Alps', 'Pyrenees', 'Ural Mountains', 'Rocky Mountains'],
+    correctAnswer: 'Ural Mountains',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '74',
+    text: 'Which river flows through Egypt?',
+    options: ['Amazon', 'Nile', 'Congo', 'Mississippi'],
+    correctAnswer: 'Nile',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '75',
+    text: 'What is the largest island in the world?',
+    options: ['Greenland', 'New Guinea', 'Borneo', 'Madagascar'],
+    correctAnswer: 'Greenland',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '76',
+    text: 'What is 15% of 200?',
+    options: ['15', '20', '30', '40'],
+    correctAnswer: '30',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '77',
+    text: 'If a shirt costs $25 and is on sale for 20% off, what is the sale price?',
+    options: ['$5', '$15', '$20', '$25'],
+    correctAnswer: '$20',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '78',
+    text: 'What is the area of a triangle with a base of 10 units and a height of 7 units?',
+    options: ['17', '35', '70', '140'],
+    correctAnswer: '35',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '79',
+    text: 'What is the value of x in the equation 4x + 8 = 20?',
+    options: ['2', '3', '4', '5'],
+    correctAnswer: '3',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '80',
+    text: 'What is the perimeter of a square with sides of 9 units?',
+    options: ['18', '27', '36', '81'],
+    correctAnswer: '36',
+    category: 'Math',
+    difficulty: 'medium',
+  },
+  {
+    id: '81',
+    text: 'Who wrote "The Canterbury Tales"?',
+    options: ['Geoffrey Chaucer', 'William Langland', 'John Milton', 'Edmund Spenser'],
+    correctAnswer: 'Geoffrey Chaucer',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '82',
+    text: 'Which Shakespearean play features the character Othello?',
+    options: ['Hamlet', 'Macbeth', 'Othello', 'King Lear'],
+    correctAnswer: 'Othello',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '83',
+    text: 'Who is the author of "One Hundred Years of Solitude"?',
+    options: ['Gabriel Garcia Marquez', 'Mario Vargas Llosa', 'Jorge Luis Borges', 'Isabel Allende'],
+    correctAnswer: 'Gabriel Garcia Marquez',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '84',
+    text: 'Which novel tells the story of the Pevensie children in a magical land?',
+    options: ['The Hobbit', 'The Chronicles of Narnia', 'Alice\'s Adventures in Wonderland', 'A Wrinkle in Time'],
+    correctAnswer: 'The Chronicles of Narnia',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '85',
+    text: 'Who wrote "Don Quixote"?',
+    options: ['Miguel de Cervantes', 'Lope de Vega', 'Pedro Calderón de la Barca', 'Tirso de Molina'],
+    correctAnswer: 'Miguel de Cervantes',
+    category: 'Literature',
+    difficulty: 'medium',
+  },
+  {
+    id: '86',
+    text: 'In which year did the American Civil War begin?',
+    options: ['1850', '1861', '1865', '1870'],
+    correctAnswer: '1861',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '87',
+    text: 'Who was the first woman to fly solo across the Atlantic Ocean?',
+    options: ['Bessie Coleman', 'Harriet Quimby', 'Amelia Earhart', 'Jacqueline Cochran'],
+    correctAnswer: 'Amelia Earhart',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '88',
+    text: 'Which event is considered the start of the Great Depression?',
+    options: ['Black Tuesday', 'Dust Bowl', 'New Deal', 'Smoot-Hawley Tariff Act'],
+    correctAnswer: 'Black Tuesday',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '89',
+    text: 'Who was the leader of Nazi Germany during World War II?',
+    options: ['Benito Mussolini', 'Hideki Tojo', 'Adolf Hitler', 'Francisco Franco'],
+    correctAnswer: 'Adolf Hitler',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '90',
+    text: 'In what year did the Soviet Union collapse?',
+    options: ['1985', '1989', '1991', '1995'],
+    correctAnswer: '1991',
+    category: 'History',
+    difficulty: 'medium',
+  },
+  {
+    id: '91',
+    text: 'What is the chemical symbol for potassium?',
+    options: ['Po', 'P', 'K', 'Pt'],
+    correctAnswer: 'K',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '92',
+    text: 'Which planet is known for its prominent rings?',
+    options: ['Jupiter', 'Saturn', 'Uranus', 'Neptune'],
+    correctAnswer: 'Saturn',
+    category: 'Science',
+    difficulty: 'easy',
+  },
+  {
+    id: '93',
+    text: 'What is the process by which plants convert light energy into chemical energy?',
+    options: ['Respiration', 'Photosynthesis', 'Transpiration', 'Fermentation'],
+    correctAnswer: 'Photosynthesis',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '94',
+    text: 'What is the name for the phenomenon where a liquid turns into a gas?',
+    options: ['Condensation', 'Sublimation', 'Evaporation', 'Precipitation'],
+    correctAnswer: 'Evaporation',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '95',
+    text: 'Which scientist is known for his laws of thermodynamics?',
+    options: ['James Clerk Maxwell', 'Lord Kelvin', 'Sadi Carnot', 'Rudolf Clausius'],
+    correctAnswer: 'Lord Kelvin',
+    category: 'Science',
+    difficulty: 'medium',
+  },
+  {
+    id: '96',
+    text: 'What is the capital of Germany?',
+    options: ['Munich', 'Hamburg', 'Berlin', 'Cologne'],
+    correctAnswer: 'Berlin',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '97',
+    text: 'Which country is known for kangaroos?',
+    options: ['South Africa', 'Argentina', 'Australia', 'India'],
+    correctAnswer: 'Australia',
+    category: 'Geography',
+    difficulty: 'easy',
+  },
+  {
+    id: '98',
+    text: 'What is the name of the largest rainforest in the world?',
+    options: ['Congo Rainforest', 'Amazon Rainforest', 'Southeast Asian Rainforest', 'Daintree Rainforest'],
+    correctAnswer: 'Amazon Rainforest',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '99',
+    text: 'Which sea is located between Greece and Turkey?',
+    options: ['Adriatic Sea', 'Black Sea', 'Aegean Sea', 'Caspian Sea'],
+    correctAnswer: 'Aegean Sea',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
+  {
+    id: '100',
+    text: 'What is the capital of Argentina?',
+    options: ['Rio de Janeiro', 'Santiago', 'Buenos Aires', 'Lima'],
+    correctAnswer: 'Buenos Aires',
+    category: 'Geography',
+    difficulty: 'medium',
+  },
 ];
 
-// Additional default questions - we'll load these from Supabase for all users
-let additionalDefaultQuestions: StaticQuestion[] = [];
-
-// Initialize local storage with base questions if it doesn't exist yet
-const initializeStorage = async () => {
+/**
+ * Gets imported questions from Supabase
+ * @returns Imported questions from Supabase
+ */
+export const getImportedQuestions = async (): Promise<StaticQuestion[]> => {
   try {
-    console.log("Initializing question storage...");
+    const { data, error } = await supabase
+      .from('questions')
+      .select(`
+        id,
+        text,
+        options,
+        correct_answer,
+        categories:category_id (
+          name
+        )
+      `);
     
-    // First, check if we've already migrated all questions
-    const migratedFlag = localStorage.getItem('trivia_all_questions_migrated');
+    if (error) {
+      console.error('Error fetching imported questions:', error);
+      return [];
+    }
     
-    if (!migratedFlag) {
-      console.log("Starting full question migration...");
-      
-      // Load any existing questions from Supabase
-      try {
-        console.log("Fetching all questions from Supabase...");
-        const { data: dbQuestions, error } = await supabase
-          .from('questions')
-          .select(`
-            id, 
-            text, 
-            options, 
-            correct_answer, 
-            categories:category_id (
-              id,
-              name
-            )
-          `);
-          
-        if (error) {
-          console.error("Error fetching questions from database:", error);
-        } else if (dbQuestions && dbQuestions.length > 0) {
-          console.log(`Found ${dbQuestions.length} questions in the database to migrate`);
-          
-          // Format the questions for our system
-          additionalDefaultQuestions = dbQuestions.map(q => {
-            let options: string[] = [];
-            if (q.options) {
-              if (Array.isArray(q.options)) {
-                options = q.options.map(opt => String(opt));
-              } else if (typeof q.options === 'string') {
-                try {
-                  const parsedOptions = JSON.parse(q.options);
-                  options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
-                } catch {
-                  options = [String(q.options)];
-                }
-              }
-            }
-            
-            return {
-              id: q.id,
-              text: q.text,
-              options: options,
-              correctAnswer: q.correct_answer,
-              category: q.categories ? q.categories.name : 'General',
-              difficulty: 'medium' as 'easy' | 'medium' | 'hard'
-            };
-          });
-          
-          console.log(`Successfully migrated ${additionalDefaultQuestions.length} questions from database`);
-        }
-      } catch (dbError) {
-        console.error("Error migrating database questions:", dbError);
-      }
-      
-      // Initialize storage with base questions and additional ones
-      if (!localStorage.getItem('trivia_questions')) {
-        const allDefaultQuestions = [...baseStaticQuestions, ...additionalDefaultQuestions];
-        saveQuestionsToLocalStorage(allDefaultQuestions);
-        console.log(`Initialized local storage with ${allDefaultQuestions.length} questions`);
-      }
-      
-      // Check if there are imported questions
-      const importedQuestionsStr = localStorage.getItem('imported_questions');
-      if (importedQuestionsStr) {
-        try {
-          const importedQuestions = JSON.parse(importedQuestionsStr);
-          if (Array.isArray(importedQuestions) && importedQuestions.length > 0) {
-            console.log(`Found ${importedQuestions.length} imported questions to add to default bucket`);
-            
-            // Get existing data
-            const existingDataString = localStorage.getItem('trivia_questions');
-            let existingData: Record<string, any[]> = {};
-            
-            if (existingDataString) {
-              existingData = JSON.parse(existingDataString);
-            }
-            
-            // Initialize default array if needed
-            if (!existingData['default']) {
-              existingData['default'] = [];
-            }
-            
-            // Add imported questions to default, avoiding duplicates
-            const existingIds = new Set(existingData['default'].map((q: any) => q.id));
-            const newQuestions = importedQuestions.filter(q => !existingIds.has(q.id));
-            
-            existingData['default'] = [...existingData['default'], ...newQuestions];
-            
-            // Save back to localStorage
-            localStorage.setItem('trivia_questions', JSON.stringify(existingData));
-            console.log(`Added ${newQuestions.length} imported questions to default bucket`);
+    if (!data || data.length === 0) {
+      console.log('No imported questions found in Supabase');
+      return [];
+    }
+    
+    const formattedQuestions = data.map(question => {
+      let options: string[] = [];
+      if (question.options) {
+        if (Array.isArray(question.options)) {
+          options = question.options.map(opt => String(opt));
+        } else if (typeof question.options === 'string') {
+          try {
+            const parsedOptions = JSON.parse(question.options);
+            options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
+          } catch {
+            options = [String(question.options)];
           }
-        } catch (error) {
-          console.error("Error migrating imported questions:", error);
         }
       }
       
-      // Mark as migrated
-      localStorage.setItem('trivia_all_questions_migrated', 'true');
-      console.log("Question migration completed and flagged");
-    } else {
-      // Just make sure base questions are there if storage is empty
-      if (!localStorage.getItem('trivia_questions')) {
-        saveQuestionsToLocalStorage(baseStaticQuestions);
-        console.log("Initialized local storage with base questions (migration already done)");
-      }
-    }
-  } catch (error) {
-    console.error("Error initializing local storage:", error);
-  }
-};
-
-// Get the current user ID if logged in
-export const getCurrentUserId = async (): Promise<string | undefined> => {
-  try {
-    const { data: { session } } = await supabase.auth.getSession();
-    return session?.user?.id;
-  } catch (error) {
-    console.error("Error getting current user:", error);
-    return undefined;
-  }
-};
-
-// Check for the presence of imported questions in localStorage
-const hasImportedQuestions = (): boolean => {
-  try {
-    // Check for the presence of imported_questions key
-    const importedQuestionsStr = localStorage.getItem('imported_questions');
-    if (importedQuestionsStr) {
-      const importedQuestions = JSON.parse(importedQuestionsStr);
-      return Array.isArray(importedQuestions) && importedQuestions.length > 0;
-    }
-    return false;
-  } catch (error) {
-    console.error("Error checking for imported questions:", error);
-    return false;
-  }
-};
-
-// Get imported questions from localStorage
-const getImportedQuestions = (): StaticQuestion[] => {
-  try {
-    const importedQuestionsStr = localStorage.getItem('imported_questions');
-    if (importedQuestionsStr) {
-      return JSON.parse(importedQuestionsStr) || [];
-    }
-    return [];
-  } catch (error) {
-    console.error("Error getting imported questions:", error);
-    return [];
-  }
-};
-
-// Get all static questions, combining base questions with user-imported ones
-export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
-  try {
-    const userId = await getCurrentUserId();
-    console.log(`Getting questions for user: ${userId || 'anonymous'}`);
-    
-    // First, ensure storage is initialized
-    await initializeStorage();
-    
-    // Check for imported questions first
-    const hasImported = hasImportedQuestions();
-    console.log(`Has imported questions: ${hasImported}`);
-    
-    // Get stored user questions from localStorage
-    const storedUserQuestions = getQuestionsFromLocalStorage(userId);
-    console.log(`Stored user questions count: ${storedUserQuestions.length}`);
-    
-    // Get stored imported questions
-    const importedQuestions = getImportedQuestions();
-    console.log(`Imported questions count: ${importedQuestions.length}`);
-    
-    // Get all available questions (e.g., from external sources)
-    const availableQuestions = await getAllAvailableQuestions();
-    console.log(`Available questions from other sources: ${availableQuestions.length}`);
-    
-    // Check the default bucket for all available questions
-    const defaultBucketStr = localStorage.getItem('trivia-buckets');
-    let defaultBucket = null;
-    
-    if (defaultBucketStr) {
-      const buckets = JSON.parse(defaultBucketStr);
-      defaultBucket = buckets.find(b => b.isDefault);
-    }
-    
-    // Start with base questions
-    let allQuestions = [...baseStaticQuestions, ...additionalDefaultQuestions];
-    console.log(`Starting with ${allQuestions.length} default questions`);
-    
-    // Add imported questions if available
-    if (hasImported) {
-      // Add imported questions, avoiding duplicates by ID
-      const existingIds = new Set(allQuestions.map(q => q.id));
-      
-      let addedCount = 0;
-      importedQuestions.forEach(question => {
-        if (!existingIds.has(question.id)) {
-          allQuestions.push(question);
-          existingIds.add(question.id);
-          addedCount++;
-        }
-      });
-      console.log(`Added ${addedCount} imported questions (avoiding duplicates)`);
-    }
-    
-    // Add available questions, avoiding duplicates
-    if (availableQuestions.length > 0) {
-      const allExistingIds = new Set(allQuestions.map(q => q.id));
-      let addedCount = 0;
-      
-      availableQuestions.forEach(question => {
-        if (!allExistingIds.has(question.id)) {
-          allQuestions.push(question);
-          allExistingIds.add(question.id);
-          addedCount++;
-        }
-      });
-      console.log(`Added ${addedCount} available questions (avoiding duplicates)`);
-    }
-    
-    // Add user-specific questions, avoiding duplicates
-    const allExistingIds = new Set(allQuestions.map(q => q.id));
-    let addedUserCount = 0;
-    storedUserQuestions.forEach(question => {
-      if (!allExistingIds.has(question.id)) {
-        allQuestions.push(question);
-        allExistingIds.add(question.id);
-        addedUserCount++;
-      }
-    });
-    console.log(`Added ${addedUserCount} user-specific questions (avoiding duplicates)`);
-    
-    console.log(`Total questions after combining: ${allQuestions.length}`);
-    
-    // Update the default bucket question count if needed
-    if (defaultBucket && defaultBucket.questionCount !== allQuestions.length) {
-      updateDefaultBucketCount(allQuestions.length);
-    }
-    
-    return allQuestions;
-  } catch (error) {
-    console.error("Error getting static questions:", error);
-    return baseStaticQuestions; // Fallback to base questions on error
-  }
-};
-
-// Make sure to export the getAllAvailableQuestions function
-export const getAllAvailableQuestions = async (): Promise<StaticQuestion[]> => {
-  try {
-    // Check for imported questions in localStorage
-    const importedQuestionsStr = localStorage.getItem('imported_questions');
-    let importedQuestions: StaticQuestion[] = [];
-    
-    if (importedQuestionsStr) {
-      try {
-        importedQuestions = JSON.parse(importedQuestionsStr) || [];
-      } catch (error) {
-        console.error("Error parsing imported questions:", error);
-      }
-    }
-    
-    return importedQuestions;
-  } catch (error) {
-    console.error("Error getting all available questions:", error);
-    return [];
-  }
-};
-
-// Function to update default bucket question count
-const updateDefaultBucketCount = (count: number) => {
-  try {
-    const bucketsStr = localStorage.getItem('trivia-buckets');
-    if (bucketsStr) {
-      const buckets = JSON.parse(bucketsStr);
-      const defaultBucketIndex = buckets.findIndex(b => b.isDefault);
-      
-      if (defaultBucketIndex >= 0) {
-        buckets[defaultBucketIndex].questionCount = count;
-        localStorage.setItem('trivia-buckets', JSON.stringify(buckets));
-        console.log(`Updated default bucket question count to ${count}`);
-      }
-    }
-  } catch (error) {
-    console.error("Error updating default bucket count:", error);
-  }
-};
-
-// Function to get questions by category
-export const getQuestionsByCategory = async (category: string): Promise<StaticQuestion[]> => {
-  const allQuestions = await getStaticQuestions();
-  return allQuestions.filter(q => q.category.toLowerCase() === category.toLowerCase());
-};
-
-// Function to get questions by difficulty
-export const getQuestionsByDifficulty = async (difficulty: 'easy' | 'medium' | 'hard'): Promise<StaticQuestion[]> => {
-  const allQuestions = await getStaticQuestions();
-  return allQuestions.filter(q => q.difficulty === difficulty);
-};
-
-// Function to get random questions
-export const getRandomQuestions = async (count: number = 10): Promise<StaticQuestion[]> => {
-  const allQuestions = await getStaticQuestions();
-  const shuffled = [...allQuestions].sort(() => 0.5 - Math.random());
-  return shuffled.slice(0, Math.min(count, shuffled.length));
-};
-
-// Function to format questions for game use
-export const formatQuestionsForGame = (questions: StaticQuestion[], defaultTimeLimit: number = 20) => {
-  return questions.map(question => ({
-    ...question,
-    timeLimit: question.timeLimit || defaultTimeLimit
-  }));
-};
-
-// Function to add imported questions to the collection
-export const addImportedQuestionsToCollection = async (newQuestions: any[]): Promise<string> => {
-  try {
-    console.log(`Adding ${newQuestions.length} questions to the collection`);
-    
-    // Generate new IDs for the imported questions
-    const importedQuestions = newQuestions.map((question, index) => {
-      // Create a new StaticQuestion object from the imported data
-      const newQuestion: StaticQuestion = {
-        id: `imported_${Date.now()}_${index}`,
-        text: question.question || question.text,
-        options: question.options,
-        correctAnswer: question.correctAnswer,
-        category: question.category,
-        difficulty: (question.difficulty?.toLowerCase() || 'medium') as 'easy' | 'medium' | 'hard',
-        timeLimit: question.timeLimit
+      return {
+        id: question.id,
+        text: question.text,
+        options: options,
+        correctAnswer: question.correct_answer,
+        category: question.categories ? question.categories.name : 'Imported',
+        difficulty: 'medium' as 'easy' | 'medium' | 'hard'
       };
-      
-      return newQuestion;
     });
     
-    // Save to imported_questions in localStorage for admin usage
-    localStorage.setItem('imported_questions', JSON.stringify(importedQuestions));
-    console.log(`Saved ${importedQuestions.length} questions to imported_questions`);
-    
-    // Also add to the default bucket
-    try {
-      // Get existing questions from default bucket
-      const existingDataString = localStorage.getItem('trivia_questions');
-      let existingData: Record<string, any[]> = {};
-      
-      if (existingDataString) {
-        existingData = JSON.parse(existingDataString);
-      }
-      
-      // Add to default bucket
-      if (!existingData['default']) {
-        existingData['default'] = [];
-      }
-      
-      // Check for duplicates by question text
-      const existingTexts = new Set(existingData['default'].map((q: any) => q.text.toLowerCase()));
-      
-      const newQuestions = importedQuestions.filter(q => 
-        !existingTexts.has(q.text.toLowerCase())
-      );
-      
-      existingData['default'] = [...existingData['default'], ...newQuestions];
-      
-      // Save back
-      localStorage.setItem('trivia_questions', JSON.stringify(existingData));
-      console.log(`Added ${newQuestions.length} new questions to default bucket`);
-    } catch (storageError) {
-      console.error("Error adding to default bucket:", storageError);
-    }
-    
-    // Update default bucket question count
-    const allQuestions = await getStaticQuestions();
-    updateDefaultBucketCount(allQuestions.length);
-    
-    // Return success message with number of questions added
-    return `Successfully added ${importedQuestions.length} questions to the collection.`;
+    console.log(`Loaded ${formattedQuestions.length} imported questions from Supabase`);
+    return formattedQuestions;
   } catch (error) {
-    console.error('Error adding imported questions:', error);
-    throw new Error('Failed to add imported questions to collection.');
+    console.error('Error in getImportedQuestions:', error);
+    return [];
   }
 };
 
-// Function to export all questions to JSON format
-export const exportQuestionsToJson = async (): Promise<string> => {
+/**
+ * Gets user-specific questions from Supabase
+ * @returns User-specific questions from Supabase
+ */
+export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
   try {
-    const allQuestions = await getStaticQuestions();
-    return JSON.stringify(allQuestions, null, 2);
-  } catch (error) {
-    console.error('Error exporting questions to JSON:', error);
-    throw new Error('Failed to export questions to JSON.');
-  }
-};
-
-// Function to export all questions to CSV format
-export const exportQuestionsToCSV = async (): Promise<string> => {
-  try {
-    const allQuestions = await getStaticQuestions();
-    return convertQuestionsToCSV(allQuestions);
-  } catch (error) {
-    console.error('Error exporting questions to CSV:', error);
-    throw new Error('Failed to export questions to CSV.');
-  }
-};
-
-// Function to remove a question from the collection
-export const removeQuestionFromCollection = async (questionId: string): Promise<boolean> => {
-  try {
-    // Get current user ID if available
-    const userId = await getCurrentUserId();
+    const { data: session } = await supabase.auth.getSession();
     
-    // Get the stored questions from localStorage
-    const existingDataString = localStorage.getItem('trivia_questions');
-    if (!existingDataString) {
-      return false;
+    if (!session?.session?.user?.id) {
+      console.log('No user session found, skipping user-specific questions');
+      return [];
     }
-    
-    const existingData = JSON.parse(existingDataString);
-    
-    // Determine which collection to update (user-specific or default)
-    const storageKey = userId || 'default';
-    
-    // Skip if collection doesn't exist
-    if (!existingData[storageKey]) {
-      return false;
-    }
-    
-    // Find and remove the question with the matching ID
-    const questions = existingData[storageKey];
-    const initialLength = questions.length;
-    existingData[storageKey] = questions.filter(q => q.id !== questionId);
-    
-    // If no question was removed, return false
-    if (initialLength === existingData[storageKey].length) {
-      // The question might be in the base questions, which can't be removed
-      const baseIds = baseStaticQuestions.map(q => q.id);
-      if (baseIds.includes(questionId)) {
-        console.warn(`Cannot remove base question with ID ${questionId}`);
-        throw new Error("Cannot remove questions from the default set. These questions are built into the system.");
-      }
-      return false;
-    }
-    
-    // Save updated questions back to localStorage
-    localStorage.setItem('trivia_questions', JSON.stringify(existingData));
-    
-    // Update default bucket question count after removing
-    getStaticQuestions(); // This will trigger the count update
-    
-    console.log(`Successfully removed question with ID ${questionId}`);
-    return true;
-  } catch (error) {
-    console.error('Error removing question from collection:', error);
-    throw error;
-  }
-};
-
-// Function to clear all imported questions but keep base ones
-export const clearImportedQuestions = async (): Promise<boolean> => {
-  try {
-    // Clear imported questions
-    localStorage.removeItem('imported_questions');
-    console.log("Cleared imported_questions from localStorage");
-    
-    // Update default bucket question count
-    const allQuestions = await getStaticQuestions();
-    updateDefaultBucketCount(allQuestions.length);
-    
-    console.log("Successfully cleared all imported questions");
-    return true;
-  } catch (error) {
-    console.error('Error clearing imported questions:', error);
-    return false;
-  }
-};
-
-// Function to restore all default questions
-export const restoreDefaultQuestions = async (): Promise<boolean> => {
-  try {
-    // Get original imported questions from backup if available
-    const originalQuestionsStr = localStorage.getItem('original_imported_questions');
-    if (originalQuestionsStr) {
-      localStorage.setItem('imported_questions', originalQuestionsStr);
-      console.log("Restored original imported questions from backup");
-    } else {
-      console.log("No backup of original imported questions found");
-    }
-    
-    // Update default bucket question count
-    const allQuestions = await getStaticQuestions();
-    updateDefaultBucketCount(allQuestions.length);
-    
-    console.log("Successfully restored default questions");
-    return true;
-  } catch (error) {
-    console.error('Error restoring default questions:', error);
-    return false;
-  }
-};
-
-// Function to backup current imported questions
-export const backupImportedQuestions = (): boolean => {
-  try {
-    const importedQuestionsStr = localStorage.getItem('imported_questions');
-    if (importedQuestionsStr) {
-      localStorage.setItem('original_imported_questions', importedQuestionsStr);
-      console.log("Successfully backed up imported questions");
-      return true;
-    }
-    return false;
-  } catch (error) {
-    console.error('Error backing up imported questions:', error);
-    return false;
-  }
-};
-
-// Call initialization on module load
-initializeStorage();

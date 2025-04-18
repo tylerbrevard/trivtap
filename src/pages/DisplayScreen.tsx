@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -166,7 +165,8 @@ const DisplayScreen = () => {
       if (savedSlides) {
         try {
           const slides = JSON.parse(savedSlides);
-          const activeSlides = slides.filter((slide: any) => slide.isActive);
+          // Changed this line to filter by "isActive" instead of looking for a specific property
+          const activeSlides = slides.filter((slide: any) => slide.isActive === true);
           console.log(`Found ${slides.length} total slides, ${activeSlides.length} are active`);
           setIntermissionSlides(activeSlides);
         } catch (error) {
@@ -425,74 +425,19 @@ const DisplayScreen = () => {
     });
   };
   
+  // Update the getCurrentIntermissionSlide function to ensure it works properly
   const getCurrentIntermissionSlide = () => {
     if (intermissionSlides.length === 0) {
       return null;
     }
     
+    // Make sure we don't go out of bounds
     const slideIndex = currentSlideIndex % intermissionSlides.length;
+    console.log(`Getting slide at index ${slideIndex} of ${intermissionSlides.length} active slides`);
     return intermissionSlides[slideIndex];
   };
 
-  const renderWinnerSlide = () => {
-    return (
-      <div className="flex flex-col items-center justify-center h-full">
-        <div className="mb-8">
-          <Trophy className="h-24 w-24 text-yellow-500 animate-bounce" />
-          <h1 className="text-4xl font-bold text-primary text-center">Winners!</h1>
-        </div>
-        
-        <div className="card-trivia p-8 max-w-2xl w-full">
-          <h2 className="text-3xl font-bold mb-6 text-center">Round Winners</h2>
-          
-          <div className="flex justify-center items-end gap-6 mb-8">
-            {roundWinners.length > 0 ? (
-              roundWinners.map((winner, idx) => (
-                <div key={winner.id} className="flex flex-col items-center">
-                  <div className={`w-20 h-20 rounded-full flex items-center justify-center mb-2 border-4 ${
-                    idx === 0 ? 'border-yellow-400' : idx === 1 ? 'border-gray-400' : 'border-amber-700'
-                  }`}>
-                    <span className={`text-3xl font-bold ${
-                      idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-gray-400' : 'text-amber-700'
-                    }`}>{idx + 1}</span>
-                  </div>
-                  <div className="text-center">
-                    <div className={`h-${idx === 0 ? '40' : idx === 1 ? '32' : '24'} ${
-                      idx === 0 
-                        ? 'bg-gradient-to-t from-yellow-600 to-yellow-400' 
-                        : idx === 1 
-                          ? 'bg-gradient-to-t from-gray-600 to-gray-400'
-                          : 'bg-gradient-to-t from-amber-800 to-amber-500'
-                    } w-${idx === 0 ? '32' : '24'} rounded-t-lg flex items-end justify-center pb-4`}>
-                      <span className="text-white font-bold">{winner.score || 0}</span>
-                    </div>
-                    <div className={`${
-                      idx === 0 
-                        ? 'bg-yellow-100 text-yellow-800' 
-                        : idx === 1 
-                          ? 'bg-gray-200 text-gray-800'
-                          : 'bg-amber-100 text-amber-800'
-                    } py-2 px-4 rounded-b-lg`}>
-                      <span className="font-medium">{winner.name}</span>
-                    </div>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="text-center text-muted-foreground">
-                <p>No winners yet.</p>
-              </div>
-            )}
-          </div>
-          
-          <div className="mt-8 text-center">
-            <p className="text-muted-foreground">Next question coming up soon!</p>
-          </div>
-        </div>
-      </div>
-    );
-  };
-  
+  // Update the renderContent switch case for intermission
   const renderContent = () => {
     switch (currentState) {
       case 'join':
@@ -655,6 +600,7 @@ const DisplayScreen = () => {
         }
       
         const currentSlide = getCurrentIntermissionSlide();
+        console.log("Current intermission slide:", currentSlide);
         
         if (!currentSlide) {
           return (
