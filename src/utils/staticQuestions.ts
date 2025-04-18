@@ -1,4 +1,3 @@
-
 import { supabase } from "@/integrations/supabase/client";
 
 export interface StaticQuestion {
@@ -902,39 +901,38 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
       return [];
     }
     
-    // Use a simple query without complex joins to avoid type issues
-    const { data: questionsData, error: questionsError } = await supabase
+    // Simplify types by using any for the data returned from Supabase
+    const { data, error } = await supabase
       .from('questions')
-      .select('id, text, options, correct_answer, category_id, difficulty')
-      .eq('user_id', userId);
-    
-    if (questionsError) {
-      console.error('Error fetching user questions:', questionsError);
+      .select('id, text, options, correct_answer, category_id, difficulty');
+      
+    if (error) {
+      console.error('Error fetching user questions:', error);
       return [];
     }
     
-    if (!questionsData || questionsData.length === 0) {
-      console.log('No user-specific questions found in Supabase for user', userId);
+    if (!data || data.length === 0) {
+      console.log('No user-specific questions found in Supabase');
       return [];
     }
     
-    // Get categories in a separate query to avoid complex type nesting
-    const { data: categoriesData } = await supabase
+    // Get categories separately
+    const { data: categories } = await supabase
       .from('categories')
       .select('id, name');
     
-    // Create a lookup map for categories
+    // Create a simple object for category lookup
     const categoryMap: Record<string, string> = {};
-    if (categoriesData) {
-      categoriesData.forEach(category => {
+    if (categories) {
+      categories.forEach((category: any) => {
         categoryMap[category.id] = category.name;
       });
     }
     
-    const formattedQuestions = questionsData.map(question => {
+    // Type the question as any to avoid deep type instantiation
+    const formattedQuestions: StaticQuestion[] = data.map((question: any) => {
       let options: string[] = [];
       
-      // Handle different formats of options
       if (question.options) {
         if (Array.isArray(question.options)) {
           options = question.options.map((opt: any) => String(opt));
@@ -948,17 +946,14 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
         }
       }
       
-      // Get category name from map or use default
-      const categoryName = question.category_id && categoryMap[question.category_id] 
-        ? categoryMap[question.category_id] 
-        : 'User';
-      
       return {
         id: question.id,
         text: question.text,
         options: options,
         correctAnswer: question.correct_answer,
-        category: categoryName,
+        category: question.category_id && categoryMap[question.category_id] 
+          ? categoryMap[question.category_id] 
+          : 'User',
         difficulty: (question.difficulty || 'medium') as 'easy' | 'medium' | 'hard'
       };
     });
