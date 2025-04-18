@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface StaticQuestion {
@@ -886,3 +887,354 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
       console.log('No user session found, skipping user-specific questions');
       return [];
     }
+    
+    const userId = session.session.user.id;
+    
+    const { data, error } = await supabase
+      .from('user_questions')
+      .select(`
+        id,
+        text,
+        options,
+        correct_answer,
+        categories:category_id (
+          name
+        ),
+        difficulty
+      `)
+      .eq('user_id', userId);
+    
+    if (error) {
+      console.error('Error fetching user questions:', error);
+      return [];
+    }
+    
+    if (!data || data.length === 0) {
+      console.log('No user-specific questions found in Supabase for user', userId);
+      return [];
+    }
+    
+    const formattedQuestions = data.map(question => {
+      let options: string[] = [];
+      if (question.options) {
+        if (Array.isArray(question.options)) {
+          options = question.options.map(opt => String(opt));
+        } else if (typeof question.options === 'string') {
+          try {
+            const parsedOptions = JSON.parse(question.options);
+            options = Array.isArray(parsedOptions) ? parsedOptions.map(opt => String(opt)) : [];
+          } catch {
+            options = [String(question.options)];
+          }
+        }
+      }
+      
+      return {
+        id: question.id,
+        text: question.text,
+        options: options,
+        correctAnswer: question.correct_answer,
+        category: question.categories ? question.categories.name : 'User',
+        difficulty: question.difficulty || 'medium' as 'easy' | 'medium' | 'hard'
+      };
+    });
+    
+    console.log(`Loaded ${formattedQuestions.length} user-specific questions from Supabase`);
+    return formattedQuestions;
+  } catch (error) {
+    console.error('Error in getUserQuestions:', error);
+    return [];
+  }
+};
+
+/**
+ * Gets the current user ID from Supabase session
+ * @returns Current user ID or undefined if not logged in
+ */
+export const getCurrentUserId = async (): Promise<string | undefined> => {
+  try {
+    const { data: session } = await supabase.auth.getSession();
+    return session?.session?.user?.id;
+  } catch (error) {
+    console.error('Error getting current user ID:', error);
+    return undefined;
+  }
+};
+
+/**
+ * Gets questions from localStorage for the current user
+ * @param userId Optional user ID, if not provided will use the default storage key
+ * @returns Questions from localStorage
+ */
+export const getLocalStorageQuestions = (userId?: string): StaticQuestion[] => {
+  try {
+    const storageKey = userId || 'default';
+    const existingDataString = localStorage.getItem('trivia_questions');
+    
+    if (!existingDataString) {
+      return [];
+    }
+    
+    const existingData = JSON.parse(existingDataString);
+    return existingData[storageKey] || [];
+  } catch (error) {
+    console.error('Error getting questions from localStorage:', error);
+    return [];
+  }
+};
+
+/**
+ * Gets all static questions from various sources
+ * @returns Combined questions from all sources
+ */
+export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
+  try {
+    // Get current user ID
+    const userId = await getCurrentUserId();
+    
+    // Get default questions
+    const defaultQuestions = getLocalStorageQuestions('default');
+    
+    // If default questions are empty, use the base static questions
+    const baseQuestions = defaultQuestions.length > 0 ? defaultQuestions : baseStaticQuestions;
+    
+    // Get user-specific questions from localStorage
+    const userQuestions = userId ? getLocalStorageQuestions(userId) : [];
+    
+    // Get imported questions
+    const importedQuestions = await getImportedQuestions();
+    
+    // Get user-specific questions from Supabase
+    const supabaseUserQuestions = await getUserQuestions();
+    
+    // Combine all questions
+    const allQuestions = [
+      ...baseQuestions,
+      ...userQuestions,
+      ...importedQuestions,
+      ...supabaseUserQuestions
+    ];
+    
+    console.log(`Total questions loaded: ${allQuestions.length}`);
+    return allQuestions;
+  } catch (error) {
+    console.error('Error getting static questions:', error);
+    // Fallback to base static questions
+    return baseStaticQuestions;
+  }
+};
+
+/**
+ * Export questions to JSON format
+ * @returns JSON string of all questions
+ */
+export const exportQuestionsToJson = async (): Promise<string> => {
+  try {
+    const allQuestions = await getStaticQuestions();
+    
+    return JSON.stringify(allQuestions, null, 2);
+  } catch (error) {
+    console.error('Error exporting questions to JSON:', error);
+    throw new Error('Failed to export questions');
+  }
+};
+
+/**
+ * Export questions to CSV format
+ * @returns CSV string of all questions
+ */
+export const exportQuestionsToCSV = async (): Promise<string> => {
+  try {
+    const allQuestions = await getStaticQuestions();
+    const csvRows = [];
+    
+    // Add header row
+    csvRows.push('question,category,option1,option2,option3,option4,correctAnswer,difficulty');
+    
+    // Add data rows
+    allQuestions.forEach(question => {
+      const options = [...question.options];
+      
+      // Fill options array with empty strings if not enough options
+      while (options.length < 4) {
+        options.push('');
+      }
+      
+      // Escape commas in all fields
+      const escapedQuestion = question.text.replace(/,/g, '\\,');
+      const escapedCategory = question.category.replace(/,/g, '\\,');
+      const escapedOptions = options.map(opt => opt.replace(/,/g, '\\,'));
+      const escapedCorrectAnswer = question.correctAnswer.replace(/,/g, '\\,');
+      
+      // Create and add the CSV row
+      csvRows.push(
+        `${escapedQuestion},${escapedCategory},${escapedOptions[0]},${escapedOptions[1]},${escapedOptions[2]},${escapedOptions[3]},${escapedCorrectAnswer},${question.difficulty}`
+      );
+    });
+    
+    return csvRows.join('\n');
+  } catch (error) {
+    console.error('Error exporting questions to CSV:', error);
+    throw new Error('Failed to export questions to CSV');
+  }
+};
+
+/**
+ * Add imported questions to the collection
+ * @param questions Questions to add
+ * @returns Result message
+ */
+export const addImportedQuestionsToCollection = async (questions: any[]): Promise<string> => {
+  try {
+    if (!questions || questions.length === 0) {
+      throw new Error('No questions to import');
+    }
+    
+    const userId = await getCurrentUserId();
+    
+    // Format questions to StaticQuestion format
+    const formattedQuestions: StaticQuestion[] = questions.map((q, index) => {
+      const questionText = q.question || q.text;
+      const category = q.category || 'Imported';
+      const options = q.options || [];
+      const correctAnswer = q.correctAnswer || q.correct_answer;
+      const difficulty = q.difficulty || 'medium';
+      
+      if (!questionText) {
+        throw new Error(`Question at index ${index} is missing text`);
+      }
+      
+      if (!options || options.length < 2) {
+        throw new Error(`Question "${questionText}" has fewer than 2 options`);
+      }
+      
+      if (!correctAnswer) {
+        throw new Error(`Question "${questionText}" is missing a correct answer`);
+      }
+      
+      if (!options.includes(correctAnswer)) {
+        throw new Error(`Question "${questionText}" has a correct answer that is not in the options`);
+      }
+      
+      return {
+        id: `imported_${Date.now()}_${index}`,
+        text: questionText,
+        category,
+        options,
+        correctAnswer,
+        difficulty: (['easy', 'medium', 'hard'].includes(difficulty.toLowerCase()) 
+          ? difficulty.toLowerCase() 
+          : 'medium') as 'easy' | 'medium' | 'hard'
+      };
+    });
+    
+    // Get existing questions
+    const existingDataString = localStorage.getItem('trivia_questions');
+    let existingData: Record<string, any[]> = {};
+    
+    if (existingDataString) {
+      existingData = JSON.parse(existingDataString);
+    }
+    
+    // Key to store questions under: either user ID or 'default' for unauthenticated users
+    const storageKey = userId || 'default';
+    
+    // Initialize the array for this key if it doesn't exist
+    if (!existingData[storageKey]) {
+      existingData[storageKey] = [];
+    }
+    
+    // Add the new questions to the existing array
+    existingData[storageKey] = [...existingData[storageKey], ...formattedQuestions];
+    
+    // Save back to localStorage
+    localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+    
+    return `Successfully imported ${formattedQuestions.length} questions`;
+  } catch (error) {
+    console.error('Error adding imported questions to collection:', error);
+    throw error;
+  }
+};
+
+/**
+ * Remove a question from the collection
+ * @param questionId ID of the question to remove
+ * @returns true if successful, false if not found
+ */
+export const removeQuestionFromCollection = async (questionId: string): Promise<boolean> => {
+  try {
+    if (!questionId) {
+      throw new Error('No question ID provided');
+    }
+    
+    const userId = await getCurrentUserId();
+    
+    // Get existing questions
+    const existingDataString = localStorage.getItem('trivia_questions');
+    
+    if (!existingDataString) {
+      return false;
+    }
+    
+    let existingData = JSON.parse(existingDataString);
+    
+    // Check default questions
+    if (existingData['default']) {
+      const defaultIndex = existingData['default'].findIndex((q: any) => q.id === questionId);
+      if (defaultIndex >= 0) {
+        existingData['default'].splice(defaultIndex, 1);
+        localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+        return true;
+      }
+    }
+    
+    // Check user questions
+    if (userId && existingData[userId]) {
+      const userIndex = existingData[userId].findIndex((q: any) => q.id === questionId);
+      if (userIndex >= 0) {
+        existingData[userId].splice(userIndex, 1);
+        localStorage.setItem('trivia_questions', JSON.stringify(existingData));
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('Error removing question from collection:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get all available questions (including default and user-specific)
+ * @param userId Optional user ID, if not provided will use the current user
+ * @returns All available questions
+ */
+export const getAllAvailableQuestions = async (userId?: string): Promise<StaticQuestion[]> => {
+  try {
+    // If no userId provided, get the current user ID
+    const currentUserId = userId || await getCurrentUserId();
+    
+    // Get existing questions from localStorage
+    const existingDataString = localStorage.getItem('trivia_questions');
+    if (!existingDataString) {
+      return baseStaticQuestions;
+    }
+    
+    const existingData = JSON.parse(existingDataString);
+    
+    // Always include default questions
+    let allQuestions = [...(existingData['default'] || baseStaticQuestions)];
+    
+    // Add user-specific questions if user is logged in
+    if (currentUserId && existingData[currentUserId]) {
+      allQuestions = [...allQuestions, ...existingData[currentUserId]];
+    }
+    
+    return allQuestions;
+  } catch (error) {
+    console.error('Error retrieving all available questions:', error);
+    return baseStaticQuestions;
+  }
+};
