@@ -324,7 +324,7 @@ export const getStaticQuestions = async (): Promise<StaticQuestion[]> => {
     console.log(`Imported questions count: ${importedQuestions.length}`);
     
     // Get all available questions (e.g., from external sources)
-    const availableQuestions = getAllAvailableQuestions();
+    const availableQuestions = await getAllAvailableQuestions();
     console.log(`Available questions from other sources: ${availableQuestions.length}`);
     
     // Check the default bucket for all available questions
