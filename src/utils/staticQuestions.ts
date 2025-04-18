@@ -902,18 +902,10 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
       return [];
     }
     
-    // Use a properly typed query with explicit column selection
-    // This avoids the deep type instantiation error
+    // Simplified query to avoid deep type instantiation
     const { data, error } = await supabase
       .from('questions')
-      .select(`
-        id,
-        text,
-        options,
-        correct_answer,
-        categories:category_id (name),
-        difficulty
-      `)
+      .select('id, text, options, correct_answer, category_id, difficulty')
       .eq('user_id', userId);
     
     if (error) {
@@ -924,6 +916,19 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
     if (!data || data.length === 0) {
       console.log('No user-specific questions found in Supabase for user', userId);
       return [];
+    }
+    
+    // Get categories in a separate query if needed
+    const { data: categories } = await supabase
+      .from('categories')
+      .select('id, name');
+    
+    // Create a lookup map for categories
+    const categoryMap = new Map();
+    if (categories) {
+      categories.forEach(category => {
+        categoryMap.set(category.id, category.name);
+      });
     }
     
     const formattedQuestions = data.map(question => {
@@ -941,12 +946,17 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
         }
       }
       
+      // Get category name from map or use default
+      const categoryName = question.category_id && categoryMap.has(question.category_id) 
+        ? categoryMap.get(question.category_id) 
+        : 'User';
+      
       return {
         id: question.id,
         text: question.text,
         options: options,
         correctAnswer: question.correct_answer,
-        category: question.categories ? question.categories.name : 'User',
+        category: categoryName,
         difficulty: (question.difficulty || 'medium') as 'easy' | 'medium' | 'hard'
       };
     });
