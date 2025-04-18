@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -394,12 +395,28 @@ const DisplayScreen = () => {
     }
   };
   
-  const currentQuestion = questions[questionIndex] || { 
-    text: "Loading question...", 
-    options: ["Option 1", "Option 2", "Option 3", "Option 4"],
-    correctAnswer: "Option 1",
-    category: "General"
+  // Make sure we have a valid current question, even if the questionIndex is out of bounds
+  const getCurrentQuestion = () => {
+    if (!questions.length) {
+      return { 
+        text: "Loading question...", 
+        options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+        correctAnswer: "Option 1",
+        category: "General"
+      };
+    }
+    
+    // Ensure we have a valid index (could be out of range if questions array changed)
+    const safeIndex = questionIndex < questions.length ? questionIndex : 0;
+    return questions[safeIndex] || { 
+      text: "Loading question...", 
+      options: ["Option 1", "Option 2", "Option 3", "Option 4"],
+      correctAnswer: "Option 1",
+      category: "General"
+    };
   };
+  
+  const currentQuestion = getCurrentQuestion();
   
   const getTimerColor = () => {
     if (timeLeft > gameSettings.questionDuration * 0.6) return 'bg-green-500';

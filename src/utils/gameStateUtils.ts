@@ -1,3 +1,4 @@
+
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -109,16 +110,19 @@ export const moveToNextQuestion = (
   questionDuration: number,
   totalQuestions: number
 ) => {
+  console.log(`Moving to next question (total: ${totalQuestions}), shown so far: ${shownQuestionIndices.length}`);
+  
   // Add current question to shown list if not already there
   if (!shownQuestionIndices.includes(currentQuestionIndex)) {
     shownQuestionIndices.push(currentQuestionIndex);
+    console.log(`Added question ${currentQuestionIndex} to shown list`);
   }
   
   let nextQuestionIndex: number;
   
   // If we've shown all questions, reset the tracking
-  if (shownQuestionIndices.length >= totalQuestions || shownQuestionIndices.length >= 1000) {
-    console.log('All questions have been shown or reached limit, resetting question cycle');
+  if (shownQuestionIndices.length >= totalQuestions) {
+    console.log('All questions have been shown, resetting question cycle');
     shownQuestionIndices = [currentQuestionIndex];
   }
   
@@ -131,7 +135,10 @@ export const moveToNextQuestion = (
     // Prevent infinite loops with a reasonable attempt limit
     if (attemptsCounter > 100) {
       console.log('Exceeded attempt limit, using a random question');
-      nextQuestionIndex = Math.floor(Math.random() * totalQuestions);
+      // Ensure we don't repeat the current question at least
+      do {
+        nextQuestionIndex = Math.floor(Math.random() * totalQuestions);
+      } while (nextQuestionIndex === currentQuestionIndex);
       break;
     }
   } while (shownQuestionIndices.includes(nextQuestionIndex) && shownQuestionIndices.length < totalQuestions);
