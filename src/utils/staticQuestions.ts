@@ -1,3 +1,4 @@
+
 import { supabase } from "@/integrations/supabase/client";
 
 export interface StaticQuestion {
@@ -889,7 +890,7 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
     
     const userId = session.session.user.id;
     
-    // Check if the user_questions table exists
+    // Check if the questions table exists
     const { error: tableCheckError } = await supabase
       .from('questions')
       .select('id')
@@ -901,7 +902,8 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
       return [];
     }
     
-    // Try to query user questions from the questions table with user_id filter instead
+    // Use a properly typed query with explicit column selection
+    // This avoids the deep type instantiation error
     const { data, error } = await supabase
       .from('questions')
       .select(`
@@ -909,9 +911,7 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
         text,
         options,
         correct_answer,
-        categories:category_id (
-          name
-        ),
+        categories:category_id (name),
         difficulty
       `)
       .eq('user_id', userId);
@@ -947,7 +947,7 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
         options: options,
         correctAnswer: question.correct_answer,
         category: question.categories ? question.categories.name : 'User',
-        difficulty: question.difficulty || 'medium' as 'easy' | 'medium' | 'hard'
+        difficulty: (question.difficulty || 'medium') as 'easy' | 'medium' | 'hard'
       };
     });
     
