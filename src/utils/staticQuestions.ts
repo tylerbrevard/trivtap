@@ -902,10 +902,10 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
       return [];
     }
     
-    // Simplified query to avoid deep type instantiation
+    // Use a raw query approach to simplify types
     const { data, error } = await supabase
       .from('questions')
-      .select('id, text, options, correct_answer, category_id, difficulty')
+      .select('*')
       .eq('user_id', userId);
     
     if (error) {
@@ -918,10 +918,10 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
       return [];
     }
     
-    // Get categories in a separate query if needed
+    // Get categories in a separate query
     const { data: categories } = await supabase
       .from('categories')
-      .select('id, name');
+      .select('*');
     
     // Create a lookup map for categories
     const categoryMap = new Map();
@@ -933,6 +933,8 @@ export const getUserQuestions = async (): Promise<StaticQuestion[]> => {
     
     const formattedQuestions = data.map(question => {
       let options: string[] = [];
+      
+      // Handle different formats of options
       if (question.options) {
         if (Array.isArray(question.options)) {
           options = question.options.map(opt => String(opt));
