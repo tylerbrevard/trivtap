@@ -28,7 +28,7 @@ export const JoinDisplay = ({
           <QrCode className="h-40 w-40 text-black" />
         </div>
         <p className="text-xl">Scan the QR code or visit</p>
-        <p className="text-2xl font-bold text-primary mb-4">triviapulse.com/join</p>
+        <p className="text-2xl font-bold text-primary mb-4">trivtap.com/join</p>
         <div className="text-4xl font-bold bg-gradient-to-r from-trivia-primary to-trivia-accent bg-clip-text text-transparent py-4 px-8 border-2 border-primary rounded-lg animate-pulse-scale">
           {gameCode}
         </div>

@@ -345,17 +345,16 @@ const DisplayScreen = () => {
   }, [currentState, questionIndex, questionCounter, updateGameState, hasGameStarted, setCurrentState, setTimeLeft]);
   
   useEffect(() => {
-    // If we have an ID from URL params, use that as game code
+    let generatedCode = '';
+    
     if (id) {
-      setGameCode(id);
+      generatedCode = id;
     } else {
-      // Generate a random 4-digit code as fallback
-      const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
-      setGameCode(randomCode);
+      generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
     }
     
-    // Store the game code in localStorage for other components to access
-    localStorage.setItem('currentGameCode', id || randomCode);
+    setGameCode(generatedCode);
+    localStorage.setItem('currentGameCode', generatedCode);
   }, [id]);
 
   const handleStartGameNow = () => {
