@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Progress } from "@/components/ui/progress";
+import { Button } from "@/components/ui/button";
+import { Wifi } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/components/ui/use-toast";
 import { useGameSync } from '@/hooks/useGameSync';
+import { gameSettings } from '@/utils/gameSettings';
 import { JoinDisplay } from '@/components/display/JoinDisplay';
 import { QuestionDisplay } from '@/components/display/QuestionDisplay';
 import { AnswerDisplay } from '@/components/display/AnswerDisplay';
@@ -341,6 +344,20 @@ const DisplayScreen = () => {
     };
   }, [currentState, questionIndex, questionCounter, updateGameState, hasGameStarted, setCurrentState, setTimeLeft]);
   
+  useEffect(() => {
+    // If we have an ID from URL params, use that as game code
+    if (id) {
+      setGameCode(id);
+    } else {
+      // Generate a random 4-digit code as fallback
+      const randomCode = Math.floor(1000 + Math.random() * 9000).toString();
+      setGameCode(randomCode);
+    }
+    
+    // Store the game code in localStorage for other components to access
+    localStorage.setItem('currentGameCode', id || randomCode);
+  }, [id]);
+
   const handleStartGameNow = () => {
     setCurrentState('question');
     setTimeLeft(gameSettings.questionDuration);
