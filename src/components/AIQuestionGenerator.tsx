@@ -1,11 +1,10 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Robot, Loader2 } from 'lucide-react';
+import { Bot, Loader2 } from 'lucide-react';
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 interface GeneratedQuestion {
@@ -34,7 +33,6 @@ const AIQuestionGenerator = () => {
     setIsGenerating(true);
 
     try {
-      // Call the OpenAI API through Supabase Edge Function (to be implemented)
       const response = await fetch('/api/generate-questions', {
         method: 'POST',
         headers: {
@@ -52,7 +50,6 @@ const AIQuestionGenerator = () => {
 
       const generatedQuestions = await response.json();
 
-      // Save to localStorage for now (this would be replaced with database storage)
       const existingDataString = localStorage.getItem('trivia_questions');
       let existingData: Record<string, any[]> = {};
       
@@ -65,7 +62,6 @@ const AIQuestionGenerator = () => {
         existingData[bucketName] = [];
       }
 
-      // Add generated questions to the bucket
       existingData[bucketName] = [...existingData[bucketName], ...generatedQuestions];
       
       localStorage.setItem('trivia_questions', JSON.stringify(existingData));
@@ -90,7 +86,7 @@ const AIQuestionGenerator = () => {
     <Card className="mt-6">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Robot className="h-6 w-6" />
+          <Bot className="h-6 w-6" />
           AI Question Generator
         </CardTitle>
         <CardDescription>
@@ -147,7 +143,7 @@ const AIQuestionGenerator = () => {
             </>
           ) : (
             <>
-              <Robot className="mr-2 h-4 w-4" />
+              <Bot className="mr-2 h-4 w-4" />
               Generate 100 Questions
             </>
           )}
