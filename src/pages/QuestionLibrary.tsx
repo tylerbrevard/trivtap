@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -42,6 +41,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import BucketManager from '@/components/BucketManager';
+import AIQuestionGenerator from '@/components/AIQuestionGenerator';
 
 const QuestionLibrary = () => {
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
@@ -62,7 +62,7 @@ const QuestionLibrary = () => {
   const [formState, setFormState] = useState({
     id: '',
     text: '',
-    category: '',
+    category: categories.length > 0 ? categories[0].id : '',
     difficulty: 'medium',
     options: ['', '', '', ''],
     correctAnswerIndex: 0,
@@ -108,15 +108,9 @@ const QuestionLibrary = () => {
     if (filter === 'all') {
       return allQuestions;
     } else if (filter === 'user') {
-      // Show questions that aren't from the base set
       return allQuestions.filter(q => !baseStaticQuestions.some(bq => bq.id === q.id));
     } else if (filter === 'default') {
-      // Modified: Include all imported questions and base questions
-      // We consider any question that's available to all users as a default question,
-      // not just the initial baseStaticQuestions
       return allQuestions.filter(q => {
-        // Check if it's a base static question OR if it has a system-generated ID 
-        // (like imported_*, which are the imported questions)
         return q.id.startsWith('imported_') || 
                q.id.startsWith('q') || 
                baseStaticQuestions.some(bq => bq.id === q.id);
@@ -489,6 +483,7 @@ const QuestionLibrary = () => {
         </TabsList>
         
         <TabsContent value="all">
+          <AIQuestionGenerator />
           {isLoading ? (
             <p>Loading questions...</p>
           ) : (
