@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Progress } from "@/components/ui/progress";
@@ -347,12 +348,19 @@ const DisplayScreen = () => {
   useEffect(() => {
     let generatedCode = '';
     
-    if (id) {
+    // Check for custom code in settings
+    const customCode = localStorage.getItem('customGameCode');
+    
+    if (customCode && customCode.trim() !== '') {
+      generatedCode = customCode;
+    } else if (id && id !== 'default') {
       generatedCode = id;
     } else {
+      // Generate a random 4-digit code as fallback
       generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
     }
     
+    console.log('Setting game code:', generatedCode);
     setGameCode(generatedCode);
     localStorage.setItem('currentGameCode', generatedCode);
   }, [id]);
@@ -660,7 +668,7 @@ const DisplayScreen = () => {
           <h1 className="text-2xl font-bold text-primary">TrivTap</h1>
           <div className="flex items-center gap-4">
             <div className="bg-primary/20 text-primary px-3 py-1 rounded-full">
-              Display #{id || 'Default'}
+              Display {id && id !== 'default' ? `#${id}` : ''}
             </div>
             <div className="bg-green-500/20 text-green-500 px-3 py-1 rounded-full">
               Players: {uniquePlayers.length}
