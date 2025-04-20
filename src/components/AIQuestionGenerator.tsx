@@ -1,26 +1,13 @@
-import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Bot, Loader2, Key } from 'lucide-react';
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { supabase } from "@/integrations/supabase/client";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 
-interface AIProvider {
-  id: string;
-  name: string;
-  keyName: string;
-}
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useToast } from "@/hooks/use-toast";
+import { Bot } from 'lucide-react';
+import { supabase } from "@/integrations/supabase/client";
+import { AIProvider } from './ai-generator/types';
+import { APIKeyDialog } from './ai-generator/APIKeyDialog';
+import { AIProviderSelect } from './ai-generator/AIProviderSelect';
+import { QuestionGeneratorForm } from './ai-generator/QuestionGeneratorForm';
 
 const AI_PROVIDERS: AIProvider[] = [
   { id: 'openai', name: 'OpenAI', keyName: 'openai_api_key' },
@@ -28,24 +15,16 @@ const AI_PROVIDERS: AIProvider[] = [
   { id: 'gemini', name: 'Google Gemini', keyName: 'gemini_api_key' },
 ];
 
-interface GeneratedQuestion {
-  text: string;
-  options: string[];
-  correctAnswer: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-}
-
-const AIQuestionGenerator = () => {
+export default function AIQuestionGenerator() {
   const [topic, setTopic] = useState('');
   const [difficulty, setDifficulty] = useState<'easy' | 'medium' | 'hard'>('medium');
   const [isGenerating, setIsGenerating] = useState(false);
-  const { toast } = useToast();
-
   const [selectedProvider, setSelectedProvider] = useState<string>('openai');
   const [apiKeys, setApiKeys] = useState<Record<string, string | null>>({});
   const [showApiKeyDialog, setShowApiKeyDialog] = useState(false);
   const [currentApiKey, setCurrentApiKey] = useState('');
   const [currentKeyType, setCurrentKeyType] = useState<string>('');
+  const { toast } = useToast();
 
   useEffect(() => {
     checkApiKeys();
@@ -67,7 +46,7 @@ const AIQuestionGenerator = () => {
     });
   };
 
-  const handleSaveApiKey = async () => {
+  const handleSaveApiKey = async (apiKey: string) => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -83,18 +62,17 @@ const AIQuestionGenerator = () => {
         .from('user_api_settings')
         .upsert({
           user_id: session.user.id,
-          [currentKeyType]: currentApiKey,
+          [currentKeyType]: apiKey,
         });
 
       if (error) throw error;
 
       setApiKeys(prev => ({
         ...prev,
-        [currentKeyType]: currentApiKey
+        [currentKeyType]: apiKey
       }));
       
       setShowApiKeyDialog(false);
-      setCurrentApiKey('');
       
       toast({
         title: "Success",
@@ -199,132 +177,38 @@ const AIQuestionGenerator = () => {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Alert>
-          <AlertDescription className="space-y-2">
-            <p>This will generate 100 multiple-choice questions based on your topic. 
-            Questions will be saved to a new bucket labeled "AI Generated: [Topic]".</p>
-            {!apiKeys[AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName || ''] && (
-              <p className="text-yellow-600 dark:text-yellow-400">
-                You need to configure your {AI_PROVIDERS.find(p => p.id === selectedProvider)?.name} API key before generating questions.
-                Click the "Configure API Key" button below.
-              </p>
-            )}
-          </AlertDescription>
-        </Alert>
-        
-        <div className="grid gap-4">
-          <div className="flex flex-col space-y-1.5">
-            <label htmlFor="provider" className="text-sm font-medium">AI Provider</label>
-            <Select
-              value={selectedProvider}
-              onValueChange={setSelectedProvider}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select AI provider" />
-              </SelectTrigger>
-              <SelectContent>
-                {AI_PROVIDERS.map(provider => (
-                  <SelectItem key={provider.id} value={provider.id}>
-                    {provider.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-          
-          <div className="flex flex-col space-y-1.5">
-            <label htmlFor="topic" className="text-sm font-medium">Topic</label>
-            <Input
-              id="topic"
-              placeholder="Enter a topic (e.g., World History, Science, Geography)"
-              value={topic}
-              onChange={(e) => setTopic(e.target.value)}
-            />
-          </div>
-          
-          <div className="flex flex-col space-y-1.5">
-            <label className="text-sm font-medium">Difficulty Level</label>
-            <Select
-              value={difficulty}
-              onValueChange={(value: 'easy' | 'medium' | 'hard') => setDifficulty(value)}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Select difficulty" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="easy">Easy</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="hard">Hard</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-      </CardContent>
-      <CardFooter className="flex gap-2">
-        <Button 
-          onClick={handleGenerate} 
-          disabled={isGenerating || !topic.trim()} 
-          className="flex-1"
-        >
-          {isGenerating ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Generating Questions...
-            </>
-          ) : (
-            <>
-              <Bot className="mr-2 h-4 w-4" />
-              Generate 100 Questions
-            </>
-          )}
-        </Button>
-        <Button
-          variant="outline"
-          onClick={() => {
-            setCurrentKeyType(AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName || '');
+        <AIProviderSelect
+          providers={AI_PROVIDERS}
+          selectedProvider={selectedProvider}
+          onProviderChange={setSelectedProvider}
+          onConfigureKey={() => {
+            const providerKey = AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName;
+            setCurrentKeyType(providerKey || '');
+            setCurrentApiKey(apiKeys[providerKey || ''] || '');
             setShowApiKeyDialog(true);
           }}
-          title={`Configure ${AI_PROVIDERS.find(p => p.id === selectedProvider)?.name} API Key`}
-        >
-          <Key className="h-4 w-4" />
-        </Button>
-      </CardFooter>
+          hasApiKey={!!apiKeys[AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName || '']}
+        />
 
-      <Dialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Configure {AI_PROVIDERS.find(p => p.id === selectedProvider)?.name} API Key</DialogTitle>
-            <DialogDescription>
-              Enter your {AI_PROVIDERS.find(p => p.id === selectedProvider)?.name} API key to generate questions. 
-              You can get your API key from the {AI_PROVIDERS.find(p => p.id === selectedProvider)?.name} dashboard.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <label htmlFor="apiKey" className="text-sm font-medium">
-                {AI_PROVIDERS.find(p => p.id === selectedProvider)?.name} API Key
-              </label>
-              <Input
-                id="apiKey"
-                type="password"
-                placeholder="Enter API key..."
-                value={currentApiKey}
-                onChange={(e) => setCurrentApiKey(e.target.value)}
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowApiKeyDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleSaveApiKey} disabled={!currentApiKey.trim()}>
-              Save API Key
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <QuestionGeneratorForm
+          topic={topic}
+          onTopicChange={setTopic}
+          difficulty={difficulty}
+          onDifficultyChange={setDifficulty}
+          onGenerate={handleGenerate}
+          isGenerating={isGenerating}
+          hasApiKey={!!apiKeys[AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName || '']}
+        />
+
+        <APIKeyDialog
+          open={showApiKeyDialog}
+          onOpenChange={setShowApiKeyDialog}
+          selectedProvider={AI_PROVIDERS.find(p => p.id === selectedProvider) || AI_PROVIDERS[0]}
+          currentApiKey={currentApiKey}
+          onSave={handleSaveApiKey}
+          onCancel={() => setShowApiKeyDialog(false)}
+        />
+      </CardContent>
     </Card>
   );
-};
-
-export default AIQuestionGenerator;
+}
