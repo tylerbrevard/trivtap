@@ -90,6 +90,13 @@ export default function AIQuestionGenerator() {
     }
   };
 
+  const handleConfigureKey = () => {
+    const providerKey = AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName;
+    setCurrentKeyType(providerKey || '');
+    setCurrentApiKey(apiKeys[providerKey || ''] || '');
+    setShowApiKeyDialog(true);
+  };
+
   const handleGenerate = async () => {
     if (!topic.trim()) {
       toast({
@@ -102,8 +109,7 @@ export default function AIQuestionGenerator() {
 
     const providerKey = AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName;
     if (!providerKey || !apiKeys[providerKey]) {
-      setCurrentKeyType(providerKey || '');
-      setShowApiKeyDialog(true);
+      handleConfigureKey();
       return;
     }
 
@@ -131,7 +137,7 @@ export default function AIQuestionGenerator() {
       }
 
       const generatedQuestions = await response.json();
-
+      
       // Save to localStorage
       const existingDataString = localStorage.getItem('trivia_questions');
       let existingData: Record<string, any[]> = {};
@@ -181,12 +187,7 @@ export default function AIQuestionGenerator() {
           providers={AI_PROVIDERS}
           selectedProvider={selectedProvider}
           onProviderChange={setSelectedProvider}
-          onConfigureKey={() => {
-            const providerKey = AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName;
-            setCurrentKeyType(providerKey || '');
-            setCurrentApiKey(apiKeys[providerKey || ''] || '');
-            setShowApiKeyDialog(true);
-          }}
+          onConfigureKey={handleConfigureKey}
           hasApiKey={!!apiKeys[AI_PROVIDERS.find(p => p.id === selectedProvider)?.keyName || '']}
         />
 
