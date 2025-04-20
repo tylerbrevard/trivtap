@@ -14,74 +14,49 @@ interface Question {
   difficulty: 'easy' | 'medium' | 'hard';
 }
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+interface AIRequest {
+  topic: string;
+  difficulty: string;
+  provider: string;
+}
+
+async function handleAuthentication(req: Request) {
+  const supabase = createClient(
+    Deno.env.get('SUPABASE_URL') ?? '',
+    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+  )
+
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
+    throw new Error('No authorization header')
+  }
+  
+  const { data: { user }, error: userError } = await supabase.auth.getUser(
+    authHeader.replace('Bearer ', '')
+  )
+  
+  if (userError || !user) {
+    throw new Error('Invalid token')
   }
 
-  try {
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+  return { user, supabase };
+}
 
-    const authHeader = req.headers.get('Authorization')
-    if (!authHeader) {
-      throw new Error('No authorization header')
-    }
-    
-    const { data: { user }, error: userError } = await supabase.auth.getUser(
-      authHeader.replace('Bearer ', '')
-    )
-    
-    if (userError || !user) {
-      throw new Error('Invalid token')
-    }
+async function getUserSettings(supabase: any, userId: string) {
+  const { data: settings, error: settingsError } = await supabase
+    .from('user_api_settings')
+    .select('openai_api_key, anthropic_api_key, gemini_api_key')
+    .eq('user_id', userId)
+    .single()
 
-    const { data: settings, error: settingsError } = await supabase
-      .from('user_api_settings')
-      .select('openai_api_key, anthropic_api_key, gemini_api_key')
-      .eq('user_id', user.id)
-      .single()
-
-    if (settingsError) {
-      throw new Error('Error fetching API settings')
-    }
-
-    const { topic, difficulty, provider } = await req.json()
-
-    let questions: Question[] = []
-
-    switch (provider) {
-      case 'openai':
-        if (!settings?.openai_api_key) throw new Error('OpenAI API key not found')
-        questions = await generateOpenAIQuestions(settings.openai_api_key, topic, difficulty)
-        break
-      case 'anthropic':
-        if (!settings?.anthropic_api_key) throw new Error('Anthropic API key not found')
-        questions = await generateAnthropicQuestions(settings.anthropic_api_key, topic, difficulty)
-        break
-      case 'gemini':
-        if (!settings?.gemini_api_key) throw new Error('Gemini API key not found')
-        questions = await generateGeminiQuestions(settings.gemini_api_key, topic, difficulty)
-        break
-      default:
-        throw new Error('Invalid AI provider')
-    }
-
-    return new Response(JSON.stringify(questions), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
-  } catch (error) {
-    console.error('Error:', error)
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    })
+  if (settingsError) {
+    throw new Error('Error fetching API settings')
   }
-})
 
-async function generateOpenAIQuestions(apiKey: string, topic: string, difficulty: string): Promise<Question[]> {
+  return settings;
+}
+
+async function generateWithOpenAI(apiKey: string, topic: string, difficulty: string): Promise<Question[]> {
   const response = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
@@ -92,7 +67,7 @@ async function generateOpenAIQuestions(apiKey: string, topic: string, difficulty
       model: "gpt-4o-mini",
       messages: [{
         role: "system",
-        content: "You are a helpful assistant that generates multiple-choice trivia questions. Generate questions in JSON format with the following structure: [{ text: string, options: string[], correctAnswer: string, difficulty: 'easy' | 'medium' | 'hard' }]"
+        content: "You are a helpful assistant that generates multiple-choice questions. Generate questions in JSON format with the following structure: [{ text: string, options: string[], correctAnswer: string, difficulty: 'easy' | 'medium' | 'hard' }]"
       }, {
         role: "user",
         content: `Generate 100 multiple choice questions about ${topic}. Each question should have 4 options and be of ${difficulty} difficulty. Return only the JSON array.`
@@ -101,11 +76,11 @@ async function generateOpenAIQuestions(apiKey: string, topic: string, difficulty
     })
   });
 
-  const data = await response.json()
-  return JSON.parse(data.choices[0].message.content)
+  const data = await response.json();
+  return JSON.parse(data.choices[0].message.content);
 }
 
-async function generateAnthropicQuestions(apiKey: string, topic: string, difficulty: string): Promise<Question[]> {
+async function generateWithAnthropic(apiKey: string, topic: string, difficulty: string): Promise<Question[]> {
   const response = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -123,11 +98,11 @@ async function generateAnthropicQuestions(apiKey: string, topic: string, difficu
     })
   });
 
-  const data = await response.json()
-  return JSON.parse(data.content[0].text)
+  const data = await response.json();
+  return JSON.parse(data.content[0].text);
 }
 
-async function generateGeminiQuestions(apiKey: string, topic: string, difficulty: string): Promise<Question[]> {
+async function generateWithGemini(apiKey: string, topic: string, difficulty: string): Promise<Question[]> {
   const response = await fetch('https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent', {
     method: 'POST',
     headers: {
@@ -143,6 +118,46 @@ async function generateGeminiQuestions(apiKey: string, topic: string, difficulty
     })
   });
 
-  const data = await response.json()
-  return JSON.parse(data.candidates[0].content.parts[0].text)
+  const data = await response.json();
+  return JSON.parse(data.candidates[0].content.parts[0].text);
 }
+
+async function generateQuestions(settings: any, request: AIRequest): Promise<Question[]> {
+  switch (request.provider) {
+    case 'openai':
+      if (!settings?.openai_api_key) throw new Error('OpenAI API key not found');
+      return await generateWithOpenAI(settings.openai_api_key, request.topic, request.difficulty);
+    case 'anthropic':
+      if (!settings?.anthropic_api_key) throw new Error('Anthropic API key not found');
+      return await generateWithAnthropic(settings.anthropic_api_key, request.topic, request.difficulty);
+    case 'gemini':
+      if (!settings?.gemini_api_key) throw new Error('Gemini API key not found');
+      return await generateWithGemini(settings.gemini_api_key, request.topic, request.difficulty);
+    default:
+      throw new Error('Invalid AI provider');
+  }
+}
+
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const { user, supabase } = await handleAuthentication(req);
+    const settings = await getUserSettings(supabase, user.id);
+    const request: AIRequest = await req.json();
+    const questions = await generateQuestions(settings, request);
+
+    return new Response(JSON.stringify(questions), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  } catch (error) {
+    console.error('Error:', error);
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
+  }
+});
+
