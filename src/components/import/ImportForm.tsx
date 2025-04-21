@@ -9,6 +9,7 @@ import { useToast } from "@/components/ui/use-toast";
 import { AlertCircle, CheckCircle2, Upload, Save } from 'lucide-react';
 import { parseCSVData, parseJSONData } from './importUtils';
 import { addImportedQuestionsToCollection } from '@/utils/staticQuestions';
+import { exportQuestionsToCSV, exportQuestionsToJson } from '@/utils/staticQuestions';
 
 interface ImportFormProps {
   setImportResults: React.Dispatch<React.SetStateAction<{ success: boolean; message: string } | null>>;
@@ -87,6 +88,54 @@ const ImportForm = ({ setImportResults, importResults }: ImportFormProps) => {
       });
     } finally {
       setImporting(false);
+    }
+  };
+
+  const handleExport = async () => {
+    try {
+      let exportData: string;
+      let filename: string;
+      let mimeType: string;
+      
+      if (exportFormat === 'csv') {
+        exportData = await exportQuestionsToCSV();
+        filename = 'trivia-questions.csv';
+        mimeType = 'text/csv';
+      } else {
+        exportData = await exportQuestionsToJson();
+        filename = 'trivia-questions.json';
+        mimeType = 'application/json';
+      }
+      
+      // Create a blob from the data
+      const blob = new Blob([exportData], { type: mimeType });
+      
+      // Create a link element
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = filename;
+      
+      // Add to DOM, click the link, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      // Clean up the URL object
+      URL.revokeObjectURL(url);
+      
+      toast({
+        title: "Export Successful",
+        description: `Questions exported successfully as ${filename}!`,
+        variant: "default",
+      });
+    } catch (error) {
+      console.error('Export failed:', error);
+      toast({
+        title: "Export Failed",
+        description: error instanceof Error ? error.message : 'Failed to export questions',
+        variant: "destructive",
+      });
     }
   };
 
@@ -198,7 +247,7 @@ const ImportForm = ({ setImportResults, importResults }: ImportFormProps) => {
           <Button 
             variant="outline" 
             className="flex-1"
-            onClick={() => {}}
+            onClick={handleExport}
           >
             <Save className="mr-2 h-4 w-4" />
             Export Collection
