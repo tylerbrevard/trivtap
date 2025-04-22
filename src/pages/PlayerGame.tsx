@@ -32,6 +32,7 @@ const PlayerGame = () => {
   const [pendingPoints, setPendingPoints] = useState(0);
   const [pendingCorrect, setPendingCorrect] = useState(false);
   const [hasSelectedAnswer, setHasSelectedAnswer] = useState(false);
+  const [lastKnownQuestion, setLastKnownQuestion] = useState<number>(0);
   const { toast } = useToast();
   const navigate = useNavigate();
   
@@ -402,8 +403,9 @@ const PlayerGame = () => {
         if (questions.length > 0) {
           const newIndex = gameState.questionIndex;
           if (newIndex >= 0 && newIndex < questions.length) {
-            setCurrentQuestion(questions[newIndex]);
-            console.log('Override updated question to:', questions[newIndex]?.text);
+            const newQuestion = questions[newIndex];
+            setCurrentQuestion(newQuestion);
+            console.log('Override updated question to:', newQuestion?.text);
           }
         }
         
@@ -537,10 +539,7 @@ const PlayerGame = () => {
     return cleanupListener;
   }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly, isAnswerRevealed, pendingPoints, pendingCorrect, hasSelectedAnswer, score, playerName, gameId, isRegistered, correctAnswers, toast]);
 
-  // Add a more robust fix for intermission state
   useEffect(() => {
-    // Stronger intermission recovery: 
-    // If we're on intermission, but display shows "question", force player back to question in ALL CASES
     const fixIntermissionLoop = () => {
       if (currentGameState === 'intermission') {
         console.log('Running robust intermission state recovery...');
@@ -613,7 +612,7 @@ const PlayerGame = () => {
           // If the question hasn't changed in a while, force an update
           if (parsedTruth.questionIndex !== lastKnownQuestion) {
             console.log(`Question changed from ${lastKnownQuestion} to ${parsedTruth.questionIndex}`);
-            lastKnownQuestion = parsedTruth.questionIndex;
+            setLastKnownQuestion(parsedTruth.questionIndex);
             
             // Apply display truth directly
             setCurrentGameState(parsedTruth.state);
@@ -689,7 +688,7 @@ const PlayerGame = () => {
     return () => {
       clearInterval(periodicSyncInterval);
     };
-  }, [questions, playerName, gameId, currentGameState]);
+  }, [questions, playerName, gameId, currentGameState, lastKnownQuestion]);
   
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
