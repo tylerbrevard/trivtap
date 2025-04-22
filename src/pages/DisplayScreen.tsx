@@ -376,21 +376,67 @@ const DisplayScreen = () => {
     };
   }, [players, toast, gameCode]);
   
+  // AUTOSTART: Automatically transition from JOIN to QUESTION after timeout
   useEffect(() => {
+    let autoStartTimeout: number | undefined;
     if (currentState === 'join' && !hasGameStarted) {
-      // Clear any auto-transition timer that might exist
-      const timerId = window.setTimeout(() => {
-        // Do not auto-start the game here, just ensure the join state is preserved
-        console.log('Join screen active, waiting for manual start');
-      }, 500);
-      
-      return () => {
-        if (timerId) clearTimeout(timerId);
-      };
+      // Only start if there are questions loaded
+      if (questions.length > 0) {
+        autoStartTimeout = window.setTimeout(() => {
+          console.log('Auto-starting the game after join screen timeout');
+          setHasGameStarted(true);
+          setCurrentState('question');
+          setTimeLeft(gameSettings.questionDuration);
+
+          // Create a specific game start state
+          const gameStartState = {
+            state: 'question',
+            questionIndex: 0,
+            timeLeft: gameSettings.questionDuration,
+            questionCounter: 1,
+            timestamp: Date.now() + 20000, // Far future timestamp to ensure priority
+            hasGameStarted: true,
+            manualStart: false,
+            autoStart: true,
+            forceSync: true,
+            definitiveTruth: true
+          };
+
+          // Clear existing states
+          localStorage.removeItem('gameState');
+          localStorage.removeItem('gameState_display_truth');
+
+          // Set new authoritative state
+          setTimeout(() => {
+            localStorage.setItem('gameState', JSON.stringify(gameStartState));
+            localStorage.setItem('gameState_display_truth', JSON.stringify(gameStartState));
+            window.dispatchEvent(new CustomEvent('triviaStateChange', {
+              detail: gameStartState
+            }));
+
+            // Send additional events to ensure delivery
+            for (let i = 1; i <= 5; i++) {
+              setTimeout(() => {
+                window.dispatchEvent(new CustomEvent('triviaStateChange', {
+                  detail: {
+                    ...gameStartState,
+                    timestamp: gameStartState.timestamp + i,
+                    redundancyLevel: i
+                  }
+                }));
+              }, i * 100);
+            }
+
+            console.log('Game started automatically with state:', gameStartState);
+          }, 100);
+        }, 10000); // Auto-start delay (10 seconds on join screen)
+      }
     }
-    
-    return () => {};
-  }, [currentState, hasGameStarted]);
+
+    return () => {
+      if (autoStartTimeout) clearTimeout(autoStartTimeout);
+    };
+  }, [currentState, hasGameStarted, questions, gameSettings.questionDuration, setCurrentState, setTimeLeft]);
   
   useEffect(() => {
     let generatedCode = '';

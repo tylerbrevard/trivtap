@@ -537,34 +537,30 @@ const PlayerGame = () => {
     return cleanupListener;
   }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly, isAnswerRevealed, pendingPoints, pendingCorrect, hasSelectedAnswer, score, playerName, gameId, isRegistered, correctAnswers, toast]);
 
-  // Add a more direct fix for intermission state
+  // Add a more robust fix for intermission state
   useEffect(() => {
-    // Special check focused on fixing stuck intermission state
+    // Stronger intermission recovery: 
+    // If we're on intermission, but display shows "question", force player back to question in ALL CASES
     const fixIntermissionLoop = () => {
-      // If we're stuck in intermission
       if (currentGameState === 'intermission') {
-        console.log('Running special intermission state check...');
-        
-        // Try to retrieve display truth which may have question state
+        console.log('Running robust intermission state recovery...');
         const displayTruth = localStorage.getItem('gameState_display_truth');
         if (displayTruth) {
           try {
             const truthState = JSON.parse(displayTruth);
-            
-            // If display is showing a question but we're in intermission, force question state
+
             if (truthState.state === 'question') {
-              console.log('Found display truth showing question while player is in intermission! Fixing.');
-              
+              console.log('Display shows question state while player is in intermission, FORCING RECOVERY!');
               setCurrentGameState('question');
               setQuestionIndex(truthState.questionIndex);
               setTimeLeft(truthState.timeLeft);
               setLastGameStateTimestamp(truthState.timestamp);
-              
+
               if (questions.length > 0 && truthState.questionIndex >= 0 && truthState.questionIndex < questions.length) {
                 setCurrentQuestion(questions[truthState.questionIndex]);
-                console.log('Emergency fix updated question to:', questions[truthState.questionIndex]?.text);
+                console.log('Synced current question to:', questions[truthState.questionIndex]?.text);
               }
-              
+
               setSelectedAnswer(null);
               setHasSelectedAnswer(false);
               setAnsweredCorrectly(null);
@@ -573,9 +569,9 @@ const PlayerGame = () => {
               setPendingCorrect(false);
               setShowTimeUp(false);
               setFailedSyncAttempts(0);
-              
+
               // Also broadcast that we're fixing this issue
-              window.dispatchEvent(new CustomEvent('playerStateFixed', { 
+              window.dispatchEvent(new CustomEvent('playerStateFixed', {
                 detail: {
                   player: playerName,
                   fixedFrom: 'intermission',
@@ -584,23 +580,21 @@ const PlayerGame = () => {
               }));
             }
           } catch (error) {
-            console.error('Error checking display truth for intermission fix:', error);
+            console.error('Error in robust intermission fix:', error);
           }
         }
       }
     };
-    
-    // Run this check immediately
+
     fixIntermissionLoop();
-    
-    // And setup an interval to keep checking
-    const intermissionFixInterval = setInterval(fixIntermissionLoop, 3000);
-    
+    // Check every second aggressively
+    const intermissionFixInterval = setInterval(fixIntermissionLoop, 1000);
+
     return () => {
       clearInterval(intermissionFixInterval);
     };
   }, [currentGameState, playerName, questionIndex, questions, lastGameStateTimestamp]);
-  
+
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
       const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
