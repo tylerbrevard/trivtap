@@ -52,7 +52,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
     // Force page reload after a brief delay
     setTimeout(() => {
       window.location.reload();
-    }, 500);
+    }, 300);
   };
 
   return (
@@ -74,7 +74,16 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
           variant="outline" 
           size="sm" 
           className="bg-indigo-800/30 hover:bg-indigo-700/40"
-          onClick={handleForceSync}
+          onClick={() => {
+            handleForceSync();
+            // After triggering parent sync, also dispatch an event to notify players
+            window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
+              detail: {
+                timestamp: Date.now(),
+                forceClear: true
+              }
+            }));
+          }}
         >
           Force Sync
         </Button>
@@ -84,9 +93,19 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
             variant="outline" 
             size="sm" 
             className="bg-indigo-800/30 hover:bg-indigo-700/40"
-            onClick={onForceTimer}
+            onClick={() => {
+              onForceTimer();
+              // After forcing timer reset, broadcast synchronization event
+              window.dispatchEvent(new CustomEvent('playerStateFixed', {
+                detail: {
+                  fixedFrom: 'stuck',
+                  fixedTo: 'question',
+                  timeReset: true
+                }
+              }));
+            }}
           >
-            Reset Timer
+            Reset Timer (30s)
           </Button>
         )}
         

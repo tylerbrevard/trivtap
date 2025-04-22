@@ -33,7 +33,6 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   // Local state to track answer selection
   const [localAnswer, setLocalAnswer] = useState<string | null>(null);
   const [clickDebugMsg, setClickDebugMsg] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
   const [clickCount, setClickCount] = useState(0);
   
   // Container reference for direct DOM event handling
@@ -43,7 +42,6 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   useEffect(() => {
     setLocalAnswer(selectedAnswer);
     setClickCount(0);
-    setIsProcessing(false);
     setClickDebugMsg("");
     console.log("New question loaded, reset selection state. Selected answer:", selectedAnswer);
   }, [currentQuestion?.text, selectedAnswer]);
@@ -62,10 +60,10 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     const clickTime = new Date().toISOString();
     setClickCount(prev => prev + 1);
     console.log(`Click detected on "${option}" at ${clickTime}`, {
-      isProcessing,
       isAnswerRevealed,
       timeLeft,
-      currentAnswer: localAnswer
+      currentAnswer: localAnswer,
+      selectedAnswer
     });
     
     // Don't process clicks if:
@@ -86,8 +84,10 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     setClickDebugMsg(`Clicked: ${option} at ${clickTime}`);
     console.log("Processing answer selection:", option);
     
-    // Call the parent handler
-    handleSelectAnswer(option);
+    // Call the parent handler with a small delay to ensure local UI updates first
+    setTimeout(() => {
+      handleSelectAnswer(option);
+    }, 50);
   };
   
   // Direct DOM event listener for more reliable click handling
@@ -96,8 +96,6 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     if (!container) return;
     
     const directClickHandler = (e: MouseEvent) => {
-      if (isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) return;
-      
       const target = e.target as HTMLElement;
       const optionElement = target.closest('[data-option]');
       
@@ -106,22 +104,31 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         if (option) {
           console.log("Direct DOM click handler activated for option:", option);
           
-          // Use the same handler for consistency
-          const clickTime = new Date().toISOString();
-          setClickCount(prev => prev + 1);
-          setLocalAnswer(option);
-          setClickDebugMsg(`Direct DOM click: ${option} at ${clickTime}`);
-          
-          // Call the parent handler directly
-          handleSelectAnswer(option);
+          // Only process if we haven't selected an answer yet
+          if (localAnswer === null && !isAnswerRevealed && timeLeft > 0) {
+            // Update local UI immediately
+            setLocalAnswer(option);
+            setClickCount(prev => prev + 1);
+            
+            const clickTime = new Date().toISOString();
+            setClickDebugMsg(`Direct DOM click: ${option} at ${clickTime}`);
+            
+            // Call the parent handler with a small delay
+            setTimeout(() => {
+              handleSelectAnswer(option);
+            }, 50);
+          } else {
+            console.log("DOM click ignored - answer already selected or revealed");
+          }
         }
       }
     };
     
-    container.addEventListener('click', directClickHandler);
+    // Use mousedown for faster response
+    container.addEventListener('mousedown', directClickHandler);
     
     return () => {
-      container.removeEventListener('click', directClickHandler);
+      container.removeEventListener('mousedown', directClickHandler);
     };
   }, [isAnswerRevealed, timeLeft, localAnswer, handleSelectAnswer]);
   
@@ -144,8 +151,8 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             // Determine if this option is selected
             const isSelected = option === localAnswer;
             
-            // Define button classes based on state with improved visual feedback
-            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-300 relative";
+            // Define button classes based on state
+            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-200 relative hover:scale-[1.01] active:scale-[0.99]";
             
             if (isAnswerRevealed) {
               // Answer revealed state
@@ -159,7 +166,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             } else {
               // Question state
               if (isSelected) {
-                buttonClasses += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md";
+                buttonClasses += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-lg animate-pulse";
               } else {
                 buttonClasses += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow hover:shadow-lg cursor-pointer";
               }
@@ -231,7 +238,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
         <p>Debug: Last Click: {clickDebugMsg || 'None'}</p>
         <p>Selected: {selectedAnswer || 'None'} | Local: {localAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        <p>Click Count: {clickCount} | Processing: {String(isProcessing)} | State: {currentGameState}</p>
+        <p>Click Count: {clickCount} | State: {currentGameState}</p>
       </div>
       
       {/* Dev tools */}
@@ -239,9 +246,6 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         <PlayerGameDevTools 
           handleForceSync={handleForceSync} 
           onForceTimer={() => {
-            // Reset processing flag in case it's stuck
-            setIsProcessing(false);
-            
             // Clear local storage state to force reset
             localStorage.removeItem('gameState');
             
@@ -249,7 +253,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             const resetState = {
               state: 'question',
               questionIndex: currentQuestion ? currentQuestion.index : 0,
-              timeLeft: 25,
+              timeLeft: 30,
               timestamp: Date.now() + 10000,
               definitiveTruth: true,
               forceSync: true
@@ -261,7 +265,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
               detail: resetState
             }));
             
-            console.log('Forced complete reset, timer set to 25 seconds');
+            console.log('Forced complete reset, timer set to 30 seconds');
           }}
           debugInfo={{
             selectedAnswer,
@@ -273,8 +277,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         />
       )}
       
-      <style>
-        {`
+      <style jsx="true">{`
         .selectable-answer:active {
           transform: scale(0.98);
           box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
@@ -292,8 +295,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         .unselected-answer {
           opacity: 0.8;
         }
-        `}
-      </style>
+      `}</style>
     </main>
   );
 };

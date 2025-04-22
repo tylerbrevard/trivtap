@@ -18,7 +18,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   const lastTimeRef = useRef(timeLeft);
   const timerRef = useRef<number | null>(null);
   
-  // Update local timer whenever the prop changes
+  // Force timer update when timeLeft changes from parent
   useEffect(() => {
     // Force immediate update when time changes
     setDisplayTime(timeLeft);
@@ -32,23 +32,36 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
     
     // Create a new active timer for smooth countdown if time is running
     if (timeLeft > 0) {
-      console.log(`Timer synchronized to ${timeLeft}s - starting countdown`);
+      console.log(`Timer synchronized to ${timeLeft}s - starting visual countdown`);
+      
+      // Store start time for accurate countdown
+      const startTime = Date.now();
+      const startValue = timeLeft;
       
       // Set up visual countdown that doesn't affect game state
       const startCountdown = () => {
         timerRef.current = window.setTimeout(() => {
-          const newTime = displayTime - 1;
+          // Calculate time passed
+          const timeElapsed = Math.floor((Date.now() - startTime) / 1000);
+          const newTime = Math.max(0, startValue - timeElapsed);
           
           if (newTime >= 0 && newTime < lastTimeRef.current) {
             setDisplayTime(newTime);
             startCountdown(); // Continue countdown
           }
-        }, 1000);
+        }, 200); // Update more frequently for smooth display
       };
       
       startCountdown();
     } else {
       console.log('Timer stopped at 0s');
+      setDisplayTime(0);
+    }
+    
+    // Force display to match timeLeft from parent when significant difference
+    if (Math.abs(displayTime - timeLeft) > 2) {
+      console.log(`Timer significantly out of sync (diff: ${displayTime - timeLeft}s) - forcing update`);
+      setDisplayTime(timeLeft);
     }
     
     return () => {
@@ -57,15 +70,6 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
       }
     };
   }, [timeLeft]);
-  
-  // Reset timer if displayTime gets out of sync
-  useEffect(() => {
-    // If display time gets significantly out of sync with the actual time
-    if (Math.abs(displayTime - timeLeft) > 2 && timeLeft > 0) {
-      console.log(`Timer desynchronized by ${displayTime - timeLeft}s - correcting`);
-      setDisplayTime(timeLeft);
-    }
-  }, [displayTime, timeLeft]);
   
   // Function to determine time color based on remaining time
   const getTimeColor = () => {
@@ -101,7 +105,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
       {displayTime > 0 && (
         <div className="w-full h-2 bg-indigo-900/50 rounded-full mt-3 overflow-hidden shadow-inner">
           <div 
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000 ease-linear"
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-200 ease-linear"
             style={{ width: `${(displayTime / 30) * 100}%` }}
             data-testid="timer-progress"
           ></div>
