@@ -15,19 +15,16 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
 }) => {
   // Local state for smooth timer display with proper synchronization
   const [displayTime, setDisplayTime] = useState(timeLeft);
-  const timeChangeRef = useRef<number | null>(null);
+  const lastTimeRef = useRef(timeLeft);
   
   // Update local timer whenever the prop changes
   useEffect(() => {
-    // Cancel any existing animation
-    if (timeChangeRef.current !== null) {
-      window.cancelAnimationFrame(timeChangeRef.current);
-      timeChangeRef.current = null;
+    // Force immediate update when time changes
+    if (timeLeft !== lastTimeRef.current) {
+      setDisplayTime(timeLeft);
+      lastTimeRef.current = timeLeft;
+      console.log(`Timer synchronized to ${timeLeft}s`);
     }
-    
-    // Update immediately for accurate timing
-    setDisplayTime(timeLeft);
-    console.log(`Timer synchronized to ${timeLeft}s`);
   }, [timeLeft]);
   
   // Function to determine time color based on remaining time

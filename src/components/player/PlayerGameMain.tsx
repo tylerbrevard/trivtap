@@ -56,7 +56,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     }
   }, [selectedAnswer, localAnswer]);
 
-  // Option click handler - primary approach
+  // Option click handler with improved feedback
   const handleOptionClick = (option: string) => {
     // Capture click timestamp for debugging
     const clickTime = new Date().toISOString();
@@ -69,46 +69,34 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     });
     
     // Don't process clicks if:
-    // - Already processing a click
     // - Answer has been revealed
     // - Time is up
     // - Already selected an answer
-    if (isProcessing || isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) {
+    if (isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) {
       console.log("Click ignored:", {
-        reason: isProcessing ? "Already processing" : 
-               isAnswerRevealed ? "Answer revealed" : 
+        reason: isAnswerRevealed ? "Answer revealed" : 
                timeLeft <= 0 ? "Time is up" : 
                localAnswer !== null ? "Already selected" : "Unknown"
       });
       return;
     }
     
-    // Set processing flag to prevent double-clicks
-    setIsProcessing(true);
-    
     // Update local state immediately for responsive UI
     setLocalAnswer(option);
     setClickDebugMsg(`Clicked: ${option} at ${clickTime}`);
-    
     console.log("Processing answer selection:", option);
     
     // Call the parent handler
     handleSelectAnswer(option);
-    
-    // Reset processing flag after a short delay
-    setTimeout(() => {
-      setIsProcessing(false);
-    }, 500);
   };
   
-  // Backup approach: direct DOM event listener
+  // Direct DOM event listener for more reliable click handling
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     
-    // Use event capturing for higher priority
     const directClickHandler = (e: MouseEvent) => {
-      if (isProcessing || isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) return;
+      if (isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) return;
       
       const target = e.target as HTMLElement;
       const optionElement = target.closest('[data-option]');
@@ -116,14 +104,17 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       if (optionElement) {
         const option = optionElement.getAttribute('data-option');
         if (option) {
-          // Prevent normal event propagation
           e.preventDefault();
           e.stopPropagation();
           
-          console.log("Direct DOM click captured on:", option);
-          
           // Use the same handler for consistency
-          handleOptionClick(option);
+          const clickTime = new Date().toISOString();
+          setClickCount(prev => prev + 1);
+          setLocalAnswer(option);
+          setClickDebugMsg(`Direct DOM click: ${option} at ${clickTime}`);
+          
+          // Call the parent handler directly
+          handleSelectAnswer(option);
         }
       }
     };
@@ -133,7 +124,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     return () => {
       container.removeEventListener('click', directClickHandler, { capture: true });
     };
-  }, [isProcessing, isAnswerRevealed, timeLeft, localAnswer, handleOptionClick]);
+  }, [isAnswerRevealed, timeLeft, localAnswer, handleSelectAnswer]);
   
   // Ensure we have a valid question
   if (!currentQuestion || !currentQuestion.options) {
@@ -154,7 +145,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             // Determine if this option is selected
             const isSelected = option === localAnswer || option === selectedAnswer;
             
-            // Define button classes based on state
+            // Define button classes based on state with improved visual feedback
             let buttonClasses = "p-5 rounded-lg text-left transition-all duration-300 relative";
             
             if (isAnswerRevealed) {

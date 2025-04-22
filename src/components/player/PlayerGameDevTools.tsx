@@ -23,6 +23,36 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
     console.log('Display truth:', displayTruth ? JSON.parse(displayTruth) : 'Not found');
     console.log('Debug info:', debugInfo);
   };
+  
+  const handleEmergencyReset = () => {
+    // Clear all game state
+    localStorage.removeItem('gameState');
+    localStorage.removeItem('gameState_display_truth');
+    
+    // Create a high-priority reset state
+    const resetState = {
+      state: 'question',
+      questionIndex: 0, 
+      timeLeft: 30,
+      timestamp: Date.now() + 20000,
+      definitiveTruth: true,
+      forceSync: true,
+      emergencyReset: true
+    };
+    
+    // Apply the reset
+    localStorage.setItem('gameState', JSON.stringify(resetState));
+    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+      detail: resetState
+    }));
+    
+    console.log('EMERGENCY RESET applied');
+    
+    // Force page reload after a brief delay
+    setTimeout(() => {
+      window.location.reload();
+    }, 500);
+  };
 
   return (
     <div className="mt-4 border border-dashed border-indigo-500/40 rounded-lg p-4 bg-indigo-900/20">
@@ -38,7 +68,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         </Button>
       </div>
       
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-2 gap-2 mb-2">
         <Button 
           variant="outline" 
           size="sm" 
@@ -81,6 +111,15 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
           Clear State
         </Button>
       </div>
+      
+      <Button 
+        variant="destructive" 
+        size="sm" 
+        className="w-full text-xs"
+        onClick={handleEmergencyReset}
+      >
+        Emergency Reset
+      </Button>
       
       {showDetails && debugInfo && (
         <div className="mt-3 border-t border-indigo-500/30 pt-2">
