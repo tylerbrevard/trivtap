@@ -18,6 +18,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   
   // Update the animated time whenever the actual time changes
   useEffect(() => {
+    console.log("Header received timeLeft update:", timeLeft);
     setAnimatedTimeLeft(timeLeft);
   }, [timeLeft]);
   
@@ -41,7 +42,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
           </div>
           <div className={`flex items-center gap-1 ${getTimeColor()}`}>
             <Clock className="h-5 w-5" />
-            <span className="font-bold">{timeLeft || 0}s</span>
+            <span className="font-bold" data-time-value={timeLeft}>{timeLeft || 0}s</span>
           </div>
         </div>
       </div>

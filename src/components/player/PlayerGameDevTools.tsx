@@ -18,6 +18,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
+            console.log("Force sync button clicked");
             handleForceSync();
           }}
           className="bg-purple-800/50 hover:bg-purple-700/50 text-purple-100 border-purple-600/50"
@@ -31,10 +32,12 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
             e.stopPropagation();
             localStorage.removeItem('gameState');
             console.log('Cleared gameState from localStorage');
+            // Force reload the page to reset everything
+            setTimeout(() => window.location.reload(), 500);
           }}
           className="bg-red-800/50 hover:bg-red-700/50 text-red-100 border-red-600/50"
         >
-          Clear Game State
+          Clear Game State & Reload
         </Button>
         <Button
           variant="outline"
@@ -45,7 +48,8 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
               gameState: JSON.parse(localStorage.getItem('gameState') || '{}'),
               displayTruth: JSON.parse(localStorage.getItem('gameState_display_truth') || '{}'),
               playerName: sessionStorage.getItem('playerName'),
-              gameId: sessionStorage.getItem('gameId')
+              gameId: sessionStorage.getItem('gameId'),
+              clickEvents: document.querySelectorAll('[data-clickable="true"]').length
             });
           }}
           className="bg-blue-800/50 hover:bg-blue-700/50 text-blue-100 border-blue-600/50"
