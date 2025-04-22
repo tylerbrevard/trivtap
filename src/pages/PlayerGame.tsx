@@ -242,7 +242,7 @@ const PlayerGame = () => {
               console.log('Game state is not newer, ignoring');
               setFailedSyncAttempts(prev => prev + 1);
               
-              if (failedSyncAttempts > 10) {
+              if (failedSyncAttempts > 5) { // Reduced from 10 to make synchronization more aggressive
                 console.log('Multiple sync failures detected, resetting timestamp to accept any state');
                 setLastGameStateTimestamp(0);
                 setFailedSyncAttempts(0);
@@ -283,10 +283,11 @@ const PlayerGame = () => {
             setShowTimeUp(false);
           } 
           else if (newGameState === 'question') {
+            // Always update time when in question state to keep in sync with display
             setTimeLeft(parsedState.timeLeft);
             
             if (parsedState.timeLeft > 0) {
-              setAnsweredCorrectly(null);
+              // Only reset answer state if time is still running
               setShowTimeUp(false);
             } else if (parsedState.timeLeft === 0 && !isAnswerRevealed) {
               setShowTimeUp(true);
@@ -364,7 +365,8 @@ const PlayerGame = () => {
       }
     };
     
-    const intervalId = setInterval(checkGameState, 200);
+    // Increase check frequency for more responsive updates
+    const intervalId = setInterval(checkGameState, 100); // Reduced from 200ms to 100ms
     
     // More aggressive recovery for intermission states
     const forceSyncIntervalId = setInterval(() => {
@@ -743,9 +745,43 @@ const PlayerGame = () => {
   }, [currentGameState, isRegistered, registeredPlayerId, gameId, score, correctAnswers, questions.length, playerName]);
   
   const handleSelectAnswer = (answer: string) => {
-    if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
+    console.log('PlayerGame handleSelectAnswer called with:', answer);
+    console.log('Current state:', {
+      selectedAnswer,
+      isAnswerRevealed,
+      timeLeft,
+      currentGameState
+    });
+    
+    // Only allow selection if no answer is already selected, answer not revealed, and time is still running
+    if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0 && currentGameState === 'question') {
       console.log('Selected answer:', answer);
       setSelectedAnswer(answer);
+      setHasSelectedAnswer(true);
+      
+      // Check if answer is correct and calculate points immediately
+      if (currentQuestion && answer === currentQuestion.correctAnswer) {
+        const pointsEarned = 100 + (timeLeft * 10);
+        setPendingPoints(pointsEarned);
+        setPendingCorrect(true);
+        console.log('Stored pending points:', pointsEarned);
+      }
+      
+      // Broadcast selection for debugging
+      window.dispatchEvent(new CustomEvent('playerSelectedAnswer', { 
+        detail: { 
+          player: playerName,
+          answer,
+          timestamp: Date.now()
+        }
+      }));
+    } else {
+      console.log('Answer selection ignored:', {
+        reason: selectedAnswer !== null ? 'Already selected' : 
+               isAnswerRevealed ? 'Answer revealed' : 
+               timeLeft <= 0 ? 'Time up' : 
+               currentGameState !== 'question' ? 'Not in question state' : 'Unknown'
+      });
     }
   };
   
@@ -869,4 +905,4 @@ const PlayerGame = () => {
   );
 };
 
-export default PlayerGame;
+export default PlayerGame

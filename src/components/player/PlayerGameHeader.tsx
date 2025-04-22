@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { Clock } from "lucide-react";
 
 interface PlayerGameHeaderProps {
@@ -13,6 +13,14 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   score,
   timeLeft,
 }) => {
+  // Local state to track time for smooth animations
+  const [animatedTimeLeft, setAnimatedTimeLeft] = useState(timeLeft);
+  
+  // Update the animated time whenever the actual time changes
+  useEffect(() => {
+    setAnimatedTimeLeft(timeLeft);
+  }, [timeLeft]);
+  
   // Function to determine time color based on remaining time
   const getTimeColor = () => {
     if (timeLeft > 20) return "text-green-400";

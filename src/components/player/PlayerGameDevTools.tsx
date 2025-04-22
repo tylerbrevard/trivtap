@@ -1,7 +1,6 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, RotateCcw } from "lucide-react";
 
 interface PlayerGameDevToolsProps {
   handleForceSync: () => void;
@@ -9,41 +8,53 @@ interface PlayerGameDevToolsProps {
 
 const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
   handleForceSync,
-}) => (
-  <div className="mt-4 border border-dashed border-purple-500/50 p-4 rounded-md bg-indigo-900/50">
-    <p className="text-sm text-purple-300 mb-2">Development Controls</p>
-    <div className="flex gap-3">
-      <Button 
-        variant="outline" 
-        size="sm" 
-        onClick={(e) => {
-          e.stopPropagation(); // Prevent event bubbling
-          e.preventDefault();
-          console.log("Force sync button clicked");
-          handleForceSync();
-        }}
-        className="flex items-center gap-1 bg-indigo-800/50 hover:bg-indigo-700/50 border-purple-500/50 text-purple-200"
-      >
-        <RefreshCw className="h-4 w-4 mr-1" />
-        Force Sync
-      </Button>
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={(e) => {
-          e.stopPropagation(); // Prevent event bubbling
-          e.preventDefault();
-          console.log("Reset game button clicked");
-          localStorage.removeItem("gameState");
-          window.location.reload();
-        }}
-        className="flex items-center gap-1 bg-indigo-800/50 hover:bg-indigo-700/50 border-purple-500/50 text-purple-200"
-      >
-        <RotateCcw className="h-4 w-4 mr-1" />
-        Reset Game
-      </Button>
+}) => {
+  return (
+    <div className="mt-4 p-4 border border-dashed border-purple-500/30 rounded bg-purple-900/10">
+      <h3 className="text-purple-300 font-bold mb-2">Dev Tools</h3>
+      <div className="flex flex-wrap gap-2">
+        <Button 
+          variant="outline" 
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            handleForceSync();
+          }}
+          className="bg-purple-800/50 hover:bg-purple-700/50 text-purple-100 border-purple-600/50"
+        >
+          Force Sync with Display
+        </Button>
+        <Button
+          variant="outline"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            localStorage.removeItem('gameState');
+            console.log('Cleared gameState from localStorage');
+          }}
+          className="bg-red-800/50 hover:bg-red-700/50 text-red-100 border-red-600/50"
+        >
+          Clear Game State
+        </Button>
+        <Button
+          variant="outline"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            console.log('Current localStorage:', {
+              gameState: JSON.parse(localStorage.getItem('gameState') || '{}'),
+              displayTruth: JSON.parse(localStorage.getItem('gameState_display_truth') || '{}'),
+              playerName: sessionStorage.getItem('playerName'),
+              gameId: sessionStorage.getItem('gameId')
+            });
+          }}
+          className="bg-blue-800/50 hover:bg-blue-700/50 text-blue-100 border-blue-600/50"
+        >
+          Log Debug Info
+        </Button>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default PlayerGameDevTools;

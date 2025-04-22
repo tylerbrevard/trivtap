@@ -32,6 +32,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   // Track button clicks for debugging
   const [lastClickTime, setLastClickTime] = useState<number>(0);
   const [clickDebugInfo, setClickDebugInfo] = useState<string>("");
+  const [localSelectedAnswer, setLocalSelectedAnswer] = useState<string | null>(null);
   
   // Debug log to verify props being received
   useEffect(() => {
@@ -39,13 +40,19 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       currentQuestion: currentQuestion?.text, 
       selectedAnswer, 
       isAnswerRevealed, 
-      timeLeft 
+      timeLeft,
+      currentState: "question" // Add current state for debugging
     });
   }, [currentQuestion, selectedAnswer, isAnswerRevealed, timeLeft]);
 
-  // Function to handle click on answer buttons with improved logging and error handling
+  // Sync local selection with parent component selection
+  useEffect(() => {
+    setLocalSelectedAnswer(selectedAnswer);
+  }, [selectedAnswer]);
+
+  // Function to handle click on answer buttons with improved logging
   const onAnswerClick = (option: string, index: number) => {
-    // Record click time and log details
+    // Record click time and log details for debugging
     const now = Date.now();
     setLastClickTime(now);
     
@@ -53,20 +60,17 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     console.log(clickLog);
     setClickDebugInfo(clickLog);
     
-    // Always attempt to select the answer, and log what happens
-    console.log(`ATTEMPTING TO SELECT ANSWER: ${option}`);
+    // Set local selection for immediate visual feedback
+    setLocalSelectedAnswer(option);
     
-    // Call the handler directly without conditions - we'll let the parent component decide
-    // if the selection is valid based on game state
+    // Call the handler to update parent state
+    console.log(`ATTEMPTING TO SELECT ANSWER: ${option}`);
     handleSelectAnswer(option);
     
-    // Give visual feedback by highlighting the button temporarily even if not actually selected
-    if (selectedAnswer === null && !isAnswerRevealed) {
-      const visualFeedbackEvent = new CustomEvent('answerClicked', { 
-        detail: { option, timeStamp: now } 
-      });
-      window.dispatchEvent(visualFeedbackEvent);
-    }
+    // Force a DOM event to ensure click is registered
+    document.dispatchEvent(new CustomEvent('answerSelected', { 
+      detail: { option, index, timestamp: now } 
+    }));
   };
 
   // Ensure we have a valid question object
@@ -81,54 +85,59 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         <h2 className="text-xl font-bold mb-4 text-white">{currentQuestion.text}</h2>
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
-            // Determine the button class based on selection and answer state
-            let buttonClass = "p-5 rounded-lg text-left transition-all";
+            // Determine button styles based on selection state for better visual feedback
+            let buttonClass = "p-5 rounded-lg text-left transition-all cursor-pointer";
             
             // Base style for all buttons - brighter and more engaging
-            buttonClass += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg ";
+            buttonClass += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg";
             
             // Add specific styles based on selection state
-            if (selectedAnswer === option) {
+            if (localSelectedAnswer === option || selectedAnswer === option) {
               if (isAnswerRevealed) {
                 // Revealed and selected
                 buttonClass = option === currentQuestion.correctAnswer
-                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md"
-                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md cursor-pointer"
+                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md cursor-pointer";
               } else {
-                // Selected but not revealed
-                buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md";
+                // Selected but not revealed - make this state very visible
+                buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md cursor-pointer animate-pulse";
               }
             } else if (isAnswerRevealed && option === currentQuestion.correctAnswer) {
               // Correct answer when revealed
-              buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
+              buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md cursor-pointer";
             }
             
-            // Add active state for better feedback - always active for better UX
+            // Add active state for better feedback
             buttonClass += " active:scale-[0.98] active:bg-[#8B5CF6]";
             
             return (
               <button
                 key={index}
                 onClick={(e) => {
-                  // Stop any potential event propagation issues
-                  e.stopPropagation();
+                  // Ensure the click is captured directly
                   e.preventDefault();
-                  onAnswerClick(option, index);
+                  e.stopPropagation();
+                  if (!isAnswerRevealed && timeLeft > 0) {
+                    onAnswerClick(option, index);
+                  } else {
+                    console.log("Click ignored - answer revealed or time up");
+                  }
                 }}
                 className={buttonClass}
                 type="button"
                 data-option={option}
                 data-index={index}
                 data-testid={`answer-option-${index}`}
+                disabled={isAnswerRevealed || timeLeft <= 0}
               >
                 <div className="flex items-center">
                   <span className="mr-4 text-white font-bold flex items-center justify-center h-10 w-10 rounded-full bg-[#8B5CF6]/50 shadow-inner">
                     {String.fromCharCode(65 + index)}
                   </span>
                   <span className="text-white font-medium text-lg">{option}</span>
-                  {selectedAnswer === option && !isAnswerRevealed && (
+                  {(localSelectedAnswer === option || selectedAnswer === option) && !isAnswerRevealed && (
                     <span className="ml-auto">
-                      <Check className="h-6 w-6 text-white animate-pulse" />
+                      <Check className="h-6 w-6 text-white" />
                     </span>
                   )}
                 </div>
@@ -168,13 +177,11 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       )}
       
       {/* Enhanced debugging info with more details */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
-          <p>Debug: Last Click: {lastClickTime > 0 ? new Date(lastClickTime).toLocaleTimeString() : 'None'}</p>
-          <p>Selected: {selectedAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-          {clickDebugInfo && <p className="text-orange-200">Last click: {clickDebugInfo}</p>}
-        </div>
-      )}
+      <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
+        <p>Debug: Last Click: {lastClickTime > 0 ? new Date(lastClickTime).toLocaleTimeString() : 'None'}</p>
+        <p>Selected: {selectedAnswer || 'None'} | Local: {localSelectedAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
+        {clickDebugInfo && <p className="text-orange-200">Last click: {clickDebugInfo}</p>}
+      </div>
       
       {hasDevTools && handleForceSync && (
         <PlayerGameDevTools handleForceSync={handleForceSync} />
