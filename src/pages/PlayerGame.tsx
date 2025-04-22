@@ -1,12 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
-import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
-import { baseStaticQuestions, getAllAvailableQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion } from '@/utils/staticQuestions';
+import { getAllAvailableQuestions, formatQuestionsForGame } from '@/utils/staticQuestions';
 import { recoverFromDisplayTruth } from '@/utils/gameStateUtils';
 import PlayerGameHeader from "@/components/player/PlayerGameHeader";
 import PlayerGameMain from "@/components/player/PlayerGameMain";

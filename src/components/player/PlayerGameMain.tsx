@@ -2,6 +2,7 @@
 import React from "react";
 import { Trophy, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import PlayerGameDevTools from "./PlayerGameDevTools";
 
 interface PlayerGameMainProps {
   currentQuestion: any;
@@ -89,27 +90,9 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       </div>
     )}
     {hasDevTools && handleForceSync && (
-      <div className="mt-4 border border-dashed border-gray-300 p-3 rounded-md">
-        <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={handleForceSync}>
-            Force Sync
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              localStorage.removeItem("gameState");
-              window.location.reload();
-            }}
-          >
-            Reset Game
-          </Button>
-        </div>
-      </div>
+      <PlayerGameDevTools handleForceSync={handleForceSync} />
     )}
   </main>
 );
 
 export default PlayerGameMain;
-
