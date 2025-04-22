@@ -15,7 +15,8 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
 }) => {
   // Local state for smooth timer display
   const [displayTime, setDisplayTime] = useState(timeLeft);
-  const timerRef = useRef<number | null>(null);
+  // Update the type to NodeJS.Timeout which is the correct type for setTimeout/setInterval
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Update display time when parent timeLeft changes
   useEffect(() => {
