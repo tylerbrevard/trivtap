@@ -1,3 +1,4 @@
+
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -13,13 +14,16 @@ export const updateGameState = (
   timeLeft: number, 
   questionCounter: number
 ) => {
+  // Calculate slidesIndex only for intermission state transitions
+  const slidesIndex = nextState === 'intermission' ? getNextSlideIndex() : 0;
+  
   const gameState = {
     state: nextState,
     questionIndex: currentQuestionIndex,
     timeLeft: timeLeft,
     questionCounter: questionCounter,
     timestamp: Date.now(),
-    slidesIndex: nextState === 'intermission' ? getNextSlideIndex() : 0,
+    slidesIndex: slidesIndex,
     authoritative: true // Mark as authoritative source
   };
   
@@ -181,7 +185,9 @@ export const moveToNextQuestion = (
       timeLeft: questionDuration,
       questionCounter: questionCounter + 1,
       timestamp: Date.now(),
-      slidesIndex: 0
+      slidesIndex: 0,
+      authoritative: true,
+      forceSync: true
     };
     
     localStorage.setItem('gameState', JSON.stringify(gameState));
@@ -294,8 +300,8 @@ export const cycleIntermissionSlide = (
         console.error('Error dispatching intermission state change event:', error);
       }
       
-      // Set timeout for the next slide
-      setTimeout(() => {
+      // Set timeout for the next slide with backup mechanism
+      const slideRotationTimer = setTimeout(() => {
         // Verify we're still in intermission state before cycling to the next slide
         const currentGameState = localStorage.getItem('gameState');
         if (currentGameState) {
@@ -307,12 +313,38 @@ export const cycleIntermissionSlide = (
                 questionCounter,
                 gameSettings
               );
+            } else {
+              console.log('State has changed from intermission, not cycling slides');
             }
           } catch (error) {
             console.error('Error checking game state before cycling slides:', error);
           }
         }
       }, gameSettings.slideRotationTime * 1000); // Use slide rotation time from settings
+      
+      // Set a backup timer in case the main one fails
+      setTimeout(() => {
+        // Check if we're still showing the same slide after the rotation time plus buffer
+        const latestState = localStorage.getItem('gameState');
+        if (latestState) {
+          try {
+            const parsedLatestState = JSON.parse(latestState);
+            if (parsedLatestState.state === 'intermission' && 
+                parsedLatestState.slidesIndex === nextIndex &&
+                Date.now() - timestamp > (gameSettings.slideRotationTime * 1000) + 2000) {
+              
+              console.log('Backup timer: Slide did not rotate as expected, forcing rotation');
+              cycleIntermissionSlide(
+                currentQuestionIndex,
+                questionCounter,
+                gameSettings
+              );
+            }
+          } catch (error) {
+            console.error('Error in backup timer check:', error);
+          }
+        }
+      }, (gameSettings.slideRotationTime * 1000) + 3000); // Main timer plus buffer
     }
   } catch (error) {
     console.error('Error cycling intermission slides:', error);
@@ -477,8 +509,11 @@ export const listenForGameStateChanges = (callback: (gameState: any) => void) =>
   const handleStateChange = (event: CustomEvent) => {
     console.log('Received game state change event:', event.detail);
     
-    // Special flag for guaranteed delivery - always process these
-    if (event.detail.guaranteedDelivery || event.detail.authoritative) {
+    // Special flags for guaranteed delivery - always process these
+    if (event.detail.guaranteedDelivery || 
+        event.detail.authoritative || 
+        event.detail.definitiveTruth ||
+        event.detail.forceSync) {
       console.log('Processing authoritative/guaranteed game state update');
       callback(event.detail);
       return;
