@@ -12,21 +12,40 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   questionIndex,
   score,
   timeLeft,
-}) => (
-  <header className="p-4 border-b border-border">
-    <div className="flex justify-between items-center">
-      <h1 className="text-xl font-bold text-primary">Question {questionIndex + 1}</h1>
-      <div className="flex items-center gap-2">
-        <div className="bg-primary/10 text-primary px-3 py-1 rounded-full">
-          <span className="font-medium">Score: {score}</span>
-        </div>
-        <div className="flex items-center gap-1 text-muted-foreground">
-          <Clock className="h-4 w-4" />
-          <span>{timeLeft || 0}s</span>
+}) => {
+  // Function to determine time color based on remaining time
+  const getTimeColor = () => {
+    if (timeLeft > 20) return "text-green-400";
+    if (timeLeft > 10) return "text-yellow-400";
+    return "text-red-400";
+  };
+
+  return (
+    <header className="p-4 border-b border-border bg-card/80 backdrop-blur-sm">
+      <div className="flex justify-between items-center">
+        <h1 className="text-xl font-bold bg-gradient-to-r from-trivia-primary to-trivia-accent bg-clip-text text-transparent">
+          Question {questionIndex + 1}
+        </h1>
+        <div className="flex items-center gap-3">
+          <div className="bg-gradient-to-r from-trivia-primary/20 to-trivia-accent/20 border border-trivia-primary/30 text-white px-3 py-1 rounded-full shadow-sm">
+            <span className="font-medium">Score: {score}</span>
+          </div>
+          <div className={`flex items-center gap-1 ${getTimeColor()}`}>
+            <Clock className="h-4 w-4" />
+            <span className="font-medium">{timeLeft || 0}s</span>
+          </div>
         </div>
       </div>
-    </div>
-  </header>
-);
+      {timeLeft > 0 && (
+        <div className="w-full h-1 bg-gray-700 rounded-full mt-2 overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-trivia-primary to-trivia-accent rounded-full transition-all duration-1000"
+            style={{ width: `${(timeLeft / 30) * 100}%` }}
+          ></div>
+        </div>
+      )}
+    </header>
+  );
+};
 
 export default PlayerGameHeader;
