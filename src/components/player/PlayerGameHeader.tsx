@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Clock } from "lucide-react";
 
 interface PlayerGameHeaderProps {
@@ -13,12 +13,17 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   score,
   timeLeft,
 }) => {
-  // Use a local state to ensure the timer is always responsive
+  // Local state for smooth timer display
   const [displayTime, setDisplayTime] = useState(timeLeft);
+  const lastTimeRef = useRef(timeLeft);
   
-  // Sync with incoming timeLeft prop
+  // Sync with incoming timeLeft prop with improved handling
   useEffect(() => {
-    setDisplayTime(timeLeft);
+    if (timeLeft !== lastTimeRef.current) {
+      setDisplayTime(timeLeft);
+      lastTimeRef.current = timeLeft;
+      console.log(`Timer updated to ${timeLeft}s`);
+    }
   }, [timeLeft]);
   
   // Function to determine time color based on remaining time
@@ -41,7 +46,13 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
           </div>
           <div className={`flex items-center gap-1 ${getTimeColor()}`}>
             <Clock className="h-5 w-5" />
-            <span className="font-bold" data-time-value={displayTime}>{displayTime || 0}s</span>
+            <span 
+              className="font-bold" 
+              data-time-value={displayTime}
+              data-testid="timer-display"
+            >
+              {displayTime || 0}s
+            </span>
           </div>
         </div>
       </div>
@@ -50,6 +61,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
           <div 
             className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-linear"
             style={{ width: `${(displayTime / 30) * 100}%` }}
+            data-testid="timer-progress"
           ></div>
         </div>
       )}

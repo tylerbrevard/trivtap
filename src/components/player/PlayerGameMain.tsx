@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Trophy, AlertTriangle, Check } from "lucide-react";
 import PlayerGameDevTools from "./PlayerGameDevTools";
 
@@ -30,132 +30,118 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   handleForceSync,
   currentGameState = "question"
 }) => {
-  // Simplified approach with direct DOM tracking
-  const [directClickCount, setDirectClickCount] = useState(0);
-  const [lastClickedOption, setLastClickedOption] = useState<string | null>(null);
+  // References to track elements and clicks
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [trackingEnabled, setTrackingEnabled] = useState(true);
   const [debugMsg, setDebugMsg] = useState("");
-  const [elementIds, setElementIds] = useState<string[]>([]);
+  const [localAnswer, setLocalAnswer] = useState<string | null>(null);
+  const [clickCount, setClickCount] = useState(0);
   
-  // Force a rerender every second to ensure UI is responsive
-  const [forceUpdate, setForceUpdate] = useState(0);
+  // Ensures we process each selection only once
+  const processingRef = useRef(false);
   
+  // Clear local state when question changes
   useEffect(() => {
-    const timer = setInterval(() => {
-      setForceUpdate(prev => prev + 1);
-    }, 1000);
-    
-    return () => clearInterval(timer);
-  }, []);
-  
-  // Reset local selection when the question changes
-  useEffect(() => {
-    setLastClickedOption(null);
+    setLocalAnswer(null);
     setDebugMsg("");
-    setDirectClickCount(0);
-    
-    // Map option elements to track them
-    if (currentQuestion?.options) {
-      const ids = currentQuestion.options.map((_: any, index: number) => `answer-option-${index}`);
-      setElementIds(ids);
-      
-      // Log for debugging
-      console.log("New question loaded, tracking elements:", ids);
-    }
+    setClickCount(0);
+    processingRef.current = false;
+    console.log("New question loaded, resetting selection state");
   }, [currentQuestion?.text]);
   
-  // Update local selection when global selection changes
+  // Update local state when parent state changes
   useEffect(() => {
     if (selectedAnswer) {
-      setLastClickedOption(selectedAnswer);
+      setLocalAnswer(selectedAnswer);
     }
   }, [selectedAnswer]);
   
-  // Direct DOM interaction for click handling to bypass React complexities
+  // Actual click handler function
+  const selectAnswerOption = (option: string) => {
+    if (processingRef.current) return;
+    if (isAnswerRevealed) return;
+    if (timeLeft <= 0) return;
+    if (localAnswer !== null) return;
+    
+    processingRef.current = true;
+    setClickCount(prev => prev + 1);
+    setLocalAnswer(option);
+    setDebugMsg(`Clicked: ${option} at ${new Date().toLocaleTimeString()}`);
+    
+    console.log(`Player clicked answer: ${option}`, {
+      time: timeLeft,
+      revealed: isAnswerRevealed,
+      currentlyProcessing: processingRef.current
+    });
+    
+    // Send to parent handler
+    handleSelectAnswer(option);
+    
+    // Reset processing flag after a short delay
+    setTimeout(() => {
+      processingRef.current = false;
+    }, 500);
+  };
+  
+  // Fallback direct DOM click handler as a backup
   useEffect(() => {
-    const handleDirectClick = (event: MouseEvent) => {
-      const target = event.target as HTMLElement;
-      const optionButton = target.closest('[data-option]');
+    if (!containerRef.current || !trackingEnabled) return;
+    
+    const handleClickCapture = (e: MouseEvent) => {
+      // Only process if we haven't selected yet
+      if (localAnswer !== null || timeLeft <= 0 || isAnswerRevealed) return;
       
-      if (!optionButton || timeLeft <= 0 || isAnswerRevealed || lastClickedOption) {
-        return;
-      }
+      const target = e.target as HTMLElement;
+      const optionElement = target.closest('[data-option]');
       
-      const optionValue = optionButton.getAttribute('data-option');
-      const optionIndex = optionButton.getAttribute('data-index');
-      
-      if (optionValue) {
-        console.log(`Direct click on option ${optionIndex}: ${optionValue}`);
-        setDirectClickCount(prev => prev + 1);
-        setLastClickedOption(optionValue);
-        setDebugMsg(`Clicked: ${optionValue} at ${new Date().toLocaleTimeString()}`);
-        
-        // Visually mark it as selected immediately
-        optionButton.setAttribute('data-selected', 'true');
-        optionButton.classList.add('selected-answer');
-        
-        // Call the parent handler
-        handleSelectAnswer(optionValue);
+      if (optionElement) {
+        const option = optionElement.getAttribute('data-option');
+        if (option) {
+          e.preventDefault();
+          e.stopPropagation();
+          
+          console.log("Direct DOM click captured on option:", option);
+          selectAnswerOption(option);
+        }
       }
     };
     
-    // Add direct event listeners to the document
-    document.addEventListener('click', handleDirectClick);
+    // Use capturing phase to get the event before React
+    containerRef.current.addEventListener('click', handleClickCapture, { capture: true });
     
     return () => {
-      document.removeEventListener('click', handleDirectClick);
-    };
-  }, [timeLeft, isAnswerRevealed, lastClickedOption, handleSelectAnswer]);
-  
-  // Force a timer update if needed
-  const handleForceTimerUpdate = () => {
-    const gameState = localStorage.getItem('gameState');
-    if (gameState) {
-      try {
-        const parsedState = JSON.parse(gameState);
-        const updatedState = {
-          ...parsedState,
-          timeLeft: 25,
-          timestamp: Date.now() + 1000,
-          forceSync: true,
-          definitiveTruth: true
-        };
-        localStorage.setItem('gameState', JSON.stringify(updatedState));
-        
-        // Dispatch a custom event to notify other components
-        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-          detail: updatedState
-        }));
-        
-        console.log('Forced timer update to 25 seconds');
-      } catch (error) {
-        console.error('Error parsing game state:', error);
+      if (containerRef.current) {
+        containerRef.current.removeEventListener('click', handleClickCapture, { capture: true });
       }
-    }
-  };
-
+    };
+  }, [localAnswer, timeLeft, isAnswerRevealed, trackingEnabled]);
+  
   // Ensure we have a valid question
   if (!currentQuestion || !currentQuestion.options) {
     return <div className="p-4 text-center">Loading question...</div>;
   }
 
   return (
-    <main className="flex-1 p-4 overflow-auto bg-gradient-to-b from-[#2B2464] to-[#1A1740]">
+    <main 
+      className="flex-1 p-4 overflow-auto bg-gradient-to-b from-[#2B2464] to-[#1A1740]"
+      ref={containerRef}
+    >
       <div className="card-trivia p-6 mb-6 shadow-lg rounded-xl bg-gradient-to-r from-indigo-600/30 to-purple-600/30 border border-indigo-500/40">
         <h2 className="text-xl font-bold mb-4 text-white">{currentQuestion.text}</h2>
         
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
-            // Determine if this option is selected either via local or global state
-            const isSelected = option === lastClickedOption || option === selectedAnswer;
+            // Determine if this option is selected either via local or parent state
+            const isSelected = option === localAnswer || option === selectedAnswer;
             
-            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-200 relative cursor-pointer";
+            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-300 relative cursor-pointer";
             
             // Add proper visual state
             if (isAnswerRevealed) {
               if (option === currentQuestion.correctAnswer) {
-                buttonClasses += " correct-answer bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
+                buttonClasses += " correct-answer bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-lg";
               } else if (isSelected) {
-                buttonClasses += " incorrect-answer bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+                buttonClasses += " incorrect-answer bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-lg";
               } else {
                 buttonClasses += " unselected-answer bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
               }
@@ -163,7 +149,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
               if (isSelected) {
                 buttonClasses += " selected-answer bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
               } else {
-                buttonClasses += " selectable-answer bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg";
+                buttonClasses += " selectable-answer bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow hover:shadow-lg";
               }
             }
             
@@ -174,9 +160,11 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                 className={buttonClasses}
                 data-testid={`answer-option-${index}`}
                 data-option={option}
-                data-clickable={!isAnswerRevealed && timeLeft > 0 && !isSelected ? "true" : "false"}
-                data-selected={isSelected ? "true" : "false"}
                 data-index={index}
+                onClick={() => selectAnswerOption(option)}
+                role="button"
+                tabIndex={0}
+                aria-selected={isSelected}
               >
                 <div className="flex items-center">
                   <span className="mr-4 text-white font-bold flex items-center justify-center h-10 w-10 rounded-full bg-[#8B5CF6]/50 shadow-inner">
@@ -184,7 +172,6 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                   </span>
                   <span className="text-white font-medium text-lg">{option}</span>
                   
-                  {/* Selection indicator */}
                   {isSelected && (
                     <span className="ml-auto">
                       <Check className="h-6 w-6 text-white" />
@@ -231,21 +218,45 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       {/* Debug information */}
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
         <p>Debug: Last Click: {debugMsg || 'None'}</p>
-        <p>Selected: {selectedAnswer || 'None'} | Local: {lastClickedOption || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        <p>Click Count: {directClickCount} | Processing: {String(false)} | Force Update: {forceUpdate}</p>
-        <p>Element IDs: {elementIds.join(', ')}</p>
+        <p>Selected: {selectedAnswer || 'None'} | Local: {localAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
+        <p>Click Count: {clickCount} | Processing: {String(processingRef.current)} | State: {currentGameState}</p>
       </div>
       
       {/* Dev tools */}
       {hasDevTools && handleForceSync && (
         <PlayerGameDevTools 
           handleForceSync={handleForceSync} 
-          onForceTimer={handleForceTimerUpdate}
+          onForceTimer={() => {
+            // Reset processing flag in case it's stuck
+            processingRef.current = false;
+            setTrackingEnabled(true);
+            
+            // Clear local storage state to force reset
+            localStorage.removeItem('gameState');
+            
+            // Create a high-priority reset state
+            const resetState = {
+              state: 'question',
+              questionIndex: currentQuestion ? currentQuestion.index : 0,
+              timeLeft: 25,
+              timestamp: Date.now() + 10000,
+              definitiveTruth: true,
+              forceSync: true
+            };
+            
+            // Apply the reset
+            localStorage.setItem('gameState', JSON.stringify(resetState));
+            window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+              detail: resetState
+            }));
+            
+            console.log('Forced complete reset, timer set to 25 seconds');
+          }}
           debugInfo={{
             selectedAnswer,
             timeLeft,
             isAnswerRevealed,
-            clicksRegistered: directClickCount,
+            clicksRegistered: clickCount,
             currentState: currentGameState || "question"
           }}
         />
@@ -261,7 +272,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         
         .selected-answer {
           transform: scale(1.02);
-          transition: all 0.2s ease;
+          transition: all 0.3s ease;
         }
         
         .correct-answer, .incorrect-answer {
