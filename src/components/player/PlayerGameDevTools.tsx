@@ -1,7 +1,7 @@
 
 import React from "react";
 import { Button } from "@/components/ui/button";
-import { Zap, RefreshCw, Bug } from "lucide-react";
+import { Zap, RefreshCw, Bug, Timer } from "lucide-react";
 
 interface PlayerGameDevToolsProps {
   handleForceSync: () => void;
@@ -12,11 +12,13 @@ interface PlayerGameDevToolsProps {
     clicksRegistered: number;
     currentState: string;
   };
+  onForceTimer?: () => void;
 }
 
 const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
   handleForceSync,
-  debugInfo
+  debugInfo,
+  onForceTimer
 }) => {
   return (
     <div className="mt-4 p-4 border border-dashed border-purple-500/30 rounded bg-purple-900/10">
@@ -78,6 +80,17 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
           <Bug className="h-3.5 w-3.5 mr-1.5" />
           Log Debug Info
         </Button>
+        {onForceTimer && (
+          <Button
+            variant="outline"
+            onClick={onForceTimer}
+            className="bg-green-800/50 hover:bg-green-700/50 text-green-100 border-green-600/50 flex items-center"
+            size="sm"
+          >
+            <Timer className="h-3.5 w-3.5 mr-1.5" />
+            Force Timer Update
+          </Button>
+        )}
       </div>
     </div>
   );

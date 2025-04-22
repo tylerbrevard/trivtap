@@ -30,57 +30,107 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   handleForceSync,
   currentGameState = "question"
 }) => {
-  // Track the locally selected answer for immediate feedback
-  const [localSelectedAnswer, setLocalSelectedAnswer] = useState<string | null>(null);
-  // Track if we're currently processing a click to prevent double-clicks
-  const [isProcessingClick, setIsProcessingClick] = useState(false);
-  // Debug information
+  // Simplified approach with direct DOM tracking
+  const [directClickCount, setDirectClickCount] = useState(0);
+  const [lastClickedOption, setLastClickedOption] = useState<string | null>(null);
   const [debugMsg, setDebugMsg] = useState("");
-  // Track number of clicks for debugging
-  const [clickCount, setClickCount] = useState(0);
+  const [elementIds, setElementIds] = useState<string[]>([]);
   
-  // Reset local selection when the question or global selection changes
+  // Force a rerender every second to ensure UI is responsive
+  const [forceUpdate, setForceUpdate] = useState(0);
+  
   useEffect(() => {
-    setLocalSelectedAnswer(selectedAnswer);
-  }, [selectedAnswer, currentQuestion?.text]);
+    const timer = setInterval(() => {
+      setForceUpdate(prev => prev + 1);
+    }, 1000);
+    
+    return () => clearInterval(timer);
+  }, []);
   
-  // Handle clicking an answer option
-  const handleAnswerClick = (answer: string) => {
-    console.log(`Answer clicked: ${answer}, timeLeft: ${timeLeft}, isAnswerRevealed: ${isAnswerRevealed}`);
+  // Reset local selection when the question changes
+  useEffect(() => {
+    setLastClickedOption(null);
+    setDebugMsg("");
+    setDirectClickCount(0);
     
-    // Increment click counter for debugging
-    setClickCount(prev => prev + 1);
-    
-    // Don't process if time's up or answer is revealed
-    if (timeLeft <= 0 || isAnswerRevealed) {
-      console.log("Click ignored: time's up or answer already revealed");
-      setDebugMsg(`Click ignored: ${timeLeft <= 0 ? "time's up" : "answer revealed"}`);
-      return;
+    // Map option elements to track them
+    if (currentQuestion?.options) {
+      const ids = currentQuestion.options.map((_: any, index: number) => `answer-option-${index}`);
+      setElementIds(ids);
+      
+      // Log for debugging
+      console.log("New question loaded, tracking elements:", ids);
     }
-    
-    // Don't process if we already have a selection (either local or global)
-    if (localSelectedAnswer || selectedAnswer) {
-      console.log("Click ignored: answer already selected");
-      setDebugMsg("Click ignored: already selected an answer");
-      return;
+  }, [currentQuestion?.text]);
+  
+  // Update local selection when global selection changes
+  useEffect(() => {
+    if (selectedAnswer) {
+      setLastClickedOption(selectedAnswer);
     }
+  }, [selectedAnswer]);
+  
+  // Direct DOM interaction for click handling to bypass React complexities
+  useEffect(() => {
+    const handleDirectClick = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      const optionButton = target.closest('[data-option]');
+      
+      if (!optionButton || timeLeft <= 0 || isAnswerRevealed || lastClickedOption) {
+        return;
+      }
+      
+      const optionValue = optionButton.getAttribute('data-option');
+      const optionIndex = optionButton.getAttribute('data-index');
+      
+      if (optionValue) {
+        console.log(`Direct click on option ${optionIndex}: ${optionValue}`);
+        setDirectClickCount(prev => prev + 1);
+        setLastClickedOption(optionValue);
+        setDebugMsg(`Clicked: ${optionValue} at ${new Date().toLocaleTimeString()}`);
+        
+        // Visually mark it as selected immediately
+        optionButton.setAttribute('data-selected', 'true');
+        optionButton.classList.add('selected-answer');
+        
+        // Call the parent handler
+        handleSelectAnswer(optionValue);
+      }
+    };
     
-    // Set processing flag to prevent double-clicks
-    setIsProcessingClick(true);
+    // Add direct event listeners to the document
+    document.addEventListener('click', handleDirectClick);
     
-    // Update local state immediately for visual feedback
-    setLocalSelectedAnswer(answer);
-    
-    // Log click for debugging
-    setDebugMsg(`Selected: ${answer} at ${new Date().toLocaleTimeString()}`);
-    
-    // Call the parent handler
-    handleSelectAnswer(answer);
-    
-    // Reset processing flag after a short delay
-    setTimeout(() => {
-      setIsProcessingClick(false);
-    }, 300);
+    return () => {
+      document.removeEventListener('click', handleDirectClick);
+    };
+  }, [timeLeft, isAnswerRevealed, lastClickedOption, handleSelectAnswer]);
+  
+  // Force a timer update if needed
+  const handleForceTimerUpdate = () => {
+    const gameState = localStorage.getItem('gameState');
+    if (gameState) {
+      try {
+        const parsedState = JSON.parse(gameState);
+        const updatedState = {
+          ...parsedState,
+          timeLeft: 25,
+          timestamp: Date.now() + 1000,
+          forceSync: true,
+          definitiveTruth: true
+        };
+        localStorage.setItem('gameState', JSON.stringify(updatedState));
+        
+        // Dispatch a custom event to notify other components
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: updatedState
+        }));
+        
+        console.log('Forced timer update to 25 seconds');
+      } catch (error) {
+        console.error('Error parsing game state:', error);
+      }
+    }
   };
 
   // Ensure we have a valid question
@@ -95,52 +145,36 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
-            // Base button classes
-            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-200 relative";
+            // Determine if this option is selected either via local or global state
+            const isSelected = option === lastClickedOption || option === selectedAnswer;
             
-            // Determine if this option is selected (either locally or globally)
-            const isSelected = option === localSelectedAnswer || option === selectedAnswer;
+            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-200 relative cursor-pointer";
             
-            // Determine button appearance based on game state
+            // Add proper visual state
             if (isAnswerRevealed) {
-              // Answer reveal state
               if (option === currentQuestion.correctAnswer) {
-                // Correct answer
-                buttonClasses += " bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
+                buttonClasses += " correct-answer bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
               } else if (isSelected) {
-                // Selected but incorrect
-                buttonClasses += " bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+                buttonClasses += " incorrect-answer bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
               } else {
-                // Not selected and not correct
-                buttonClasses += " bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
+                buttonClasses += " unselected-answer bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
               }
             } else {
-              // Question state
               if (isSelected) {
-                // Selected option
-                buttonClasses += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
+                buttonClasses += " selected-answer bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
               } else {
-                // Unselected option
-                buttonClasses += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg cursor-pointer";
+                buttonClasses += " selectable-answer bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg";
               }
             }
             
-            // Add active state for tactile feedback
-            buttonClasses += " active:scale-[0.98] active:shadow-inner";
-            
-            // Determine if button should be disabled
-            const isDisabled = isAnswerRevealed || timeLeft <= 0 || isProcessingClick || isSelected;
-            
             return (
-              <button
+              <div
                 key={index}
+                id={`answer-option-${index}`}
                 className={buttonClasses}
-                onClick={() => handleAnswerClick(option)}
-                disabled={isDisabled}
-                type="button"
                 data-testid={`answer-option-${index}`}
                 data-option={option}
-                data-clickable={!isDisabled ? "true" : "false"}
+                data-clickable={!isAnswerRevealed && timeLeft > 0 && !isSelected ? "true" : "false"}
                 data-selected={isSelected ? "true" : "false"}
                 data-index={index}
               >
@@ -157,7 +191,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                     </span>
                   )}
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>
@@ -197,23 +231,46 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       {/* Debug information */}
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
         <p>Debug: Last Click: {debugMsg || 'None'}</p>
-        <p>Selected: {selectedAnswer || 'None'} | Local: {localSelectedAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        <p>Click Count: {clickCount} | Processing: {isProcessingClick ? 'Yes' : 'No'}</p>
+        <p>Selected: {selectedAnswer || 'None'} | Local: {lastClickedOption || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
+        <p>Click Count: {directClickCount} | Processing: {false} | Force Update: {forceUpdate}</p>
+        <p>Element IDs: {elementIds.join(', ')}</p>
       </div>
       
       {/* Dev tools */}
       {hasDevTools && handleForceSync && (
         <PlayerGameDevTools 
           handleForceSync={handleForceSync} 
+          onForceTimer={handleForceTimerUpdate}
           debugInfo={{
             selectedAnswer,
             timeLeft,
             isAnswerRevealed,
-            clicksRegistered: clickCount,
+            clicksRegistered: directClickCount,
             currentState: currentGameState || "question"
           }}
         />
       )}
+      
+      {/* Add CSS for better visual states */}
+      <style jsx>{`
+        .selectable-answer:active {
+          transform: scale(0.98);
+          box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .selected-answer {
+          transform: scale(1.02);
+          transition: all 0.2s ease;
+        }
+        
+        .correct-answer, .incorrect-answer {
+          transition: all 0.5s ease;
+        }
+        
+        .unselected-answer {
+          opacity: 0.8;
+        }
+      `}</style>
     </main>
   );
 };
