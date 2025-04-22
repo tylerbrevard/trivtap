@@ -28,6 +28,7 @@ export const useGameSync = ({
   const [slidesIndex, setSlidesIndex] = useState(0);
   const [slideTimer, setSlideTimer] = useState(gameSettings.slideRotationTime);
   const [activeSlides, setActiveSlides] = useState<any[]>([]);
+  const [syncAttempts, setSyncAttempts] = useState(0);
 
   // Update game state handler
   const handleUpdateGameState = useCallback((
@@ -109,6 +110,9 @@ export const useGameSync = ({
         }
         
         setLastStateChange(gameState.timestamp);
+        setSyncAttempts(0); // Reset sync attempts counter on successful sync
+      } else {
+        console.log('Game state event is not newer, ignoring. Current timestamp:', lastStateChange, 'Event timestamp:', gameState.timestamp);
       }
     });
     
@@ -210,6 +214,55 @@ export const useGameSync = ({
     };
   }, [currentState, timeLeft, questionIndex, questionCounter, forcePause, autoSync, totalQuestions, slidesIndex, slideTimer, activeSlides]);
 
+  // Periodic state check to detect and recover from sync issues
+  useEffect(() => {
+    // Don't run this effect during initial load or if we're in a paused state
+    if (forcePause) return;
+    
+    const syncCheckInterval = window.setInterval(() => {
+      const storedGameState = localStorage.getItem('gameState');
+      if (storedGameState) {
+        try {
+          const parsedState = JSON.parse(storedGameState);
+          
+          // If our state is intermission but localStorage shows we should be in a question state
+          // and it's been a while since our last update, force a sync
+          if (currentState === 'intermission' && parsedState.state === 'question') {
+            const timeDiff = Date.now() - lastStateChange;
+            // If we haven't updated in over 10 seconds and the stored state is newer
+            if (timeDiff > 10000 && parsedState.timestamp > lastStateChange) {
+              console.log('Detected sync issue - intermission while display is showing question. Forcing sync.');
+              setCurrentState(parsedState.state);
+              setQuestionIndex(parsedState.questionIndex);
+              setTimeLeft(parsedState.timeLeft);
+              setQuestionCounter(parsedState.questionCounter);
+              setLastStateChange(parsedState.timestamp);
+              setSyncAttempts(0);
+            } else {
+              // Increment sync attempts if we think there's an issue
+              setSyncAttempts(prev => {
+                const newCount = prev + 1;
+                // After 5 failed sync attempts, force a timestamp reset to accept any newer state
+                if (newCount > 5) {
+                  console.log('Multiple sync issues detected. Resetting timestamp to force sync on next state change.');
+                  setLastStateChange(0);
+                  return 0;
+                }
+                return newCount;
+              });
+            }
+          }
+        } catch (error) {
+          console.error('Error checking stored game state:', error);
+        }
+      }
+    }, 5000); // Check every 5 seconds
+    
+    return () => {
+      clearInterval(syncCheckInterval);
+    };
+  }, [currentState, lastStateChange, forcePause, questionIndex, questionCounter]);
+
   // Listen for game settings changes
   useEffect(() => {
     const handleSettingsChange = (e: Event) => {
@@ -258,6 +311,35 @@ export const useGameSync = ({
     }
   }, [lastStateChange]);
 
+  // Force sync function that resets timestamp to accept any newer state
+  const forceSync = useCallback(() => {
+    console.log('Forcing sync by resetting timestamp');
+    setLastStateChange(0);
+    setSyncAttempts(0);
+    
+    // After resetting timestamp, immediately check for newer state
+    const storedGameState = localStorage.getItem('gameState');
+    if (storedGameState) {
+      try {
+        const parsedState = JSON.parse(storedGameState);
+        console.log('Applying stored game state after force sync:', parsedState);
+        
+        setCurrentState(parsedState.state);
+        setQuestionIndex(parsedState.questionIndex);
+        setTimeLeft(parsedState.timeLeft);
+        setQuestionCounter(parsedState.questionCounter);
+        
+        if (parsedState.slidesIndex !== undefined) {
+          setSlidesIndex(parsedState.slidesIndex);
+        }
+        
+        setLastStateChange(parsedState.timestamp);
+      } catch (error) {
+        console.error('Error applying stored game state after force sync:', error);
+      }
+    }
+  }, []);
+
   return {
     currentState,
     questionIndex,
@@ -267,9 +349,11 @@ export const useGameSync = ({
     forcePause,
     slidesIndex,
     activeSlides,
+    syncAttempts,
     updateGameState: handleUpdateGameState,
     moveToNextQuestion: handleMoveToNext,
     togglePause,
+    forceSync,
     setCurrentState,
     setQuestionIndex,
     setQuestionCounter,

@@ -35,6 +35,24 @@ export const QuestionDisplay = ({
       options: currentQuestion.options,
       correctAnswer: currentQuestion.correctAnswer
     });
+    
+    // Broadcast current question state to help with player synchronization
+    const gameState = localStorage.getItem('gameState');
+    if (gameState) {
+      try {
+        const parsedState = JSON.parse(gameState);
+        // Update timestamp to force clients to re-sync
+        parsedState.timestamp = Date.now();
+        localStorage.setItem('gameState', JSON.stringify(parsedState));
+        // Dispatch an event to notify other tabs/windows
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: parsedState
+        }));
+        console.log('Re-broadcast question state to help player sync');
+      } catch (error) {
+        console.error('Error re-broadcasting state:', error);
+      }
+    }
   }, [currentQuestion, questionCounter]);
 
   return (
@@ -97,6 +115,31 @@ export const QuestionDisplay = ({
               }}
             >
               Log Debug Info
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Force a state change event to help players sync
+                const gameState = localStorage.getItem('gameState');
+                if (gameState) {
+                  try {
+                    const parsedState = JSON.parse(gameState);
+                    // Update timestamp to force clients to re-sync
+                    parsedState.timestamp = Date.now() + 1000; // Future timestamp to ensure sync
+                    localStorage.setItem('gameState', JSON.stringify(parsedState));
+                    // Dispatch an event to notify other tabs/windows
+                    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                      detail: parsedState
+                    }));
+                    console.log('Force-broadcast game state to help player sync');
+                  } catch (error) {
+                    console.error('Error force-broadcasting state:', error);
+                  }
+                }
+              }}
+            >
+              Force Player Sync
             </Button>
           </div>
         </div>
