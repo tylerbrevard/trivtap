@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 import { gameSettings } from '@/utils/gameSettings';
@@ -27,64 +27,75 @@ export const QuestionDisplay = ({
   };
 
   // Force question state to all players and ensure it overrides any previous state
-  React.useEffect(() => {
+  useEffect(() => {
     console.log('Display showing question:', {
       text: currentQuestion.text,
       index: questionCounter - 1,
       options: currentQuestion.options,
-      correctAnswer: currentQuestion.correctAnswer
+      correctAnswer: currentQuestion.correctAnswer,
+      timeLeft: timeLeft
     });
     
-    // Create a definitive game state that players MUST accept
-    // Use future timestamp to ensure it's always newer than any existing state
-    const futureTimestamp = Date.now() + 30000; // 30 seconds in the future to guarantee precedence
-    
-    const definitiveQuestionState = {
-      state: 'question',
-      questionIndex: questionCounter - 1,
-      timeLeft: timeLeft,
-      questionCounter: questionCounter,
-      timestamp: futureTimestamp,
-      guaranteedDelivery: true,
-      definitiveTruth: true,
-      forceSync: true,
-      overrideIntermission: true, // Special flag to force overriding intermission state
-      supercedeAllStates: true    // Special flag to supercede all other states
-    };
-    
-    // Clear any possible existing game state first
+    // First clear existing game state to avoid conflicts
     localStorage.removeItem('gameState');
     
-    // Now set the definitive truth state
-    localStorage.setItem('gameState', JSON.stringify(definitiveQuestionState));
-    localStorage.setItem('gameState_display_truth', JSON.stringify(definitiveQuestionState));
-    
-    // Dispatch multiple events with slight delays to ensure receipt
-    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-      detail: definitiveQuestionState
-    }));
-    
-    // Send additional events to ensure delivery
-    for (let i = 1; i <= 5; i++) {
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-          detail: {
-            ...definitiveQuestionState,
-            timestamp: definitiveQuestionState.timestamp + i, // Slightly newer
-            redundancyLevel: i
-          }
-        }));
-        console.log(`Dispatched redundant question state event #${i}`);
-      }, i * 100); // Stagger by 100ms each
-    }
-    
-    console.log('Broadcast definitive question state with future timestamp:', definitiveQuestionState);
+    // Small delay to ensure clear happens first
+    setTimeout(() => {
+      // Create a definitive game state that players MUST accept
+      // Use future timestamp to ensure it's always newer than any existing state
+      const futureTimestamp = Date.now() + 30000; // 30 seconds in the future to guarantee precedence
+      
+      const definitiveQuestionState = {
+        state: 'question',
+        questionIndex: questionCounter - 1,
+        timeLeft: timeLeft,
+        questionCounter: questionCounter,
+        timestamp: futureTimestamp,
+        guaranteedDelivery: true,
+        definitiveTruth: true,
+        forceSync: true,
+        overrideIntermission: true, // Special flag to force overriding intermission state
+        supercedeAllStates: true,   // Special flag to supercede all other states
+        displayInit: true           // Flag indicating this came from the display
+      };
+      
+      // Set the definitive truth state
+      localStorage.setItem('gameState', JSON.stringify(definitiveQuestionState));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(definitiveQuestionState));
+      
+      // Dispatch events with slight delays to ensure receipt
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: definitiveQuestionState
+      }));
+      
+      // Send additional events to ensure delivery
+      for (let i = 1; i <= 5; i++) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+            detail: {
+              ...definitiveQuestionState,
+              timestamp: definitiveQuestionState.timestamp + i, // Slightly newer
+              redundancyLevel: i
+            }
+          }));
+          console.log(`Dispatched redundant question state event #${i}`);
+        }, i * 100); // Stagger by 100ms each
+      }
+      
+      console.log('Broadcast definitive question state with future timestamp:', definitiveQuestionState);
+    }, 50);
     
     // Set an interval to keep broadcasting the state
     const broadcastInterval = setInterval(() => {
       const refreshedState = {
-        ...definitiveQuestionState,
+        state: 'question',
+        questionIndex: questionCounter - 1,
+        timeLeft: timeLeft, // Use current timeLeft to reflect time passing
+        questionCounter: questionCounter,
         timestamp: Date.now() + 30000, // Refresh the future timestamp
+        guaranteedDelivery: true,
+        definitiveTruth: true,
+        forceSync: true,
         periodicBroadcast: true
       };
       
@@ -101,7 +112,32 @@ export const QuestionDisplay = ({
     return () => {
       clearInterval(broadcastInterval);
     };
-  }, [currentQuestion, questionCounter, timeLeft]);
+  }, [currentQuestion, questionCounter]);
+
+  // Add new effect specifically for time left updates
+  useEffect(() => {
+    if (timeLeft > 0 && !forcePause) {
+      console.log(`Question timer update: ${timeLeft} seconds remaining`);
+      
+      // Update local storage to ensure timer sync
+      const currentGameState = localStorage.getItem('gameState');
+      if (currentGameState) {
+        try {
+          const parsedState = JSON.parse(currentGameState);
+          parsedState.timeLeft = timeLeft;
+          parsedState.timestamp = Date.now() + 30000; // Future timestamp
+          localStorage.setItem('gameState', JSON.stringify(parsedState));
+          
+          // Dispatch timer update event
+          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+            detail: parsedState
+          }));
+        } catch (error) {
+          console.error('Error updating timer in game state:', error);
+        }
+      }
+    }
+  }, [timeLeft, forcePause]);
 
   return (
     <div className="flex flex-col h-full">
@@ -177,7 +213,7 @@ export const QuestionDisplay = ({
                   const authoritative = {
                     state: 'question',
                     questionIndex: questionCounter - 1,
-                    timeLeft: timeLeft,
+                    timeLeft: gameSettings.questionDuration, // Reset to full duration
                     questionCounter: questionCounter,
                     timestamp: futureTimestamp,
                     forceSync: true,
@@ -185,7 +221,8 @@ export const QuestionDisplay = ({
                     definitiveTruth: true,
                     guaranteedDelivery: true,
                     overrideIntermission: true,
-                    supercedeAllStates: true
+                    supercedeAllStates: true,
+                    resetTimer: true
                   };
                   
                   // Store it with a special key that will always be recognized

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { updateGameState, moveToNextQuestion, autoSyncGameState, listenForGameStateChanges } from '@/utils/gameStateUtils';
 import { gameSettings } from '@/utils/gameSettings';
@@ -30,9 +29,8 @@ export const useGameSync = ({
   const [activeSlides, setActiveSlides] = useState<any[]>([]);
   const [syncAttempts, setSyncAttempts] = useState(0);
   const [lastSlideRotation, setLastSlideRotation] = useState<number>(Date.now());
-  
-  // Track if we need to force an update
   const [forceUpdate, setForceUpdate] = useState(0);
+  const [timerActivity, setTimerActivity] = useState<number>(Date.now());
 
   // Update game state handler
   const handleUpdateGameState = useCallback((
@@ -47,6 +45,7 @@ export const useGameSync = ({
     setQuestionIndex(qIndex);
     setTimeLeft(time);
     setQuestionCounter(qCounter);
+    setTimerActivity(Date.now());
   }, []);
 
   // Move to next question handler
@@ -63,6 +62,7 @@ export const useGameSync = ({
     setTimeLeft(gameSettings.questionDuration);
     setCurrentState('question');
     setLastStateChange(Date.now());
+    setTimerActivity(Date.now());
     
     return { newQuestionIndex, newQuestionCounter };
   }, [questionIndex, questionCounter, totalQuestions]);
@@ -115,6 +115,7 @@ export const useGameSync = ({
         }
         
         setLastStateChange(gameState.timestamp);
+        setTimerActivity(Date.now()); // Update timer activity
         setSyncAttempts(0); // Reset sync attempts counter on successful sync
         return;
       }
@@ -133,6 +134,7 @@ export const useGameSync = ({
         }
         
         setLastStateChange(gameState.timestamp);
+        setTimerActivity(Date.now()); // Update timer activity
         setSyncAttempts(0); // Reset sync attempts counter on successful sync
       } else {
         console.log('Game state event is not newer, ignoring. Current timestamp:', lastStateChange, 'Event timestamp:', gameState.timestamp);
@@ -154,9 +156,13 @@ export const useGameSync = ({
     }
     
     if (currentState === 'question' && timeLeft > 0 && autoSync) {
+      console.log(`Timer update: timeLeft=${timeLeft}, state=${currentState}`);
+      
       timerId = window.setTimeout(() => {
         const newTimeLeft = timeLeft - 1;
+        console.log(`Decreasing timer to ${newTimeLeft}`);
         setTimeLeft(newTimeLeft);
+        setTimerActivity(Date.now()); // Record timer activity
         
         // Update localStorage with new time
         updateGameState(questionIndex, 'question', newTimeLeft, questionCounter);
@@ -175,20 +181,16 @@ export const useGameSync = ({
       }, 1000);
     }
     
-    // Handle intermission slide cycling with improved reliability
     if (currentState === 'intermission' && autoSync && !forcePause) {
-      // Ensure we have a fresh timer for slide rotation
       const currentTime = Date.now();
       const timeElapsed = currentTime - lastSlideRotation;
       const rotationTimeInMs = gameSettings.slideRotationTime * 1000;
       
       console.log(`Slide rotation check: ${timeElapsed}ms elapsed, rotation time: ${rotationTimeInMs}ms`);
       
-      // Check if it's time to rotate the slide
       if (timeElapsed >= rotationTimeInMs) {
         console.log('Rotation timeout reached, cycling slide...');
         
-        // Reload active slides to ensure we have the latest
         const storedSlides = localStorage.getItem('intermissionSlides');
         if (storedSlides) {
           try {
@@ -198,15 +200,12 @@ export const useGameSync = ({
             console.log(`Found ${activeSlidesList.length} active slides for rotation`);
             
             if (activeSlidesList.length > 1) {
-              // Calculate next slide index
               const nextSlideIndex = (slidesIndex + 1) % activeSlidesList.length;
               console.log(`Rotating to slide ${nextSlideIndex} of ${activeSlidesList.length}`);
               
-              // Update slide index in state
               setSlidesIndex(nextSlideIndex);
               
-              // Update in localStorage with a new timestamp
-              const futureTimestamp = Date.now() + 1000; // Slightly future timestamp
+              const futureTimestamp = Date.now() + 1000;
               const gameState = {
                 state: 'intermission',
                 questionIndex: questionIndex,
@@ -219,12 +218,10 @@ export const useGameSync = ({
               
               localStorage.setItem('gameState', JSON.stringify(gameState));
               
-              // Dispatch custom event for other tabs to pick up
               window.dispatchEvent(new CustomEvent('triviaStateChange', { 
                 detail: gameState
               }));
               
-              // Dispatch a redundant event with slight delay
               setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('triviaStateChange', { 
                   detail: {
@@ -235,32 +232,27 @@ export const useGameSync = ({
                 }));
               }, 200);
               
-              // Reset rotation tracking
               setLastSlideRotation(currentTime);
               setSlideTimer(gameSettings.slideRotationTime);
             } else {
               console.log('Only one active slide, not rotating');
-              // Reset rotation tracking
               setLastSlideRotation(currentTime);
             }
           } catch (e) {
             console.error('Error parsing intermission slides:', e);
-            setLastSlideRotation(currentTime); // Reset even on error
+            setLastSlideRotation(currentTime);
           }
         } else {
           console.log('No slides found in localStorage');
-          setLastSlideRotation(currentTime); // Reset even when no slides
+          setLastSlideRotation(currentTime);
         }
       } else {
-        // Update the timer for UI display
         const remainingSeconds = Math.ceil((rotationTimeInMs - timeElapsed) / 1000);
         if (remainingSeconds !== slideTimer) {
           setSlideTimer(remainingSeconds);
         }
         
-        // Set timer for next check
         timerId = window.setTimeout(() => {
-          // Force component to update
           setForceUpdate(prev => prev + 1);
         }, 1000);
       }
@@ -283,22 +275,54 @@ export const useGameSync = ({
     forceUpdate
   ]);
 
-  // Periodic state check to detect and recover from sync issues
   useEffect(() => {
-    // Don't run this effect during initial load or if we're in a paused state
-    if (forcePause) return;
+    if (currentState !== 'question' || forcePause) return;
     
+    const activityCheckInterval = window.setInterval(() => {
+      const now = Date.now();
+      const timeSinceLastActivity = now - timerActivity;
+      
+      if (timeSinceLastActivity > 5000 && timeLeft > 0) {
+        console.log(`Timer appears stuck - no activity for ${timeSinceLastActivity}ms. Resetting timer.`);
+        
+        const futureTimestamp = Date.now() + 10000;
+        const definitiveState = {
+          state: 'question',
+          questionIndex,
+          timeLeft: timeLeft - 1,
+          questionCounter,
+          timestamp: futureTimestamp,
+          forceSync: true,
+          definitiveTruth: true,
+          guaranteedDelivery: true
+        };
+        
+        setTimeLeft(timeLeft - 1);
+        setTimerActivity(now);
+        localStorage.setItem('gameState', JSON.stringify(definitiveState));
+        
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: definitiveState
+        }));
+        
+        console.log('Forced timer reset due to inactivity');
+      }
+    }, 3000);
+    
+    return () => {
+      clearInterval(activityCheckInterval);
+    };
+  }, [currentState, questionIndex, questionCounter, timeLeft, timerActivity, forcePause]);
+
+  useEffect(() => {
     const syncCheckInterval = window.setInterval(() => {
       const storedGameState = localStorage.getItem('gameState');
       if (storedGameState) {
         try {
           const parsedState = JSON.parse(storedGameState);
           
-          // If our state is intermission but localStorage shows we should be in a question state
-          // and it's been a while since our last update, force a sync
           if (currentState === 'intermission' && parsedState.state === 'question') {
             const timeDiff = Date.now() - lastStateChange;
-            // If we haven't updated in over 10 seconds and the stored state is newer
             if (timeDiff > 10000 && parsedState.timestamp > lastStateChange) {
               console.log('Detected sync issue - intermission while display is showing question. Forcing sync.');
               setCurrentState(parsedState.state);
@@ -308,10 +332,8 @@ export const useGameSync = ({
               setLastStateChange(parsedState.timestamp);
               setSyncAttempts(0);
             } else {
-              // Increment sync attempts if we think there's an issue
               setSyncAttempts(prev => {
                 const newCount = prev + 1;
-                // After 5 failed sync attempts, force a timestamp reset to accept any newer state
                 if (newCount > 5) {
                   console.log('Multiple sync issues detected. Resetting timestamp to force sync on next state change.');
                   setLastStateChange(0);
@@ -322,37 +344,32 @@ export const useGameSync = ({
             }
           }
           
-          // Special check for intermission slide rotation issues
           if (currentState === 'intermission') {
             const now = Date.now();
             const timeSinceLastRotation = now - lastSlideRotation;
             const rotationTimeInMs = gameSettings.slideRotationTime * 1000;
             
-            // If we should have rotated the slide by now but haven't
             if (timeSinceLastRotation > rotationTimeInMs * 1.5) {
               console.log('Detected slide rotation issue, forcing rotation update');
               
-              // Force a slide rotation
-              setLastSlideRotation(now - rotationTimeInMs - 1000); // Set to trigger immediate rotation
-              setForceUpdate(prev => prev + 1); // Force update
+              setLastSlideRotation(now - rotationTimeInMs - 1000);
+              setForceUpdate(prev => prev + 1);
             }
           }
         } catch (error) {
           console.error('Error checking stored game state:', error);
         }
       }
-    }, 5000); // Check every 5 seconds
+    }, 5000);
     
     return () => {
       clearInterval(syncCheckInterval);
     };
   }, [currentState, lastStateChange, forcePause, questionIndex, questionCounter, lastSlideRotation]);
 
-  // Listen for game settings changes
   useEffect(() => {
     const handleSettingsChange = (e: Event) => {
       console.log('Game settings changed, updating values', (e as CustomEvent).detail);
-      // If the slide rotation time changed, update our timer
       if ((e as CustomEvent).detail?.key === 'slideRotationTime') {
         setSlideTimer(gameSettings.slideRotationTime);
       }
@@ -365,12 +382,10 @@ export const useGameSync = ({
     };
   }, []);
 
-  // Toggle pause function
   const togglePause = useCallback(() => {
     setForcePause(prev => !prev);
   }, []);
 
-  // Check for stored game state on initialization with enhanced acceptance logic
   useEffect(() => {
     const storedGameState = localStorage.getItem('gameState');
     if (storedGameState) {
@@ -387,7 +402,7 @@ export const useGameSync = ({
           
           if (parsedState.slidesIndex !== undefined) {
             setSlidesIndex(parsedState.slidesIndex);
-            setLastSlideRotation(Date.now()); // Reset rotation timer
+            setLastSlideRotation(Date.now());
           }
           
           setLastStateChange(parsedState.timestamp);
@@ -402,7 +417,7 @@ export const useGameSync = ({
           
           if (parsedState.slidesIndex !== undefined) {
             setSlidesIndex(parsedState.slidesIndex);
-            setLastSlideRotation(Date.now()); // Reset rotation timer
+            setLastSlideRotation(Date.now());
           }
           
           setLastStateChange(parsedState.timestamp);
@@ -413,35 +428,47 @@ export const useGameSync = ({
     }
   }, [lastStateChange]);
 
-  // Force sync function that resets timestamp to accept any newer state
   const forceSync = useCallback(() => {
-    console.log('Forcing sync by resetting timestamp');
+    console.log('Forcing sync by resetting timestamp and clearing localStorage');
+    
+    localStorage.removeItem('gameState');
+    
     setLastStateChange(0);
     setSyncAttempts(0);
+    setTimerActivity(Date.now());
     
-    // After resetting timestamp, immediately check for newer state
-    const storedGameState = localStorage.getItem('gameState');
-    if (storedGameState) {
-      try {
-        const parsedState = JSON.parse(storedGameState);
-        console.log('Applying stored game state after force sync:', parsedState);
-        
-        setCurrentState(parsedState.state);
-        setQuestionIndex(parsedState.questionIndex);
-        setTimeLeft(parsedState.timeLeft);
-        setQuestionCounter(parsedState.questionCounter);
-        
-        if (parsedState.slidesIndex !== undefined) {
-          setSlidesIndex(parsedState.slidesIndex);
-          setLastSlideRotation(Date.now()); // Reset rotation timer
-        }
-        
-        setLastStateChange(parsedState.timestamp);
-      } catch (error) {
-        console.error('Error applying stored game state after force sync:', error);
+    setTimeout(() => {
+      const futureTimestamp = Date.now() + 20000;
+      const definitiveState = {
+        state: currentState,
+        questionIndex: questionIndex,
+        timeLeft: currentState === 'question' ? gameSettings.questionDuration : 0,
+        questionCounter: questionCounter,
+        timestamp: futureTimestamp,
+        slidesIndex: slidesIndex,
+        forceSync: true,
+        definitiveTruth: true,
+        guaranteedDelivery: true,
+        syncReset: true
+      };
+      
+      localStorage.setItem('gameState', JSON.stringify(definitiveState));
+      
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: definitiveState
+      }));
+      
+      setCurrentState(definitiveState.state);
+      setQuestionIndex(definitiveState.questionIndex);
+      setTimeLeft(definitiveState.timeLeft);
+      setQuestionCounter(definitiveState.questionCounter);
+      setLastStateChange(definitiveState.timestamp);
+      
+      if (definitiveState.state === 'question') {
+        setTimeLeft(gameSettings.questionDuration);
       }
-    }
-  }, []);
+    }, 200);
+  }, [currentState, questionIndex, questionCounter, slidesIndex]);
 
   return {
     currentState,
@@ -462,6 +489,7 @@ export const useGameSync = ({
     setQuestionCounter,
     setTimeLeft,
     slideTimer,
-    lastSlideRotation
+    lastSlideRotation,
+    timerActivity
   };
 };
