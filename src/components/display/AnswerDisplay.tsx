@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 
 interface AnswerDisplayProps {
@@ -13,6 +13,97 @@ export const AnswerDisplay = ({
   questionCounter,
   onManualNext
 }: AnswerDisplayProps) => {
+  // Add effect to broadcast the answer state
+  useEffect(() => {
+    // Clear any previous state
+    localStorage.removeItem('gameState');
+    
+    // Set a minimal delay to ensure clean state
+    setTimeout(() => {
+      // Create authoritative answer state
+      const definedState = {
+        state: 'answer',
+        questionIndex: questionCounter - 1,
+        timeLeft: 0,
+        questionCounter: questionCounter,
+        timestamp: Date.now() + 20000, // Future timestamp for high priority
+        forceAnswerState: true,
+        definitiveTruth: true,
+        guaranteedDelivery: true,
+        displayInit: true,
+        forceSync: true,
+        questionText: currentQuestion.text,
+        correctAnswer: currentQuestion.correctAnswer,
+        broadcastTime: new Date().toISOString()
+      };
+      
+      // Store the state
+      localStorage.setItem('gameState', JSON.stringify(definedState));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(definedState));
+      
+      // Dispatch the event to notify all listeners
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: definedState
+      }));
+      
+      console.log('Answer display initialized with authoritative state:', definedState);
+      
+      // Send redundant events to ensure delivery
+      for (let i = 1; i <= 5; i++) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+            detail: {
+              ...definedState,
+              timestamp: definedState.timestamp + i,
+              redundancyLevel: i
+            }
+          }));
+        }, i * 200);
+      }
+    }, 100);
+  }, [currentQuestion, questionCounter]);
+
+  // Listen for special sync requests from players
+  useEffect(() => {
+    const handlePlayerSyncRequest = (e: CustomEvent) => {
+      console.log('Received sync request from player while in answer state:', e.detail);
+      
+      // Create a special high-priority sync message targeted at this player
+      const targetedSync = {
+        state: 'answer',
+        questionIndex: questionCounter - 1,
+        timeLeft: 0,
+        questionCounter: questionCounter,
+        timestamp: Date.now() + 30000, // Very high priority
+        forceAnswerState: true,
+        definitiveTruth: true,
+        guaranteedDelivery: true,
+        forcedSyncResponse: true,
+        targetPlayer: e.detail.playerName,
+        questionText: currentQuestion.text,
+        correctAnswer: currentQuestion.correctAnswer,
+        broadcastTime: new Date().toISOString()
+      };
+      
+      // Store and broadcast
+      localStorage.setItem('gameState', JSON.stringify(targetedSync));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(targetedSync));
+      
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: targetedSync
+      }));
+      
+      console.log('Sent targeted answer sync response to player:', e.detail.playerName);
+    };
+    
+    // Add event listener for player sync requests
+    window.addEventListener('playerNeedsSync', handlePlayerSyncRequest as EventListener);
+    
+    return () => {
+      window.removeEventListener('playerNeedsSync', handlePlayerSyncRequest as EventListener);
+    };
+  }, [currentQuestion, questionCounter]);
+
   return (
     <div className="flex flex-col h-full">
       <div className="mb-6">
@@ -54,9 +145,73 @@ export const AnswerDisplay = ({
       {process.env.NODE_ENV === 'development' && (
         <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
           <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-          <Button variant="outline" size="sm" onClick={onManualNext}>
-            Force Next Question
-          </Button>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" size="sm" onClick={onManualNext}>
+              Force Next Question
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                const gameState = localStorage.getItem('gameState');
+                console.log('Current game state:', gameState ? JSON.parse(gameState) : 'Not found');
+                console.log('Current question:', currentQuestion);
+              }}
+            >
+              Log Debug Info
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                // Force resync with clean state
+                localStorage.removeItem('gameState');
+                localStorage.removeItem('gameState_display_truth');
+                
+                setTimeout(() => {
+                  const freshState = {
+                    state: 'answer',
+                    questionIndex: questionCounter - 1,
+                    timeLeft: 0,
+                    questionCounter: questionCounter,
+                    timestamp: Date.now() + 30000,
+                    forceAnswerState: true,
+                    definitiveTruth: true,
+                    guaranteedDelivery: true,
+                    forceSync: true,
+                    manualSync: true,
+                    questionText: currentQuestion.text,
+                    correctAnswer: currentQuestion.correctAnswer,
+                    broadcastTime: new Date().toISOString()
+                  };
+                  
+                  localStorage.setItem('gameState', JSON.stringify(freshState));
+                  localStorage.setItem('gameState_display_truth', JSON.stringify(freshState));
+                  
+                  window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                    detail: freshState
+                  }));
+                  
+                  console.log('Forced complete resync of answer state:', freshState);
+                  
+                  // Send multiple broadcasts to ensure delivery
+                  for (let i = 1; i <= 5; i++) {
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                        detail: {
+                          ...freshState,
+                          timestamp: freshState.timestamp + i,
+                          redundancyLevel: i
+                        }
+                      }));
+                    }, i * 200);
+                  }
+                }, 100);
+              }}
+            >
+              Reset and Force Sync All Players
+            </Button>
+          </div>
         </div>
       )}
     </div>

@@ -596,6 +596,102 @@ const PlayerGame = () => {
   }, [currentGameState, playerName, questionIndex, questions, lastGameStateTimestamp]);
 
   useEffect(() => {
+    const forceSyncWithDisplay = () => {
+      console.log('Performing periodic forced sync with display');
+      
+      // Clear any existing game state to prevent circular issues
+      localStorage.removeItem('gameState');
+      
+      // Try to get the display's authoritative state
+      const displayTruth = localStorage.getItem('gameState_display_truth');
+      
+      if (displayTruth) {
+        try {
+          const parsedTruth = JSON.parse(displayTruth);
+          console.log('Found display truth:', parsedTruth);
+          
+          // If the question hasn't changed in a while, force an update
+          if (parsedTruth.questionIndex !== lastKnownQuestion) {
+            console.log(`Question changed from ${lastKnownQuestion} to ${parsedTruth.questionIndex}`);
+            lastKnownQuestion = parsedTruth.questionIndex;
+            
+            // Apply display truth directly
+            setCurrentGameState(parsedTruth.state);
+            setQuestionIndex(parsedTruth.questionIndex);
+            setTimeLeft(parsedTruth.timeLeft);
+            setLastGameStateTimestamp(parsedTruth.timestamp);
+            
+            if (questions.length > 0 && parsedTruth.questionIndex >= 0 && parsedTruth.questionIndex < questions.length) {
+              setCurrentQuestion(questions[parsedTruth.questionIndex]);
+              console.log('Forcibly updated to question:', questions[parsedTruth.questionIndex]?.text);
+            }
+            
+            // Reset player state for the new question
+            setSelectedAnswer(null);
+            setHasSelectedAnswer(false);
+            setAnsweredCorrectly(null);
+            setIsAnswerRevealed(parsedTruth.state === 'answer');
+            setPendingPoints(0);
+            setPendingCorrect(false);
+            setShowTimeUp(false);
+            setFailedSyncAttempts(0);
+            
+            // Create a high-priority game state to ensure all clients are in sync
+            const highPrioritySync = {
+              ...parsedTruth,
+              timestamp: Date.now() + 15000, // Future timestamp for priority
+              forceSync: true,
+              definitiveTruth: true,
+              guaranteedDelivery: true,
+              syncReset: true,
+              playerInitiated: true
+            };
+            
+            // Store and broadcast this state
+            localStorage.setItem('gameState', JSON.stringify(highPrioritySync));
+            window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+              detail: highPrioritySync
+            }));
+            
+            console.log('Forcibly synchronized with display state');
+          }
+          
+          // If we're stuck in intermission but display shows question, force transition
+          if (currentGameState === 'intermission' && parsedTruth.state === 'question') {
+            console.log('Detected intermission/question mismatch, forcing question state');
+            setCurrentGameState('question');
+            setTimeLeft(parsedTruth.timeLeft);
+            setShowTimeUp(false);
+          }
+        } catch (error) {
+          console.error('Error processing display truth:', error);
+        }
+      } else {
+        console.log('No display truth found, requesting sync from display');
+        // Request sync from display
+        window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
+          detail: {
+            playerName,
+            gameId,
+            timestamp: Date.now()
+          }
+        }));
+      }
+    };
+    
+    // Initial sync
+    forceSyncWithDisplay();
+    
+    // Set up periodic sync to happen every 2 seconds
+    const periodicSyncInterval = setInterval(forceSyncWithDisplay, 2000);
+    
+    // Cleanup
+    return () => {
+      clearInterval(periodicSyncInterval);
+    };
+  }, [questions, playerName, gameId, currentGameState]);
+  
+  useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
       const isCorrect = selectedAnswer === currentQuestion.correctAnswer;
       

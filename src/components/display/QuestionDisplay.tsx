@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -41,12 +40,14 @@ export const QuestionDisplay = ({
         questionIndex: questionCounter - 1,
         timeLeft: timeLeft,
         questionCounter: questionCounter,
-        timestamp: Date.now() + 10000, // Future timestamp for priority
+        timestamp: Date.now() + 20000, // Increased future timestamp for higher priority
         forceQuestionState: true,
         definitiveTruth: true,
         guaranteedDelivery: true,
         displayInit: true,
-        forceSync: true
+        forceSync: true,
+        questionText: currentQuestion.text, // Add question text for debugging
+        broadcastTime: new Date().toISOString()
       };
       
       // Store the state
@@ -60,22 +61,64 @@ export const QuestionDisplay = ({
       
       console.log('Question display initialized with authoritative state:', definedState);
       
-      // Send redundant events to ensure delivery
-      for (let i = 1; i <= 3; i++) {
+      // Send redundant events to ensure delivery (more events, longer intervals)
+      for (let i = 1; i <= 5; i++) {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('triviaStateChange', { 
             detail: {
               ...definedState,
               timestamp: definedState.timestamp + i,
-              redundancyLevel: i
+              redundancyLevel: i,
+              broadcastTime: new Date().toISOString()
             }
           }));
-        }, i * 100);
+          console.log(`Sending redundant sync event #${i}`);
+        }, i * 200);
       }
     }, 100);
   }, [currentQuestion, questionCounter]);
 
-  // Active timer update effect
+  // Listen for special sync requests from players
+  useEffect(() => {
+    const handlePlayerSyncRequest = (e: CustomEvent) => {
+      console.log('Received sync request from player:', e.detail);
+      
+      // Create a special high-priority sync message targeted at this player
+      const targetedSync = {
+        state: 'question',
+        questionIndex: questionCounter - 1,
+        timeLeft: timeLeft,
+        questionCounter: questionCounter,
+        timestamp: Date.now() + 30000, // Very high priority
+        forceQuestionState: true,
+        definitiveTruth: true,
+        guaranteedDelivery: true,
+        forcedSyncResponse: true,
+        targetPlayer: e.detail.playerName,
+        questionText: currentQuestion.text,
+        broadcastTime: new Date().toISOString()
+      };
+      
+      // Store and broadcast
+      localStorage.setItem('gameState', JSON.stringify(targetedSync));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(targetedSync));
+      
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: targetedSync
+      }));
+      
+      console.log('Sent targeted sync response to player:', e.detail.playerName);
+    };
+    
+    // Add event listener for player sync requests
+    window.addEventListener('playerNeedsSync', handlePlayerSyncRequest as EventListener);
+    
+    return () => {
+      window.removeEventListener('playerNeedsSync', handlePlayerSyncRequest as EventListener);
+    };
+  }, [currentQuestion, questionCounter, timeLeft]);
+
+  // Active timer update effect - more frequent updates
   useEffect(() => {
     if (timeLeft > 0 && !forcePause) {
       // Update game state with current timer
@@ -85,19 +128,35 @@ export const QuestionDisplay = ({
         timeLeft: timeLeft,
         questionCounter: questionCounter,
         timestamp: Date.now() + 5000, // Future timestamp
-        timerUpdate: true
+        timerUpdate: true,
+        questionText: currentQuestion.text,
+        broadcastTime: new Date().toISOString()
       };
       
       localStorage.setItem('gameState', JSON.stringify(currentState));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(currentState));
       
       // Dispatch timer update event
       window.dispatchEvent(new CustomEvent('triviaStateChange', { 
         detail: currentState
       }));
       
-      console.log(`Question timer update: ${timeLeft}s remaining`);
+      // More frequent broadcasting for improved sync
+      if (timeLeft % 3 === 0) { // Every 3 seconds, send a higher priority update
+        const highPriorityUpdate = {
+          ...currentState,
+          timestamp: Date.now() + 10000,
+          highPriorityUpdate: true
+        };
+        
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+            detail: highPriorityUpdate
+          }));
+        }, 500);
+      }
     }
-  }, [timeLeft, forcePause, questionCounter]);
+  }, [timeLeft, forcePause, questionCounter, currentQuestion]);
 
   return (
     <div className="flex flex-col h-full">
@@ -174,12 +233,15 @@ export const QuestionDisplay = ({
                     questionIndex: questionCounter - 1,
                     timeLeft: gameSettings.questionDuration,
                     questionCounter: questionCounter,
-                    timestamp: Date.now() + 20000,
+                    timestamp: Date.now() + 30000,
                     forceQuestionState: true,
                     definitiveTruth: true,
                     guaranteedDelivery: true,
                     resetTimer: true,
-                    forceSync: true
+                    forceSync: true,
+                    manualSync: true,
+                    questionText: currentQuestion.text,
+                    broadcastTime: new Date().toISOString()
                   };
                   
                   localStorage.setItem('gameState', JSON.stringify(freshState));
@@ -190,6 +252,19 @@ export const QuestionDisplay = ({
                   }));
                   
                   console.log('Forced complete resync with fresh timer:', freshState);
+                  
+                  // Send multiple broadcasts to ensure delivery
+                  for (let i = 1; i <= 5; i++) {
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                        detail: {
+                          ...freshState,
+                          timestamp: freshState.timestamp + i,
+                          redundancyLevel: i
+                        }
+                      }));
+                    }, i * 200);
+                  }
                 }, 100);
               }}
             >
