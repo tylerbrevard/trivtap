@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { Progress } from "@/components/ui/progress";
@@ -28,6 +27,9 @@ const DisplayScreen = () => {
   const [displayedQuestionCount, setDisplayedQuestionCount] = useState(0);
   const { toast } = useToast();
   
+  // Force initial state to 'join' when component mounts
+  const initialState = 'join';
+  
   const { 
     currentState, 
     questionIndex, 
@@ -39,7 +41,8 @@ const DisplayScreen = () => {
     togglePause,
     setCurrentState,
     setTimeLeft,
-    lastStateChange
+    lastStateChange,
+    forceSync
   } = useGameSync({
     totalQuestions: questions.length,
     initialQuestionIndex: 0,
@@ -54,6 +57,57 @@ const DisplayScreen = () => {
   console.log('Game settings:', gameSettings);
   console.log('Current slide index:', currentSlideIndex);
   console.log('Active intermission slides:', intermissionSlides.length);
+  console.log('Has game started:', hasGameStarted);
+
+  // Force refresh the game state every 10 seconds to prevent stuck states
+  useEffect(() => {
+    const refreshInterval = setInterval(() => {
+      if (currentState === 'question' && !forcePause && timeLeft > 0) {
+        console.log('Periodic refresh of game state to prevent stuck timer');
+        
+        // Update the game state to ensure proper synchronization
+        updateGameState(currentState, questionIndex, timeLeft, questionCounter);
+      }
+    }, 10000);
+    
+    return () => clearInterval(refreshInterval);
+  }, [currentState, questionIndex, timeLeft, questionCounter, forcePause, updateGameState]);
+
+  // Reset game state to join when component mounts
+  useEffect(() => {
+    const initialGameState = {
+      state: initialState,
+      questionIndex: 0,
+      timeLeft: 0,
+      questionCounter: 1,
+      timestamp: Date.now() + 10000, // Future timestamp
+      forceSync: true,
+      initialLoad: true
+    };
+    
+    // Clear any existing game state
+    localStorage.removeItem('gameState');
+    localStorage.removeItem('gameState_display_truth');
+    
+    // Set the initial game state with a delay to ensure clean state
+    setTimeout(() => {
+      setCurrentState(initialState);
+      localStorage.setItem('gameState', JSON.stringify(initialGameState));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(initialGameState));
+      
+      // Dispatch event to notify all listeners
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: initialGameState
+      }));
+      
+      console.log('Display screen initialized with state:', initialGameState);
+    }, 200);
+    
+    // Force a sync after component mount
+    setTimeout(() => {
+      forceSync();
+    }, 1000);
+  }, []);
 
   useEffect(() => {
     const fetchQuestions = async () => {
@@ -323,27 +377,20 @@ const DisplayScreen = () => {
   }, [players, toast, gameCode]);
   
   useEffect(() => {
-    let timerId: number | undefined;
-    
     if (currentState === 'join' && !hasGameStarted) {
-      timerId = window.setTimeout(() => {
-        setCurrentState('question');
-        setTimeLeft(gameSettings.questionDuration);
-        setHasGameStarted(true);
-        console.log('Starting game with first question');
-        
-        updateGameState('question', questionIndex, gameSettings.questionDuration, questionCounter);
-      }, 10000);
+      // Clear any auto-transition timer that might exist
+      const timerId = window.setTimeout(() => {
+        // Do not auto-start the game here, just ensure the join state is preserved
+        console.log('Join screen active, waiting for manual start');
+      }, 500);
       
       return () => {
         if (timerId) clearTimeout(timerId);
       };
     }
     
-    return () => {
-      if (timerId) clearTimeout(timerId);
-    };
-  }, [currentState, questionIndex, questionCounter, updateGameState, hasGameStarted, setCurrentState, setTimeLeft]);
+    return () => {};
+  }, [currentState, hasGameStarted]);
   
   useEffect(() => {
     let generatedCode = '';
@@ -366,15 +413,61 @@ const DisplayScreen = () => {
   }, [id]);
 
   const handleStartGameNow = () => {
+    console.log('Starting game manually');
+    setHasGameStarted(true);
     setCurrentState('question');
     setTimeLeft(gameSettings.questionDuration);
-    setHasGameStarted(true);
-    updateGameState('question', questionIndex, gameSettings.questionDuration, questionCounter);
+    
+    // Create a specific game start state
+    const gameStartState = {
+      state: 'question',
+      questionIndex: 0,
+      timeLeft: gameSettings.questionDuration,
+      questionCounter: 1,
+      timestamp: Date.now() + 20000, // Far future timestamp to ensure priority
+      hasGameStarted: true,
+      manualStart: true,
+      forceSync: true,
+      definitiveTruth: true
+    };
+    
+    // Clear existing states
+    localStorage.removeItem('gameState');
+    localStorage.removeItem('gameState_display_truth');
+    
+    // Set new authoritative state
+    setTimeout(() => {
+      localStorage.setItem('gameState', JSON.stringify(gameStartState));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(gameStartState));
+      
+      // Dispatch event with multiple redundant copies for reliability
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: gameStartState
+      }));
+      
+      // Send additional events to ensure delivery
+      for (let i = 1; i <= 5; i++) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+            detail: {
+              ...gameStartState,
+              timestamp: gameStartState.timestamp + i,
+              redundancyLevel: i
+            }
+          }));
+        }, i * 100);
+      }
+      
+      console.log('Game started manually with state:', gameStartState);
+    }, 100);
   };
   
   const handleManualNextQuestion = () => {
-    if (hasGameStarted) {
+    console.log('Manually advancing to next question');
+    if (hasGameStarted || currentState !== 'join') {
       moveToNextQuestion();
+    } else {
+      handleStartGameNow();
     }
   };
   
@@ -396,8 +489,6 @@ const DisplayScreen = () => {
       category: "General"
     };
   };
-  
-  const currentQuestion = getCurrentQuestion();
   
   const getTimerColor = () => {
     if (timeLeft > gameSettings.questionDuration * 0.6) return 'bg-green-500';
@@ -512,6 +603,21 @@ const DisplayScreen = () => {
   };
 
   const renderContent = () => {
+    // Force initial display to join screen if game hasn't started
+    if (!hasGameStarted && (currentState === 'join' || window.location.href.toLowerCase().includes('display'))) {
+      console.log('Rendering join display');
+      return (
+        <JoinDisplay 
+          gameCode={gameCode}
+          uniquePlayers={uniquePlayers}
+          onStartGame={handleStartGameNow}
+          onManualNext={handleManualNextQuestion}
+          forcePause={forcePause}
+          togglePause={togglePause}
+        />
+      );
+    }
+    
     switch (currentState) {
       case 'join':
         return (
@@ -552,89 +658,15 @@ const DisplayScreen = () => {
         }
       
         const currentSlide = getCurrentIntermissionSlide();
-        console.log("Current intermission slide:", currentSlide);
-        
-        if (!currentSlide) {
-          return (
-            <div className="flex flex-col items-center justify-center h-full text-center">
-              <h1 className="text-4xl font-bold mb-8 text-primary">Intermission</h1>
-              <div className="card-trivia p-8 max-w-2xl w-full">
-                <h2 className="text-3xl font-bold mb-4">Welcome to Trivia Night!</h2>
-                <p className="text-xl mb-6">The next question will be coming up shortly...</p>
-              </div>
-              
-              {process.env.NODE_ENV === 'development' && (
-                <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
-                  <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-                  <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
-                    Force Next Question
-                  </Button>
-                </div>
-              )}
-            </div>
-          );
-        }
         
         return (
-          <div className="flex flex-col items-center justify-center h-full text-center">
-            <h1 className="text-4xl font-bold mb-8 text-primary">Intermission</h1>
-            <div className="card-trivia p-8 max-w-2xl w-full">
-              <h2 className="text-3xl font-bold mb-4">{currentSlide.title}</h2>
-              
-              {currentSlide.type === 'text' && (
-                <p className="text-xl mb-6 whitespace-pre-line">{currentSlide.content}</p>
-              )}
-              
-              {currentSlide.type === 'html' && (
-                <div className="prose max-w-none mx-auto" dangerouslySetInnerHTML={{ __html: currentSlide.content }} />
-              )}
-              
-              {currentSlide.type === 'wifi' && (
-                <div className="bg-muted p-6 rounded-md">
-                  <div className="flex items-center justify-center mb-4">
-                    <Wifi className="h-8 w-8 text-primary mr-2" />
-                    <p className="text-lg font-medium">WiFi Connection</p>
-                  </div>
-                  <div className="flex justify-center gap-8 mt-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">WiFi Name</p>
-                      <p className="text-xl font-medium">{currentSlide.wifiName}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Password</p>
-                      <p className="text-xl font-medium">{currentSlide.wifiPassword}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-              
-              {currentSlide.type === 'image' && currentSlide.imageUrl && (
-                <div className="mt-4">
-                  <img 
-                    src={currentSlide.imageUrl} 
-                    alt={currentSlide.title}
-                    className="max-w-full max-h-[300px] object-contain mx-auto rounded"
-                    onError={(e) => {
-                      const target = e.currentTarget as HTMLImageElement;
-                      target.src = 'https://placehold.co/600x400?text=Image+URL+Error';
-                    }}
-                  />
-                  {currentSlide.content && (
-                    <p className="mt-4 text-lg">{currentSlide.content}</p>
-                  )}
-                </div>
-              )}
-            </div>
-            
-            {process.env.NODE_ENV === 'development' && (
-              <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
-                <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-                <Button variant="outline" size="sm" onClick={handleManualNextQuestion}>
-                  Force Next Question
-                </Button>
-              </div>
-            )}
-          </div>
+          <IntermissionDisplay
+            currentSlide={currentSlide}
+            roundWinners={roundWinners}
+            onManualNext={handleManualNextQuestion}
+            showWinnerSlide={gameSettings.showWinnerSlide !== false}
+            currentSlideIndex={currentSlideIndex}
+          />
         );
         
       case 'leaderboard':
@@ -646,7 +678,16 @@ const DisplayScreen = () => {
         );
         
       default:
-        return <div>Unknown state: {currentState}</div>;
+        return (
+          <JoinDisplay 
+            gameCode={gameCode}
+            uniquePlayers={uniquePlayers}
+            onStartGame={handleStartGameNow}
+            onManualNext={handleManualNextQuestion}
+            forcePause={forcePause}
+            togglePause={togglePause}
+          />
+        );
     }
   };
   
@@ -676,6 +717,21 @@ const DisplayScreen = () => {
             <div className="bg-blue-500/20 text-blue-500 px-3 py-1 rounded-full">
               Questions: {displayedQuestionCount}
             </div>
+            {process.env.NODE_ENV === 'development' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  forceSync();
+                  toast({
+                    title: "Force Sync",
+                    description: "Forcing synchronization of game state",
+                  });
+                }}
+              >
+                Force Sync
+              </Button>
+            )}
           </div>
         </div>
       </header>

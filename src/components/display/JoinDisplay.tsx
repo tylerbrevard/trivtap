@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { QrCode } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
@@ -20,6 +20,51 @@ export const JoinDisplay = ({
   forcePause,
   togglePause
 }: JoinDisplayProps) => {
+  // Ensure game state is set to 'join' when this component mounts
+  useEffect(() => {
+    // Clear any previous game state
+    localStorage.removeItem('gameState');
+    localStorage.removeItem('gameState_display_truth');
+    
+    // Create authoritative join state
+    const joinState = {
+      state: 'join',
+      questionIndex: 0,
+      timeLeft: 0,
+      questionCounter: 1,
+      timestamp: Date.now() + 10000, // Future timestamp for priority
+      forceJoinState: true,
+      definitiveTruth: true,
+      guaranteedDelivery: true,
+      displayInit: true,
+      forceSync: true
+    };
+    
+    // Store the state
+    localStorage.setItem('gameState', JSON.stringify(joinState));
+    localStorage.setItem('gameState_display_truth', JSON.stringify(joinState));
+    
+    // Dispatch the event to notify all listeners
+    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+      detail: joinState
+    }));
+    
+    console.log('Join display initialized with authoritative state:', joinState);
+    
+    // Send redundant events to ensure delivery
+    for (let i = 1; i <= 3; i++) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: {
+            ...joinState,
+            timestamp: joinState.timestamp + i,
+            redundancyLevel: i
+          }
+        }));
+      }, i * 100);
+    }
+  }, []);
+
   return (
     <div className="flex flex-col items-center justify-center h-full text-center">
       <h1 className="text-5xl font-bold mb-8 text-primary animate-pulse">Join the Game!</h1>
@@ -58,6 +103,16 @@ export const JoinDisplay = ({
               </Button>
               <Button variant="outline" size="sm" onClick={togglePause}>
                 {forcePause ? 'Resume Game' : 'Pause Game'}
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  const gameState = localStorage.getItem('gameState');
+                  console.log('Current game state:', gameState ? JSON.parse(gameState) : 'Not found');
+                }}
+              >
+                Log Debug Info
               </Button>
             </div>
           </div>
