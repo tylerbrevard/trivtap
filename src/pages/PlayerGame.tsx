@@ -20,7 +20,7 @@ const PlayerGame = () => {
   const [timeLeft, setTimeLeft] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [score, setScore] = useState(0);
-  const [isAnswerRevealed, setIsAnswerRevealed] = useState(false);
+  const [isAnswerRevealed, setIsAnswerRevealed] = useState<boolean>(false);
   const [answeredCorrectly, setAnsweredCorrectly] = useState<boolean | null>(null);
   const [lastGameStateTimestamp, setLastGameStateTimestamp] = useState<number>(0);
   const [currentGameState, setCurrentGameState] = useState<string>('question');
@@ -176,8 +176,9 @@ const PlayerGame = () => {
           const parsedState = JSON.parse(storedGameState);
           console.log('Checking game state:', parsedState);
           
-          if (parsedState.authoritative || parsedState.recovered || parsedState.guaranteedDelivery) {
-            console.log('Processing authoritative game state:', parsedState);
+          // Always accept definitive truth, regardless of timestamp
+          if (parsedState.definitiveTruth || parsedState.guaranteedDelivery || parsedState.forceSync) {
+            console.log('Processing definitive game state:', parsedState);
             
             setLastGameStateTimestamp(parsedState.timestamp);
             setCurrentGameState(parsedState.state);
@@ -201,13 +202,14 @@ const PlayerGame = () => {
             return;
           }
           
+          // Standard timestamp-based check for non-definitive updates
           if (!parsedState.timestamp || parsedState.timestamp <= lastGameStateTimestamp) {
             if (lastGameStateTimestamp > 0) {
               console.log('Game state is not newer, ignoring');
               setFailedSyncAttempts(prev => prev + 1);
               
-              if (failedSyncAttempts > 20) {
-                console.log('Forcing state sync after multiple failed attempts');
+              if (failedSyncAttempts > 10) {
+                console.log('Multiple sync failures detected, resetting timestamp to accept any state');
                 setLastGameStateTimestamp(0);
                 setFailedSyncAttempts(0);
               }
@@ -330,12 +332,13 @@ const PlayerGame = () => {
     
     const intervalId = setInterval(checkGameState, 200);
     
+    // More aggressive recovery for intermission states
     const forceSyncIntervalId = setInterval(() => {
-      if (currentGameState === 'intermission' && failedSyncAttempts > 5) {
+      if (currentGameState === 'intermission' && failedSyncAttempts > 3) {
         console.log('Periodic sync check - attempting recovery');
         recoverFromDisplayTruth();
       }
-    }, 5000);
+    }, 3000); // Check more frequently
     
     return () => {
       clearInterval(intervalId);
@@ -347,18 +350,53 @@ const PlayerGame = () => {
     const cleanupListener = listenForGameStateChanges((gameState) => {
       console.log('Received game state change event in player:', gameState);
       
+      // Always accept definitive truth updates
+      if (gameState.definitiveTruth || gameState.guaranteedDelivery || gameState.forceSync) {
+        console.log('Accepting definitive game state update from event:', gameState);
+        setLastGameStateTimestamp(gameState.timestamp);
+        setCurrentGameState(gameState.state);
+        setQuestionIndex(gameState.questionIndex);
+        
+        if (questions.length > 0) {
+          const newIndex = gameState.questionIndex;
+          if (newIndex >= 0 && newIndex < questions.length) {
+            setCurrentQuestion(questions[newIndex]);
+            console.log('Event updated question to:', questions[newIndex]?.text);
+          } else {
+            console.error('Event provided invalid question index:', newIndex, 'max:', questions.length - 1);
+          }
+        }
+        
+        setSelectedAnswer(null);
+        setHasSelectedAnswer(false);
+        setAnsweredCorrectly(null);
+        setIsAnswerRevealed(gameState.state === 'answer');
+        if (gameState.state === 'question') {
+          setTimeLeft(gameState.timeLeft);
+        } else {
+          setTimeLeft(0);
+        }
+        setPendingPoints(0);
+        setPendingCorrect(false);
+        setShowTimeUp(false);
+        setFailedSyncAttempts(0);
+        return;
+      }
+      
+      // Standard timestamp check for non-definitive updates
       if (gameState.timestamp > lastGameStateTimestamp) {
         setLastGameStateTimestamp(gameState.timestamp);
         setCurrentGameState(gameState.state);
         
         if (gameState.questionIndex !== questionIndex) {
+          console.log(`Question index changed from ${questionIndex} to ${gameState.questionIndex}`);
           setQuestionIndex(gameState.questionIndex);
           
           if (questions.length > 0) {
             const newIndex = gameState.questionIndex;
             if (newIndex >= 0 && newIndex < questions.length) {
               setCurrentQuestion(questions[newIndex]);
-              console.log('Custom event updated question to:', questions[newIndex]?.text);
+              console.log('Event updated question to:', questions[newIndex]?.text);
             } else {
               console.error('Event provided invalid question index:', newIndex, 'max:', questions.length - 1);
             }
@@ -370,7 +408,6 @@ const PlayerGame = () => {
           setIsAnswerRevealed(gameState.state === 'answer');
           setPendingPoints(0);
           setPendingCorrect(false);
-          
           setShowTimeUp(false);
         }
         
@@ -498,11 +535,28 @@ const PlayerGame = () => {
   
   const handleForceSync = () => {
     console.log('Manual force sync requested');
-    recoverFromDisplayTruth();
+    
+    // Reset timestamp to accept any newer state
     setLastGameStateTimestamp(0);
     setFailedSyncAttempts(0);
     setShowTimeUp(false);
     
+    // Try to recover from display truth
+    const recovered = recoverFromDisplayTruth();
+    
+    if (!recovered) {
+      // If recovery didn't work, request a new definitive state from display
+      console.log('Requesting new definitive state from display');
+      window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
+        detail: {
+          playerName,
+          gameId,
+          timestamp: Date.now()
+        }
+      }));
+    }
+    
+    // Reload questions
     const reloadQuestions = async () => {
       try {
         const allQuestions = await getAllAvailableQuestions();

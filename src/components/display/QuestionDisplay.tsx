@@ -36,31 +36,49 @@ export const QuestionDisplay = ({
       correctAnswer: currentQuestion.correctAnswer
     });
     
-    // Ensure game state in localStorage is current - this is the source of truth
-    // Use a unique, monotonically increasing timestamp to force sync
-    const gameState = {
+    // Create a definitive game state that players MUST accept
+    // Use current timestamp + 10000 to ensure it's in the future compared to any existing state
+    const definitiveTruth = {
       state: 'question',
       questionIndex: questionCounter - 1,
       timeLeft: timeLeft,
       questionCounter: questionCounter,
-      timestamp: Date.now(),
-      forceSync: true // New flag to enforce sync
+      timestamp: Date.now() + 10000, // Future timestamp to guarantee acceptance
+      guaranteedDelivery: true,      // Flag that forces players to accept this state
+      definitiveTruth: true,         // Additional flag that overrides normal sync checks
+      forceSync: true                // Force player sync immediately
     };
     
-    // Store the game state in localStorage with a special key that guarantees
-    // it's picked up by players regardless of their current sync state
-    localStorage.setItem('gameState', JSON.stringify(gameState));
-    localStorage.setItem('gameState_display_truth', JSON.stringify(gameState));
+    // Store the definitive truth in localStorage
+    localStorage.setItem('gameState', JSON.stringify(definitiveTruth));
+    localStorage.setItem('gameState_display_truth', JSON.stringify(definitiveTruth));
     
-    // Dispatch an event to notify other tabs/windows - with guaranteed delivery flag
+    // Broadcast to all players with multiple events for redundancy
     window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-      detail: {
-        ...gameState,
-        guaranteedDelivery: true
-      }
+      detail: definitiveTruth
     }));
     
-    console.log('Broadcast definitive question state:', gameState);
+    // Send a second event with a slight delay
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: {
+          ...definitiveTruth,
+          timestamp: definitiveTruth.timestamp + 1 // Slightly newer
+        }
+      }));
+    }, 100);
+    
+    // And a third event with a longer delay
+    setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: {
+          ...definitiveTruth,
+          timestamp: definitiveTruth.timestamp + 2 // Even newer
+        }
+      }));
+    }, 300);
+    
+    console.log('Broadcast definitive question state:', definitiveTruth);
   }, [currentQuestion, questionCounter, timeLeft]);
 
   return (

@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useCallback } from 'react';
 import { updateGameState, moveToNextQuestion, autoSyncGameState, listenForGameStateChanges } from '@/utils/gameStateUtils';
 import { gameSettings } from '@/utils/gameSettings';
@@ -97,6 +96,23 @@ export const useGameSync = ({
   // Listen for game state changes from other windows/tabs
   useEffect(() => {
     const removeListener = listenForGameStateChanges((gameState) => {
+      if (gameState.definitiveTruth || gameState.guaranteedDelivery || gameState.forceSync) {
+        console.log('Accepting definitive game state update:', gameState);
+        setCurrentState(gameState.state);
+        setQuestionIndex(gameState.questionIndex);
+        setTimeLeft(gameState.timeLeft);
+        setQuestionCounter(gameState.questionCounter);
+        
+        if (gameState.slidesIndex !== undefined) {
+          setSlidesIndex(gameState.slidesIndex);
+          setSlideTimer(gameSettings.slideRotationTime); // Reset slide timer when changing slides
+        }
+        
+        setLastStateChange(gameState.timestamp);
+        setSyncAttempts(0); // Reset sync attempts counter on successful sync
+        return;
+      }
+      
       if (gameState.timestamp > lastStateChange) {
         console.log('Applying game state from event:', gameState);
         setCurrentState(gameState.state);
@@ -285,13 +301,28 @@ export const useGameSync = ({
     setForcePause(prev => !prev);
   }, []);
 
-  // Check for stored game state on initialization
+  // Check for stored game state on initialization with enhanced acceptance logic
   useEffect(() => {
     const storedGameState = localStorage.getItem('gameState');
     if (storedGameState) {
       try {
         const parsedState = JSON.parse(storedGameState);
         console.log('Found stored game state:', parsedState);
+        
+        if (parsedState.definitiveTruth || parsedState.guaranteedDelivery || parsedState.forceSync) {
+          console.log('Accepting definitive stored game state:', parsedState);
+          setCurrentState(parsedState.state);
+          setQuestionIndex(parsedState.questionIndex);
+          setTimeLeft(parsedState.timeLeft);
+          setQuestionCounter(parsedState.questionCounter);
+          
+          if (parsedState.slidesIndex !== undefined) {
+            setSlidesIndex(parsedState.slidesIndex);
+          }
+          
+          setLastStateChange(parsedState.timestamp);
+          return;
+        }
         
         if (parsedState.timestamp > lastStateChange) {
           setCurrentState(parsedState.state);
