@@ -25,9 +25,9 @@ const DisplayScreen = () => {
   const [roundWinners, setRoundWinners] = useState<any[]>([]);
   const [dayWinners, setDayWinners] = useState<any[]>([]);
   const [displayedQuestionCount, setDisplayedQuestionCount] = useState(0);
-  const [answerRevealTimeoutId, setAnswerRevealTimeoutId] = useState<number | null>(null);
   const { toast } = useToast();
   
+  // Force initial state to 'join' when component mounts
   const initialState = 'join';
   
   const { 
@@ -59,11 +59,13 @@ const DisplayScreen = () => {
   console.log('Active intermission slides:', intermissionSlides.length);
   console.log('Has game started:', hasGameStarted);
 
+  // Force refresh the game state every 10 seconds to prevent stuck states
   useEffect(() => {
     const refreshInterval = setInterval(() => {
       if (currentState === 'question' && !forcePause && timeLeft > 0) {
         console.log('Periodic refresh of game state to prevent stuck timer');
         
+        // Update the game state to ensure proper synchronization
         updateGameState(currentState, questionIndex, timeLeft, questionCounter);
       }
     }, 10000);
@@ -71,25 +73,29 @@ const DisplayScreen = () => {
     return () => clearInterval(refreshInterval);
   }, [currentState, questionIndex, timeLeft, questionCounter, forcePause, updateGameState]);
 
+  // Reset game state to join when component mounts
   useEffect(() => {
     const initialGameState = {
       state: initialState,
       questionIndex: 0,
       timeLeft: 0,
       questionCounter: 1,
-      timestamp: Date.now() + 10000,
+      timestamp: Date.now() + 10000, // Future timestamp
       forceSync: true,
       initialLoad: true
     };
     
+    // Clear any existing game state
     localStorage.removeItem('gameState');
     localStorage.removeItem('gameState_display_truth');
     
+    // Set the initial game state with a delay to ensure clean state
     setTimeout(() => {
       setCurrentState(initialState);
       localStorage.setItem('gameState', JSON.stringify(initialGameState));
       localStorage.setItem('gameState_display_truth', JSON.stringify(initialGameState));
       
+      // Dispatch event to notify all listeners
       window.dispatchEvent(new CustomEvent('triviaStateChange', { 
         detail: initialGameState
       }));
@@ -97,6 +103,7 @@ const DisplayScreen = () => {
       console.log('Display screen initialized with state:', initialGameState);
     }, 200);
     
+    // Force a sync after component mount
     setTimeout(() => {
       forceSync();
     }, 1000);
@@ -260,15 +267,7 @@ const DisplayScreen = () => {
           try {
             const gameState = JSON.parse(gameStateStr);
             gameState.slidesIndex = nextIndex;
-            gameState.timestamp = Date.now() + 5000;
             localStorage.setItem('gameState', JSON.stringify(gameState));
-            
-            window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-              detail: {
-                ...gameState,
-                slideChanged: true
-              }
-            }));
           } catch (error) {
             console.error('Error updating game state with new slide index:', error);
           }
@@ -377,9 +376,11 @@ const DisplayScreen = () => {
     };
   }, [players, toast, gameCode]);
   
+  // AUTOSTART: Automatically transition from JOIN to QUESTION after timeout
   useEffect(() => {
     let autoStartTimeout: number | undefined;
     if (currentState === 'join' && !hasGameStarted) {
+      // Only start if there are questions loaded
       if (questions.length > 0) {
         autoStartTimeout = window.setTimeout(() => {
           console.log('Auto-starting the game after join screen timeout');
@@ -387,12 +388,13 @@ const DisplayScreen = () => {
           setCurrentState('question');
           setTimeLeft(gameSettings.questionDuration);
 
+          // Create a specific game start state
           const gameStartState = {
             state: 'question',
             questionIndex: 0,
             timeLeft: gameSettings.questionDuration,
             questionCounter: 1,
-            timestamp: Date.now() + 20000,
+            timestamp: Date.now() + 20000, // Far future timestamp to ensure priority
             hasGameStarted: true,
             manualStart: false,
             autoStart: true,
@@ -400,9 +402,11 @@ const DisplayScreen = () => {
             definitiveTruth: true
           };
 
+          // Clear existing states
           localStorage.removeItem('gameState');
           localStorage.removeItem('gameState_display_truth');
 
+          // Set new authoritative state
           setTimeout(() => {
             localStorage.setItem('gameState', JSON.stringify(gameStartState));
             localStorage.setItem('gameState_display_truth', JSON.stringify(gameStartState));
@@ -410,6 +414,7 @@ const DisplayScreen = () => {
               detail: gameStartState
             }));
 
+            // Send additional events to ensure delivery
             for (let i = 1; i <= 5; i++) {
               setTimeout(() => {
                 window.dispatchEvent(new CustomEvent('triviaStateChange', {
@@ -424,7 +429,7 @@ const DisplayScreen = () => {
 
             console.log('Game started automatically with state:', gameStartState);
           }, 100);
-        }, 10000);
+        }, 10000); // Auto-start delay (10 seconds on join screen)
       }
     }
 
@@ -436,6 +441,7 @@ const DisplayScreen = () => {
   useEffect(() => {
     let generatedCode = '';
     
+    // Check for custom code in settings
     const customCode = localStorage.getItem('customGameCode');
     
     if (customCode && customCode.trim() !== '') {
@@ -443,6 +449,7 @@ const DisplayScreen = () => {
     } else if (id && id !== 'default') {
       generatedCode = id;
     } else {
+      // Generate a random 4-digit code as fallback
       generatedCode = Math.floor(1000 + Math.random() * 9000).toString();
     }
     
@@ -457,29 +464,34 @@ const DisplayScreen = () => {
     setCurrentState('question');
     setTimeLeft(gameSettings.questionDuration);
     
+    // Create a specific game start state
     const gameStartState = {
       state: 'question',
       questionIndex: 0,
       timeLeft: gameSettings.questionDuration,
       questionCounter: 1,
-      timestamp: Date.now() + 20000,
+      timestamp: Date.now() + 20000, // Far future timestamp to ensure priority
       hasGameStarted: true,
       manualStart: true,
       forceSync: true,
       definitiveTruth: true
     };
     
+    // Clear existing states
     localStorage.removeItem('gameState');
     localStorage.removeItem('gameState_display_truth');
     
+    // Set new authoritative state
     setTimeout(() => {
       localStorage.setItem('gameState', JSON.stringify(gameStartState));
       localStorage.setItem('gameState_display_truth', JSON.stringify(gameStartState));
       
+      // Dispatch event with multiple redundant copies for reliability
       window.dispatchEvent(new CustomEvent('triviaStateChange', { 
         detail: gameStartState
       }));
       
+      // Send additional events to ensure delivery
       for (let i = 1; i <= 5; i++) {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('triviaStateChange', { 
@@ -636,37 +648,8 @@ const DisplayScreen = () => {
     );
   };
 
-  useEffect(() => {
-    if (currentState === 'answer') {
-      if (answerRevealTimeoutId) {
-        clearTimeout(answerRevealTimeoutId);
-        setAnswerRevealTimeoutId(null);
-      }
-      
-      const answerDuration = gameSettings.answerRevealDuration || 5;
-      console.log(`Setting answer reveal duration to ${answerDuration} seconds`);
-      
-      if (process.env.NODE_ENV !== 'development' && questions.length > 0) {
-        const timeout = window.setTimeout(() => {
-          if (currentState === 'answer') {
-            console.log('Answer reveal time is up, moving to next question');
-            handleManualNextQuestion();
-          }
-        }, answerDuration * 1000);
-        
-        setAnswerRevealTimeoutId(timeout);
-      }
-    }
-    
-    return () => {
-      if (answerRevealTimeoutId) {
-        clearTimeout(answerRevealTimeoutId);
-        setAnswerRevealTimeoutId(null);
-      }
-    };
-  }, [currentState, questionIndex, questions.length, gameSettings.answerRevealDuration]);
-  
   const renderContent = () => {
+    // Force initial display to join screen if game hasn't started
     if (!hasGameStarted && (currentState === 'join' || window.location.href.toLowerCase().includes('display'))) {
       console.log('Rendering join display');
       return (

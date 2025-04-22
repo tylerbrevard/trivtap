@@ -1,5 +1,5 @@
 
-import React, { useEffect } from 'react';
+import React from 'react';
 import { Button } from "@/components/ui/button";
 
 interface LeaderboardDisplayProps {
@@ -11,30 +11,6 @@ export const LeaderboardDisplay = ({
   sortedPlayers,
   onManualNext
 }: LeaderboardDisplayProps) => {
-  // Force a broadcast of player scores to ensure leaderboard accuracy
-  useEffect(() => {
-    // Create a definitive game state truth that includes all player scores
-    const leaderboardState = {
-      state: 'leaderboard',
-      playerScores: sortedPlayers.map(player => ({
-        name: player.name,
-        score: player.score || 0
-      })),
-      timestamp: Date.now() + 5000,
-      definitiveTruth: true
-    };
-    
-    // Store and broadcast this state to all clients
-    localStorage.setItem('leaderboard_scores', JSON.stringify(leaderboardState));
-    
-    // Custom event to ensure all components are aware of the definitive scores
-    window.dispatchEvent(new CustomEvent('leaderboardScoresUpdated', { 
-      detail: leaderboardState
-    }));
-    
-    console.log('Broadcasting definitive leaderboard scores:', sortedPlayers);
-  }, [sortedPlayers]);
-
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <h1 className="text-4xl font-bold mb-8 text-primary">Leaderboard</h1>
@@ -95,7 +71,7 @@ export const LeaderboardDisplay = ({
             <div className="card-trivia p-4">
               <div className="divide-y divide-border">
                 {sortedPlayers.slice(3, 10).map((player, index) => (
-                  <div key={player.id || index} className="flex justify-between items-center py-3">
+                  <div key={player.id} className="flex justify-between items-center py-3">
                     <div className="flex items-center">
                       <span className="text-muted-foreground font-medium mr-4">{index + 4}</span>
                       <span className="font-medium">{player.name}</span>
