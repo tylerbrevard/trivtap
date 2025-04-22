@@ -284,7 +284,8 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       )}
       
       {/* CSS styles for animations */}
-      <style jsx>{`
+      <style>
+        {`
         .selectable-answer:active {
           transform: scale(0.98);
           box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
@@ -302,7 +303,8 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         .unselected-answer {
           opacity: 0.8;
         }
-      `}</style>
+        `}
+      </style>
     </main>
   );
 };
