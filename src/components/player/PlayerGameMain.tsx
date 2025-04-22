@@ -45,39 +45,56 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   }
 
   return (
-    <main className="flex-1 p-4 overflow-auto bg-gradient-to-b from-background to-background/80">
-      <div className="card-trivia p-6 mb-6 shadow-lg rounded-xl bg-gradient-to-r from-indigo-500/20 to-purple-500/20 border border-indigo-500/30">
+    <main className="flex-1 p-4 overflow-auto bg-gradient-to-b from-[#2B2464] to-[#1A1740]">
+      <div className="card-trivia p-6 mb-6 shadow-lg rounded-xl bg-gradient-to-r from-indigo-600/30 to-purple-600/30 border border-indigo-500/40">
         <h2 className="text-xl font-bold mb-4 text-white">{currentQuestion.text}</h2>
         <div className="grid grid-cols-1 gap-4 mt-6">
-          {currentQuestion.options.map((option: string, index: number) => (
-            <button
-              key={index}
-              onClick={() => onAnswerClick(option)}
-              disabled={selectedAnswer !== null || timeLeft === 0 || isAnswerRevealed}
-              className={`p-5 rounded-lg text-left transition-all transform hover:scale-[1.02] ${
-                selectedAnswer === option
-                  ? isAnswerRevealed
-                    ? option === currentQuestion.correctAnswer
-                      ? "bg-gradient-to-r from-green-500 to-green-400 border-green-600 border-2 text-white shadow-md"
-                      : "bg-gradient-to-r from-red-500 to-red-400 border-red-600 border-2 text-white shadow-md"
-                    : "bg-gradient-to-r from-trivia-primary to-trivia-primary/80 border-trivia-primary border-2 text-white shadow-md"
-                  : isAnswerRevealed && option === currentQuestion.correctAnswer
-                  ? "bg-gradient-to-r from-green-500 to-green-400 border-green-600 border-2 text-white shadow-md"
-                  : "bg-gradient-to-r from-indigo-500/40 to-purple-500/40 hover:from-indigo-500/60 hover:to-purple-500/60 border border-indigo-500/50 text-white shadow-lg"
-              } ${
-                timeLeft === 0 || isAnswerRevealed
-                  ? "cursor-default opacity-80"
-                  : "cursor-pointer active:scale-[0.98]"
-              }`}
-            >
-              <div className="flex items-center">
-                <span className="mr-4 text-white font-bold flex items-center justify-center h-10 w-10 rounded-full bg-trivia-primary/50 shadow-inner">
-                  {String.fromCharCode(65 + index)}
-                </span>
-                <span className="text-white font-medium text-lg">{option}</span>
-              </div>
-            </button>
-          ))}
+          {currentQuestion.options.map((option: string, index: number) => {
+            // Determine the button class based on selection and answer state
+            let buttonClass = "p-5 rounded-lg text-left transition-all transform hover:scale-[1.02] ";
+            
+            // Base style for all buttons
+            buttonClass += "bg-gradient-to-r from-[#7E69AB]/80 to-[#9B87F5]/80 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/50 text-white shadow-lg ";
+            
+            // Add specific styles based on selection state
+            if (selectedAnswer === option) {
+              if (isAnswerRevealed) {
+                // Revealed and selected
+                buttonClass = option === currentQuestion.correctAnswer
+                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md"
+                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+              } else {
+                // Selected but not revealed
+                buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md";
+              }
+            } else if (isAnswerRevealed && option === currentQuestion.correctAnswer) {
+              // Correct answer when revealed
+              buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
+            }
+            
+            // Add disabled styling if needed
+            if (selectedAnswer !== null || timeLeft === 0 || isAnswerRevealed) {
+              buttonClass += " opacity-80";
+            } else {
+              buttonClass += " cursor-pointer active:scale-[0.98]";
+            }
+            
+            return (
+              <button
+                key={index}
+                onClick={() => onAnswerClick(option)}
+                disabled={selectedAnswer !== null || timeLeft === 0 || isAnswerRevealed}
+                className={buttonClass}
+              >
+                <div className="flex items-center">
+                  <span className="mr-4 text-white font-bold flex items-center justify-center h-10 w-10 rounded-full bg-[#8B5CF6]/50 shadow-inner">
+                    {String.fromCharCode(65 + index)}
+                  </span>
+                  <span className="text-white font-medium text-lg">{option}</span>
+                </div>
+              </button>
+            );
+          })}
         </div>
       </div>
       {isAnswerRevealed && (
@@ -102,8 +119,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
               </p>
               <p className="text-md">
                 {answeredCorrectly
-                  ? `You earned ${pendingPoints > 0 ? pendingPoints : score - (score - pendingPoints)
-                    } points!`
+                  ? `You earned ${pendingPoints > 0 ? pendingPoints : score - (score - pendingPoints)} points!`
                   : `The correct answer was: ${currentQuestion.correctAnswer}`}
               </p>
             </div>
