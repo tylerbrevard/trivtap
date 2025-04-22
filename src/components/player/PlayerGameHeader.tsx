@@ -19,11 +19,10 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   
   // Sync with incoming timeLeft prop with improved handling
   useEffect(() => {
-    if (timeLeft !== lastTimeRef.current) {
-      setDisplayTime(timeLeft);
-      lastTimeRef.current = timeLeft;
-      console.log(`Timer updated to ${timeLeft}s`);
-    }
+    // Always update display time whenever timeLeft changes
+    setDisplayTime(timeLeft);
+    lastTimeRef.current = timeLeft;
+    console.log(`Timer updated to ${timeLeft}s`);
   }, [timeLeft]);
   
   // Function to determine time color based on remaining time

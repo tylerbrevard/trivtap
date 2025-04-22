@@ -30,66 +30,77 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   handleForceSync,
   currentGameState = "question"
 }) => {
-  // References to track elements and clicks
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [trackingEnabled, setTrackingEnabled] = useState(true);
-  const [debugMsg, setDebugMsg] = useState("");
+  // Local state to track selection
   const [localAnswer, setLocalAnswer] = useState<string | null>(null);
   const [clickCount, setClickCount] = useState(0);
+  const [clickDebugMsg, setClickDebugMsg] = useState("");
+  const [isProcessing, setIsProcessing] = useState(false);
   
-  // Ensures we process each selection only once
-  const processingRef = useRef(false);
+  // Refs for the container and processing state
+  const containerRef = useRef<HTMLDivElement>(null);
   
-  // Clear local state when question changes
+  // Reset local state when question changes
   useEffect(() => {
     setLocalAnswer(null);
-    setDebugMsg("");
     setClickCount(0);
-    processingRef.current = false;
+    setClickDebugMsg("");
+    setIsProcessing(false);
     console.log("New question loaded, resetting selection state");
   }, [currentQuestion?.text]);
   
-  // Update local state when parent state changes
+  // Sync with parent component's selected answer
   useEffect(() => {
-    if (selectedAnswer) {
+    if (selectedAnswer && selectedAnswer !== localAnswer) {
       setLocalAnswer(selectedAnswer);
+      console.log("Synced with parent's selected answer:", selectedAnswer);
     }
   }, [selectedAnswer]);
-  
-  // Actual click handler function
-  const selectAnswerOption = (option: string) => {
-    if (processingRef.current) return;
-    if (isAnswerRevealed) return;
-    if (timeLeft <= 0) return;
-    if (localAnswer !== null) return;
-    
-    processingRef.current = true;
-    setClickCount(prev => prev + 1);
-    setLocalAnswer(option);
-    setDebugMsg(`Clicked: ${option} at ${new Date().toLocaleTimeString()}`);
-    
-    console.log(`Player clicked answer: ${option}`, {
-      time: timeLeft,
-      revealed: isAnswerRevealed,
-      currentlyProcessing: processingRef.current
+
+  // The main click handler for option selection
+  const handleOptionClick = (option: string) => {
+    console.log("Click detected on option:", option, {
+      isProcessing,
+      isAnswerRevealed,
+      timeLeft,
+      localAnswer
     });
     
-    // Send to parent handler
+    // Don't process if already selected or answer revealed or time is up
+    if (isProcessing || isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) {
+      console.log("Click ignored:", {
+        reason: isProcessing ? "Already processing" : 
+               isAnswerRevealed ? "Answer revealed" : 
+               timeLeft <= 0 ? "Time up" : 
+               localAnswer !== null ? "Already selected" : "Unknown"
+      });
+      return;
+    }
+    
+    // Set processing flag to prevent double-clicks
+    setIsProcessing(true);
+    setClickCount(prev => prev + 1);
+    
+    // Update local state immediately for responsive UI
+    setLocalAnswer(option);
+    setClickDebugMsg(`Clicked: ${option} at ${new Date().toLocaleTimeString()}`);
+    
+    console.log("Processing answer selection:", option);
+    
+    // Call the parent handler
     handleSelectAnswer(option);
     
-    // Reset processing flag after a short delay
+    // Reset processing flag after a delay
     setTimeout(() => {
-      processingRef.current = false;
+      setIsProcessing(false);
     }, 500);
   };
   
-  // Fallback direct DOM click handler as a backup
+  // Direct DOM click handler as a backup strategy
   useEffect(() => {
-    if (!containerRef.current || !trackingEnabled) return;
+    if (!containerRef.current) return;
     
     const handleClickCapture = (e: MouseEvent) => {
-      // Only process if we haven't selected yet
-      if (localAnswer !== null || timeLeft <= 0 || isAnswerRevealed) return;
+      if (isProcessing || isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) return;
       
       const target = e.target as HTMLElement;
       const optionElement = target.closest('[data-option]');
@@ -97,16 +108,17 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       if (optionElement) {
         const option = optionElement.getAttribute('data-option');
         if (option) {
+          console.log("Direct DOM click captured on:", option);
           e.preventDefault();
           e.stopPropagation();
           
-          console.log("Direct DOM click captured on option:", option);
-          selectAnswerOption(option);
+          // Use the same handler for consistency
+          handleOptionClick(option);
         }
       }
     };
     
-    // Use capturing phase to get the event before React
+    // Use capturing phase to get events before React
     containerRef.current.addEventListener('click', handleClickCapture, { capture: true });
     
     return () => {
@@ -114,7 +126,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         containerRef.current.removeEventListener('click', handleClickCapture, { capture: true });
       }
     };
-  }, [localAnswer, timeLeft, isAnswerRevealed, trackingEnabled]);
+  }, [isProcessing, isAnswerRevealed, timeLeft, localAnswer]);
   
   // Ensure we have a valid question
   if (!currentQuestion || !currentQuestion.options) {
@@ -125,18 +137,19 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     <main 
       className="flex-1 p-4 overflow-auto bg-gradient-to-b from-[#2B2464] to-[#1A1740]"
       ref={containerRef}
+      data-testid="player-game-main"
     >
       <div className="card-trivia p-6 mb-6 shadow-lg rounded-xl bg-gradient-to-r from-indigo-600/30 to-purple-600/30 border border-indigo-500/40">
         <h2 className="text-xl font-bold mb-4 text-white">{currentQuestion.text}</h2>
         
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
-            // Determine if this option is selected either via local or parent state
+            // Determine if this option is selected
             const isSelected = option === localAnswer || option === selectedAnswer;
             
+            // Define button classes based on state
             let buttonClasses = "p-5 rounded-lg text-left transition-all duration-300 relative cursor-pointer";
             
-            // Add proper visual state
             if (isAnswerRevealed) {
               if (option === currentQuestion.correctAnswer) {
                 buttonClasses += " correct-answer bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-lg";
@@ -161,7 +174,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                 data-testid={`answer-option-${index}`}
                 data-option={option}
                 data-index={index}
-                onClick={() => selectAnswerOption(option)}
+                onClick={() => handleOptionClick(option)}
                 role="button"
                 tabIndex={0}
                 aria-selected={isSelected}
@@ -217,9 +230,9 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       
       {/* Debug information */}
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
-        <p>Debug: Last Click: {debugMsg || 'None'}</p>
+        <p>Debug: Last Click: {clickDebugMsg || 'None'}</p>
         <p>Selected: {selectedAnswer || 'None'} | Local: {localAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        <p>Click Count: {clickCount} | Processing: {String(processingRef.current)} | State: {currentGameState}</p>
+        <p>Click Count: {clickCount} | Processing: {String(isProcessing)} | State: {currentGameState}</p>
       </div>
       
       {/* Dev tools */}
@@ -228,8 +241,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
           handleForceSync={handleForceSync} 
           onForceTimer={() => {
             // Reset processing flag in case it's stuck
-            processingRef.current = false;
-            setTrackingEnabled(true);
+            setIsProcessing(false);
             
             // Clear local storage state to force reset
             localStorage.removeItem('gameState');
@@ -262,9 +274,8 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         />
       )}
       
-      {/* CSS for styling the component */}
-      <style>
-        {`
+      {/* CSS styles for animations and transitions */}
+      <style dangerouslySetInnerHTML={{ __html: `
         .selectable-answer:active {
           transform: scale(0.98);
           box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
@@ -282,8 +293,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         .unselected-answer {
           opacity: 0.8;
         }
-        `}
-      </style>
+      `}} />
     </main>
   );
 };
