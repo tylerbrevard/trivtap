@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Wifi } from 'lucide-react';
 import { Button } from "@/components/ui/button";
 
@@ -18,6 +18,26 @@ export const IntermissionDisplay = ({
   showWinnerSlide,
   currentSlideIndex
 }: IntermissionDisplayProps) => {
+  // Broadcast information about the current slide to ensure consistency
+  useEffect(() => {
+    const slideInfo = {
+      state: 'intermission',
+      slideIndex: currentSlideIndex,
+      timestamp: Date.now() + 5000,
+      definitiveTruth: true,
+      isWinnerSlide: showWinnerSlide && currentSlideIndex === 0,
+      hasCustomSlides: currentSlide !== null
+    };
+    
+    localStorage.setItem('current_intermission_slide', JSON.stringify(slideInfo));
+    
+    window.dispatchEvent(new CustomEvent('intermissionSlideUpdated', { 
+      detail: slideInfo
+    }));
+    
+    console.log('Broadcasting current intermission slide info:', slideInfo);
+  }, [currentSlide, currentSlideIndex, showWinnerSlide]);
+
   const renderWinnerSlide = () => {
     return (
       <div className="flex flex-col items-center justify-center h-full text-center">
@@ -96,6 +116,15 @@ export const IntermissionDisplay = ({
           <h2 className="text-3xl font-bold mb-4">Welcome to Trivia Night!</h2>
           <p className="text-xl mb-6">The next question will be coming up shortly...</p>
         </div>
+        
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
+            <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+            <Button variant="outline" size="sm" onClick={onManualNext}>
+              Force Next Question
+            </Button>
+          </div>
+        )}
       </div>
     );
   }

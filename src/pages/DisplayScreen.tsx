@@ -260,7 +260,15 @@ const DisplayScreen = () => {
           try {
             const gameState = JSON.parse(gameStateStr);
             gameState.slidesIndex = nextIndex;
+            gameState.timestamp = Date.now() + 5000;
             localStorage.setItem('gameState', JSON.stringify(gameState));
+            
+            window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+              detail: {
+                ...gameState,
+                slideChanged: true
+              }
+            }));
           } catch (error) {
             console.error('Error updating game state with new slide index:', error);
           }
@@ -635,12 +643,17 @@ const DisplayScreen = () => {
         setAnswerRevealTimeoutId(null);
       }
       
+      const answerDuration = gameSettings.answerRevealDuration || 5;
+      console.log(`Setting answer reveal duration to ${answerDuration} seconds`);
+      
       if (process.env.NODE_ENV !== 'development' && questions.length > 0) {
         const timeout = window.setTimeout(() => {
           if (currentState === 'answer') {
+            console.log('Answer reveal time is up, moving to next question');
             handleManualNextQuestion();
           }
-        }, (gameSettings.answerRevealDuration || 5) * 1000);
+        }, answerDuration * 1000);
+        
         setAnswerRevealTimeoutId(timeout);
       }
     }
