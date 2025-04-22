@@ -29,105 +29,59 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   hasDevTools,
   handleForceSync,
 }) => {
-  // Track button clicks for debugging
-  const [lastClickTime, setLastClickTime] = useState<number>(0);
-  const [clickDebugInfo, setClickDebugInfo] = useState<string>("");
+  // Simplified approach with direct state management
+  const [internalSelected, setInternalSelected] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string>("");
+  const [buttonClicked, setButtonClicked] = useState<number | null>(null);
   
-  // Use local state for immediate visual feedback
-  const [localSelectedAnswer, setLocalSelectedAnswer] = useState<string | null>(null);
-  
-  // Click count for debugging stuck clicks
-  const [clickCount, setClickCount] = useState<number>(0);
-  
-  // Use refs to track click status
-  const clicksRef = useRef<Record<string, number>>({});
-  const processingClickRef = useRef<boolean>(false);
-  
-  // Debug log to verify props being received
+  // Force update on props change
   useEffect(() => {
-    console.log("PlayerGameMain props update:", { 
-      currentQuestion: currentQuestion?.text,
-      selectedAnswer, 
-      localSelectedAnswer,
-      isAnswerRevealed, 
-      timeLeft,
-      timeLeftType: typeof timeLeft,
-      clickCount
-    });
-  }, [currentQuestion, selectedAnswer, localSelectedAnswer, isAnswerRevealed, timeLeft, clickCount]);
-
-  // Sync local selection with parent component selection
-  useEffect(() => {
-    setLocalSelectedAnswer(selectedAnswer);
+    setInternalSelected(selectedAnswer);
   }, [selectedAnswer]);
   
-  // Reset local state when question changes
+  // Reset when question changes
   useEffect(() => {
     if (currentQuestion) {
-      console.log("New question detected, resetting local state");
-      setLocalSelectedAnswer(null);
-      setClickCount(0);
-      clicksRef.current = {};
-      processingClickRef.current = false;
+      console.log("New question detected, resetting internal state");
+      setInternalSelected(null);
+      setButtonClicked(null);
+      setDebugInfo("");
     }
   }, [currentQuestion?.text]);
-
-  // Function to handle click on answer buttons with improved logging and guarantees
-  const onAnswerClick = (option: string, index: number) => {
-    // Record click timestamp
-    const now = Date.now();
-    setLastClickTime(now);
+  
+  // Direct click handler with immediate visual feedback
+  const handleDirectClick = (option: string, index: number) => {
+    // Log the click event for debugging
+    const clickTime = new Date().toLocaleTimeString();
+    const logMessage = `CLICK: Answer ${option} (index: ${index}) at ${clickTime}. Time left: ${timeLeft}s, Selected: ${selectedAnswer || 'None'}`;
+    console.log(logMessage);
+    setDebugInfo(logMessage);
     
-    // Increment click counter (for debugging)
-    setClickCount(prev => prev + 1);
+    // Set internal selection for immediate feedback
+    setInternalSelected(option);
+    setButtonClicked(index);
     
-    // Track clicks per option
-    clicksRef.current[option] = (clicksRef.current[option] || 0) + 1;
-    
-    // Create detailed click log
-    const clickLog = `CLICK EVENT: Answer ${option} (index: ${index}) clicked at ${new Date(now).toLocaleTimeString()}. Time left: ${timeLeft}, Selected: ${selectedAnswer || 'None'}, Revealed: ${isAnswerRevealed ? 'Yes' : 'No'}, Click #${clicksRef.current[option]}`;
-    console.log(clickLog);
-    setClickDebugInfo(clickLog);
-    
-    // Set local selection for immediate visual feedback
-    setLocalSelectedAnswer(option);
-    
-    // Prevent multiple rapid clicks from causing issues
-    if (processingClickRef.current) {
-      console.log("Click processing in progress, waiting...");
-      
-      // Create a delayed call to ensure the click is processed
-      setTimeout(() => {
-        if (!selectedAnswer) {
-          console.log("Delayed click processing for:", option);
-          handleSelectAnswer(option);
-        }
-      }, 500);
-      
-      return;
-    }
-    
-    // Set processing flag
-    processingClickRef.current = true;
-    
-    // Call the handler to update parent state
-    console.log(`ATTEMPTING TO SELECT ANSWER: ${option}`);
-    handleSelectAnswer(option);
-    
-    // Force a DOM event to ensure click is registered
-    document.dispatchEvent(new CustomEvent('answerSelected', { 
-      detail: { option, index, timestamp: now, clickCount: clicksRef.current[option] } 
+    // Dispatch a custom event to aid debugging
+    document.dispatchEvent(new CustomEvent('answerClicked', { 
+      detail: { option, index, timestamp: Date.now() }
     }));
     
-    // Clear processing flag after a short delay
+    // Call the parent handler
+    handleSelectAnswer(option);
+    
+    // Update the UI to show the selection visually
     setTimeout(() => {
-      processingClickRef.current = false;
-    }, 300);
+      const buttons = document.querySelectorAll('[data-testid^="answer-option-"]');
+      buttons.forEach((btn, i) => {
+        if (i === index) {
+          btn.classList.add('answer-selected');
+        }
+      });
+    }, 50);
   };
 
   // Ensure we have a valid question object
   if (!currentQuestion || !currentQuestion.options) {
-    console.error("Invalid question data:", currentQuestion);
     return <div className="p-4">Loading question...</div>;
   }
 
@@ -137,57 +91,52 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         <h2 className="text-xl font-bold mb-4 text-white">{currentQuestion.text}</h2>
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
-            // Determine button styles based on selection state for better visual feedback
-            let buttonClass = "p-5 rounded-lg text-left transition-all";
+            // Determine button appearance based on state
+            let buttonClass = "p-5 rounded-lg text-left transition-all duration-200";
             
-            // Base style for all buttons - brighter and more engaging
-            if (localSelectedAnswer === option || selectedAnswer === option) {
-              // Selected but not revealed - make this state very visible
-              buttonClass += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md cursor-pointer animate-pulse";
-              
-              if (isAnswerRevealed) {
-                // Revealed and selected
-                buttonClass = option === currentQuestion.correctAnswer
-                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md"
-                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+            if (isAnswerRevealed) {
+              // Answer is revealed - show correct/incorrect states
+              if (option === currentQuestion.correctAnswer) {
+                buttonClass += " bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
+              } else if (option === internalSelected || option === selectedAnswer) {
+                buttonClass += " bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+              } else {
+                buttonClass += " bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
               }
-            } else if (isAnswerRevealed && option === currentQuestion.correctAnswer) {
-              // Correct answer when revealed
-              buttonClass += " bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
             } else {
-              // Default state (not selected)
-              buttonClass += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg cursor-pointer";
+              // Answer not revealed - show selection state
+              if ((option === internalSelected || option === selectedAnswer) || buttonClicked === index) {
+                buttonClass += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
+              } else {
+                buttonClass += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg cursor-pointer";
+              }
             }
             
-            // Add active state for immediate feedback
-            buttonClass += " active:scale-[0.98] active:bg-[#8B5CF6]";
+            // Add active state and transform for tactile feedback
+            buttonClass += " active:scale-[0.98] active:shadow-inner";
             
             const isDisabled = isAnswerRevealed || timeLeft <= 0;
             
             return (
               <button
                 key={index}
+                className={buttonClass}
                 onClick={(e) => {
-                  // Prevent default to ensure the click is captured
                   e.preventDefault();
                   e.stopPropagation();
                   
-                  // Only allow clicks when appropriate
                   if (!isAnswerRevealed && timeLeft > 0) {
-                    onAnswerClick(option, index);
+                    handleDirectClick(option, index);
                   } else {
-                    console.log("Click ignored - answer revealed or time up:", {
-                      isAnswerRevealed,
-                      timeLeft
-                    });
+                    console.log("Click ignored - answer revealed or time up");
                   }
                 }}
-                className={buttonClass}
                 type="button"
                 data-option={option}
                 data-index={index}
                 data-testid={`answer-option-${index}`}
                 data-clickable={!isDisabled ? "true" : "false"}
+                data-selected={option === internalSelected || option === selectedAnswer ? "true" : "false"}
                 disabled={isDisabled}
               >
                 <div className="flex items-center">
@@ -195,7 +144,9 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                     {String.fromCharCode(65 + index)}
                   </span>
                   <span className="text-white font-medium text-lg">{option}</span>
-                  {(localSelectedAnswer === option || selectedAnswer === option) && (
+                  
+                  {/* Selection indicator */}
+                  {((option === internalSelected || option === selectedAnswer) || buttonClicked === index) && (
                     <span className="ml-auto">
                       <Check className="h-6 w-6 text-white" />
                     </span>
@@ -237,12 +188,11 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         </div>
       )}
       
-      {/* Enhanced debugging info with more details */}
+      {/* Simplified debug info */}
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
-        <p>Debug: Last Click: {lastClickTime > 0 ? new Date(lastClickTime).toLocaleTimeString() : 'None'}</p>
-        <p>Selected: {selectedAnswer || 'None'} | Local: {localSelectedAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        <p>Click Count: {clickCount} | Processing: {processingClickRef.current ? 'Yes' : 'No'}</p>
-        {clickDebugInfo && <p className="text-orange-200">Last click: {clickDebugInfo}</p>}
+        <p>Status: {internalSelected ? `Selected "${internalSelected}"` : 'No selection'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
+        {buttonClicked !== null && <p>Button clicked: Option {String.fromCharCode(65 + buttonClicked)}</p>}
+        {debugInfo && <p className="text-orange-200">{debugInfo}</p>}
       </div>
       
       {hasDevTools && handleForceSync && (

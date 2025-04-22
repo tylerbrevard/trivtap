@@ -49,7 +49,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
       {timeLeft > 0 && (
         <div className="w-full h-2 bg-indigo-900/50 rounded-full mt-3 overflow-hidden shadow-inner">
           <div 
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000"
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
             style={{ width: `${(timeLeft / 30) * 100}%` }}
           ></div>
         </div>
