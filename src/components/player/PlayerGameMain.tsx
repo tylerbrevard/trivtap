@@ -1,5 +1,5 @@
 
-import React from "react";
+import React, { useEffect } from "react";
 import { Trophy, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PlayerGameDevTools from "./PlayerGameDevTools";
@@ -29,9 +29,19 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   hasDevTools,
   handleForceSync,
 }) => {
+  // Debug log to verify props being received
+  useEffect(() => {
+    console.log("PlayerGameMain props:", { 
+      currentQuestion: currentQuestion?.text, 
+      selectedAnswer, 
+      isAnswerRevealed, 
+      timeLeft 
+    });
+  }, [currentQuestion, selectedAnswer, isAnswerRevealed, timeLeft]);
+
   // Function to handle click on answer buttons
   const onAnswerClick = (option: string) => {
-    console.log("Answer clicked:", option);
+    console.log("Answer clicked:", option, "Time left:", timeLeft, "Selected:", selectedAnswer, "Revealed:", isAnswerRevealed);
     // Only allow answer selection if no answer is already selected, answer is not revealed, and there's time left
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
       handleSelectAnswer(option);
@@ -53,8 +63,8 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             // Determine the button class based on selection and answer state
             let buttonClass = "p-5 rounded-lg text-left transition-all transform hover:scale-[1.02] ";
             
-            // Base style for all buttons
-            buttonClass += "bg-gradient-to-r from-[#7E69AB]/80 to-[#9B87F5]/80 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/50 text-white shadow-lg ";
+            // Base style for all buttons - brighter and more engaging
+            buttonClass += "bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg ";
             
             // Add specific styles based on selection state
             if (selectedAnswer === option) {
@@ -72,19 +82,12 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
               buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
             }
             
-            // Add disabled styling if needed
-            if (selectedAnswer !== null || timeLeft === 0 || isAnswerRevealed) {
-              buttonClass += " opacity-80";
-            } else {
-              buttonClass += " cursor-pointer active:scale-[0.98]";
-            }
-            
             return (
               <button
                 key={index}
                 onClick={() => onAnswerClick(option)}
-                disabled={selectedAnswer !== null || timeLeft === 0 || isAnswerRevealed}
                 className={buttonClass}
+                type="button"
               >
                 <div className="flex items-center">
                   <span className="mr-4 text-white font-bold flex items-center justify-center h-10 w-10 rounded-full bg-[#8B5CF6]/50 shadow-inner">

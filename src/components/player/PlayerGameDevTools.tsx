@@ -16,7 +16,11 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
       <Button 
         variant="outline" 
         size="sm" 
-        onClick={handleForceSync}
+        onClick={(e) => {
+          e.preventDefault();
+          console.log("Force sync button clicked");
+          handleForceSync();
+        }}
         className="flex items-center gap-1 bg-indigo-800/50 hover:bg-indigo-700/50 border-purple-500/50 text-purple-200"
       >
         <RefreshCw className="h-4 w-4 mr-1" />
@@ -25,7 +29,9 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
       <Button
         variant="outline"
         size="sm"
-        onClick={() => {
+        onClick={(e) => {
+          e.preventDefault();
+          console.log("Reset game button clicked");
           localStorage.removeItem("gameState");
           window.location.reload();
         }}
