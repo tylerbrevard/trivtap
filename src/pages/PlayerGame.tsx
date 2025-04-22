@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from "@/components/ui/button";
@@ -9,6 +8,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
 import { baseStaticQuestions, getAllAvailableQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion } from '@/utils/staticQuestions';
 import { recoverFromDisplayTruth } from '@/utils/gameStateUtils';
+import PlayerGameHeader from "@/components/player/PlayerGameHeader";
+import PlayerGameMain from "@/components/player/PlayerGameMain";
+import PlayerGameStatus from "@/components/player/PlayerGameStatus";
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -814,173 +816,57 @@ const PlayerGame = () => {
   
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-        <div className="card-trivia p-8 max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold mb-4">Loading Game...</h2>
-          <p className="text-lg mb-6">Please wait while we load your trivia game.</p>
-        </div>
-      </div>
+      <PlayerGameStatus state="loading" score={score} isRegistered={isRegistered} />
     );
   }
-  
-  if (currentGameState === 'intermission' || currentGameState === 'leaderboard') {
+
+  if (currentGameState === "intermission" || currentGameState === "leaderboard") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-        <div className="card-trivia p-8 max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold mb-4">
-            {currentGameState === 'intermission' ? 'Intermission' : 'Leaderboard'}
-          </h2>
-          <p className="text-lg mb-6">The next question will appear shortly...</p>
-          <div className="bg-muted p-4 rounded-md">
-            <p className="text-md font-medium">Your Score</p>
-            <p className="text-2xl font-bold text-primary">{score}</p>
-            {isRegistered && (
-              <p className="text-sm text-muted-foreground mt-2">
-                Your score will be saved to your account
-              </p>
-            )}
-          </div>
-          
-          {process.env.NODE_ENV === 'development' && (
-            <Button variant="outline" size="sm" onClick={handleForceSync} className="mt-4">
-              Force Sync
-            </Button>
-          )}
-        </div>
-      </div>
+      <PlayerGameStatus
+        state={currentGameState}
+        score={score}
+        isRegistered={isRegistered}
+        onForceSync={handleForceSync}
+      />
     );
   }
-  
+
   if (!currentQuestion) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-        <div className="card-trivia p-8 max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold mb-4">Waiting for Game...</h2>
-          <p className="text-lg mb-6">The host will start the game shortly.</p>
-          
-          {process.env.NODE_ENV === 'development' && (
-            <Button variant="outline" size="sm" onClick={handleForceSync} className="mt-4">
-              Force Sync
-            </Button>
-          )}
-        </div>
-      </div>
+      <PlayerGameStatus
+        state="waiting"
+        score={score}
+        isRegistered={isRegistered}
+        onForceSync={handleForceSync}
+      />
     );
   }
-  
-  if (showTimeUp && timeLeft === 0 && !isAnswerRevealed && currentGameState === 'question') {
+
+  if (showTimeUp && timeLeft === 0 && !isAnswerRevealed && currentGameState === "question") {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
-        <div className="card-trivia p-8 max-w-md w-full text-center">
-          <h2 className="text-2xl font-bold mb-4">Time's Up!</h2>
-          <p className="text-lg mb-6">The next question will appear shortly...</p>
-          <div className="bg-muted p-4 rounded-md">
-            <p className="text-md font-medium">Your Score</p>
-            <p className="text-2xl font-bold text-primary">{score}</p>
-          </div>
-        </div>
-      </div>
+      <PlayerGameStatus state="timeup" score={score} isRegistered={isRegistered} />
     );
   }
-  
+
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <header className="p-4 border-b border-border">
-        <div className="flex justify-between items-center">
-          <h1 className="text-xl font-bold text-primary">Question {questionIndex + 1}</h1>
-          <div className="flex items-center gap-2">
-            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full">
-              <span className="font-medium">Score: {score}</span>
-            </div>
-            <div className="flex items-center gap-1 text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>{timeLeft || 0}s</span>
-            </div>
-          </div>
-        </div>
-      </header>
-      
-      <main className="flex-1 p-4 overflow-auto">
-        <div className="card-trivia p-6 mb-6">
-          <h2 className="text-xl font-medium mb-4">{currentQuestion.text}</h2>
-          
-          <div className="grid grid-cols-1 gap-3 mt-4">
-            {currentQuestion.options && currentQuestion.options.map((option: string, index: number) => (
-              <button
-                key={index}
-                onClick={() => handleSelectAnswer(option)}
-                disabled={selectedAnswer !== null || timeLeft === 0 || isAnswerRevealed}
-                className={`p-4 rounded-lg text-left transition ${
-                  selectedAnswer === option 
-                    ? isAnswerRevealed
-                      ? option === currentQuestion.correctAnswer
-                        ? 'bg-green-100 border-green-500 border-2'
-                        : 'bg-red-100 border-red-500 border-2'
-                      : 'bg-primary/20 border-primary border-2'
-                    : isAnswerRevealed && option === currentQuestion.correctAnswer
-                      ? 'bg-green-100 border-green-500 border-2'
-                      : 'bg-card hover:bg-primary/10 border border-border'
-                } ${
-                  timeLeft === 0 || isAnswerRevealed ? 'cursor-default' : 'cursor-pointer'
-                }`}
-              >
-                <div className="flex items-start">
-                  <span className="mr-3 text-muted-foreground">{String.fromCharCode(65 + index)}.</span>
-                  <span>{option}</span>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-        
-        {isAnswerRevealed && (
-          <div className={`p-4 rounded-lg mb-4 ${
-            answeredCorrectly ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-          }`}>
-            <div className="flex items-start">
-              <div className="mr-3">
-                {answeredCorrectly ? (
-                  <Trophy className="h-6 w-6" />
-                ) : (
-                  <AlertTriangle className="h-6 w-6" />
-                )}
-              </div>
-              <div>
-                <p className="font-medium">
-                  {answeredCorrectly ? 'Correct!' : 'Incorrect'}
-                </p>
-                <p className="text-sm">
-                  {answeredCorrectly 
-                    ? `You earned ${pendingPoints > 0 ? pendingPoints : score - (score - pendingPoints)} points!` 
-                    : `The correct answer was: ${currentQuestion.correctAnswer}`
-                  }
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-        
-        {process.env.NODE_ENV === 'development' && (
-          <div className="mt-4 border border-dashed border-gray-300 p-3 rounded-md">
-            <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={handleForceSync}>
-                Force Sync
-              </Button>
-              <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={() => {
-                  localStorage.removeItem('gameState');
-                  window.location.reload();
-                }}
-              >
-                Reset Game
-              </Button>
-            </div>
-          </div>
-        )}
-      </main>
+      <PlayerGameHeader
+        questionIndex={questionIndex}
+        score={score}
+        timeLeft={timeLeft}
+      />
+      <PlayerGameMain
+        currentQuestion={currentQuestion}
+        selectedAnswer={selectedAnswer}
+        isAnswerRevealed={isAnswerRevealed}
+        answeredCorrectly={answeredCorrectly}
+        pendingPoints={pendingPoints}
+        score={score}
+        timeLeft={timeLeft}
+        handleSelectAnswer={handleSelectAnswer}
+        hasDevTools={process.env.NODE_ENV === "development"}
+        handleForceSync={handleForceSync}
+      />
     </div>
   );
 };
