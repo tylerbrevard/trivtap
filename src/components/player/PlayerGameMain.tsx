@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from "react";
-import { Trophy, AlertTriangle } from "lucide-react";
+import { Trophy, AlertTriangle, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PlayerGameDevTools from "./PlayerGameDevTools";
 
@@ -31,6 +31,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
 }) => {
   // Track button clicks for debugging
   const [lastClickTime, setLastClickTime] = useState<number>(0);
+  const [clickDebugInfo, setClickDebugInfo] = useState<string>("");
   
   // Debug log to verify props being received
   useEffect(() => {
@@ -42,19 +43,29 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     });
   }, [currentQuestion, selectedAnswer, isAnswerRevealed, timeLeft]);
 
-  // Function to handle click on answer buttons - completely rewritten
-  const onAnswerClick = (option: string) => {
+  // Function to handle click on answer buttons with improved logging and error handling
+  const onAnswerClick = (option: string, index: number) => {
     // Record click time and log details
     const now = Date.now();
     setLastClickTime(now);
-    console.log(`CLICK EVENT: Answer ${option} clicked at ${now}. Time left: ${timeLeft}, Selected: ${selectedAnswer}, Revealed: ${isAnswerRevealed}`);
     
-    // Only allow answer selection if no answer is already selected, answer is not revealed, and there's time left
-    if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
-      console.log(`ATTEMPTING TO SELECT ANSWER: ${option}`);
-      handleSelectAnswer(option);
-    } else {
-      console.log(`ANSWER SELECTION BLOCKED. Reason: ${selectedAnswer !== null ? 'Already answered' : isAnswerRevealed ? 'Answer revealed' : 'No time left'}`);
+    const clickLog = `CLICK EVENT: Answer ${option} (index: ${index}) clicked at ${new Date(now).toLocaleTimeString()}. Time left: ${timeLeft}, Selected: ${selectedAnswer || 'None'}, Revealed: ${isAnswerRevealed ? 'Yes' : 'No'}`;
+    console.log(clickLog);
+    setClickDebugInfo(clickLog);
+    
+    // Always attempt to select the answer, and log what happens
+    console.log(`ATTEMPTING TO SELECT ANSWER: ${option}`);
+    
+    // Call the handler directly without conditions - we'll let the parent component decide
+    // if the selection is valid based on game state
+    handleSelectAnswer(option);
+    
+    // Give visual feedback by highlighting the button temporarily even if not actually selected
+    if (selectedAnswer === null && !isAnswerRevealed) {
+      const visualFeedbackEvent = new CustomEvent('answerClicked', { 
+        detail: { option, timeStamp: now } 
+      });
+      window.dispatchEvent(visualFeedbackEvent);
     }
   };
 
@@ -71,33 +82,29 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
             // Determine the button class based on selection and answer state
-            let buttonClass = "p-5 rounded-lg text-left transition-all cursor-pointer ";
+            let buttonClass = "p-5 rounded-lg text-left transition-all";
             
             // Base style for all buttons - brighter and more engaging
-            buttonClass += "bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg ";
+            buttonClass += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg ";
             
             // Add specific styles based on selection state
             if (selectedAnswer === option) {
               if (isAnswerRevealed) {
                 // Revealed and selected
                 buttonClass = option === currentQuestion.correctAnswer
-                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md cursor-default"
-                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md cursor-default";
+                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md"
+                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
               } else {
                 // Selected but not revealed
-                buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md cursor-default";
+                buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md";
               }
             } else if (isAnswerRevealed && option === currentQuestion.correctAnswer) {
               // Correct answer when revealed
-              buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md cursor-default";
+              buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
             }
             
-            // Add active state for better feedback
-            if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
-              buttonClass += " active:scale-[0.98] active:bg-[#8B5CF6]";
-            } else {
-              buttonClass += " opacity-90 pointer-events-auto"; // Still allow clicks for better UX but style differently
-            }
+            // Add active state for better feedback - always active for better UX
+            buttonClass += " active:scale-[0.98] active:bg-[#8B5CF6]";
             
             return (
               <button
@@ -105,13 +112,11 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                 onClick={(e) => {
                   // Stop any potential event propagation issues
                   e.stopPropagation();
-                  onAnswerClick(option);
+                  e.preventDefault();
+                  onAnswerClick(option, index);
                 }}
                 className={buttonClass}
-                // Important: Changed from type="button" to role="button" for better accessibility
-                role="button"
-                aria-pressed={selectedAnswer === option}
-                // Using data attributes for debugging
+                type="button"
                 data-option={option}
                 data-index={index}
                 data-testid={`answer-option-${index}`}
@@ -121,6 +126,11 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                     {String.fromCharCode(65 + index)}
                   </span>
                   <span className="text-white font-medium text-lg">{option}</span>
+                  {selectedAnswer === option && !isAnswerRevealed && (
+                    <span className="ml-auto">
+                      <Check className="h-6 w-6 text-white animate-pulse" />
+                    </span>
+                  )}
                 </div>
               </button>
             );
@@ -157,11 +167,12 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         </div>
       )}
       
-      {/* Debugging info displayed only in development mode */}
+      {/* Enhanced debugging info with more details */}
       {process.env.NODE_ENV === "development" && (
         <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
           <p>Debug: Last Click: {lastClickTime > 0 ? new Date(lastClickTime).toLocaleTimeString() : 'None'}</p>
           <p>Selected: {selectedAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
+          {clickDebugInfo && <p className="text-orange-200">Last click: {clickDebugInfo}</p>}
         </div>
       )}
       
