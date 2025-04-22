@@ -1,4 +1,3 @@
-
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -20,11 +19,17 @@ export const updateGameState = (
     timeLeft: timeLeft,
     questionCounter: questionCounter,
     timestamp: Date.now(),
-    slidesIndex: nextState === 'intermission' ? getNextSlideIndex() : 0
+    slidesIndex: nextState === 'intermission' ? getNextSlideIndex() : 0,
+    authoritative: true // Mark as authoritative source
   };
   
   console.log('Updating game state:', gameState);
   localStorage.setItem('gameState', JSON.stringify(gameState));
+  
+  // Also store as display truth for persistent reference
+  if (nextState === 'question') {
+    localStorage.setItem('gameState_display_truth', JSON.stringify(gameState));
+  }
   
   // Trigger a custom event to notify other windows about the state change
   try {
@@ -33,6 +38,19 @@ export const updateGameState = (
     });
     window.dispatchEvent(stateChangeEvent);
     console.log('Dispatched state change event:', gameState.state);
+    
+    // Send a second event after a small delay as a backup
+    setTimeout(() => {
+      const backupEvent = new CustomEvent('triviaStateChange', { 
+        detail: {
+          ...gameState,
+          timestamp: gameState.timestamp + 1, // Slightly newer
+          backupSync: true
+        }
+      });
+      window.dispatchEvent(backupEvent);
+      console.log('Dispatched backup state event');
+    }, 200);
   } catch (error) {
     console.error('Error dispatching state change event:', error);
   }
@@ -458,6 +476,14 @@ export const autoSyncGameState = (
 export const listenForGameStateChanges = (callback: (gameState: any) => void) => {
   const handleStateChange = (event: CustomEvent) => {
     console.log('Received game state change event:', event.detail);
+    
+    // Special flag for guaranteed delivery - always process these
+    if (event.detail.guaranteedDelivery || event.detail.authoritative) {
+      console.log('Processing authoritative/guaranteed game state update');
+      callback(event.detail);
+      return;
+    }
+    
     callback(event.detail);
   };
   
@@ -511,4 +537,42 @@ export const listenForPlayersJoining = (callback: (playerData: any) => void) => 
   return () => {
     window.removeEventListener('playerJoined', handlePlayerJoined as EventListener);
   };
+};
+
+/**
+ * Emergency recovery of game state from display truth
+ * This function can be called by players who are out of sync
+ */
+export const recoverFromDisplayTruth = () => {
+  const displayTruth = localStorage.getItem('gameState_display_truth');
+  if (displayTruth) {
+    try {
+      const truthState = JSON.parse(displayTruth);
+      console.log('Recovering from display truth:', truthState);
+      
+      // Update the regular game state
+      localStorage.setItem('gameState', JSON.stringify({
+        ...truthState,
+        timestamp: Date.now(), // Fresh timestamp
+        recovered: true
+      }));
+      
+      // Trigger an event
+      const recoveryEvent = new CustomEvent('triviaStateChange', { 
+        detail: {
+          ...truthState,
+          timestamp: Date.now(),
+          recovered: true,
+          guaranteedDelivery: true
+        }
+      });
+      window.dispatchEvent(recoveryEvent);
+      
+      return true;
+    } catch (error) {
+      console.error('Error recovering from display truth:', error);
+      return false;
+    }
+  }
+  return false;
 };

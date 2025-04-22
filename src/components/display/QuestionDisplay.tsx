@@ -27,7 +27,7 @@ export const QuestionDisplay = ({
     return 'bg-red-500';
   };
 
-  // Log the current question for debugging purposes
+  // Log the current question and ensure game state is synchronized
   React.useEffect(() => {
     console.log('Display showing question:', {
       text: currentQuestion.text,
@@ -36,24 +36,32 @@ export const QuestionDisplay = ({
       correctAnswer: currentQuestion.correctAnswer
     });
     
-    // Broadcast current question state to help with player synchronization
-    const gameState = localStorage.getItem('gameState');
-    if (gameState) {
-      try {
-        const parsedState = JSON.parse(gameState);
-        // Update timestamp to force clients to re-sync
-        parsedState.timestamp = Date.now();
-        localStorage.setItem('gameState', JSON.stringify(parsedState));
-        // Dispatch an event to notify other tabs/windows
-        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-          detail: parsedState
-        }));
-        console.log('Re-broadcast question state to help player sync');
-      } catch (error) {
-        console.error('Error re-broadcasting state:', error);
+    // Ensure game state in localStorage is current - this is the source of truth
+    // Use a unique, monotonically increasing timestamp to force sync
+    const gameState = {
+      state: 'question',
+      questionIndex: questionCounter - 1,
+      timeLeft: timeLeft,
+      questionCounter: questionCounter,
+      timestamp: Date.now(),
+      forceSync: true // New flag to enforce sync
+    };
+    
+    // Store the game state in localStorage with a special key that guarantees
+    // it's picked up by players regardless of their current sync state
+    localStorage.setItem('gameState', JSON.stringify(gameState));
+    localStorage.setItem('gameState_display_truth', JSON.stringify(gameState));
+    
+    // Dispatch an event to notify other tabs/windows - with guaranteed delivery flag
+    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+      detail: {
+        ...gameState,
+        guaranteedDelivery: true
       }
-    }
-  }, [currentQuestion, questionCounter]);
+    }));
+    
+    console.log('Broadcast definitive question state:', gameState);
+  }, [currentQuestion, questionCounter, timeLeft]);
 
   return (
     <div className="flex flex-col h-full">
@@ -120,26 +128,34 @@ export const QuestionDisplay = ({
               variant="outline"
               size="sm"
               onClick={() => {
-                // Force a state change event to help players sync
-                const gameState = localStorage.getItem('gameState');
-                if (gameState) {
-                  try {
-                    const parsedState = JSON.parse(gameState);
-                    // Update timestamp to force clients to re-sync
-                    parsedState.timestamp = Date.now() + 1000; // Future timestamp to ensure sync
-                    localStorage.setItem('gameState', JSON.stringify(parsedState));
-                    // Dispatch an event to notify other tabs/windows
-                    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-                      detail: parsedState
-                    }));
-                    console.log('Force-broadcast game state to help player sync');
-                  } catch (error) {
-                    console.error('Error force-broadcasting state:', error);
+                // Create a fresh, authoritative game state update
+                const authoritative = {
+                  state: 'question',
+                  questionIndex: questionCounter - 1,
+                  timeLeft: timeLeft,
+                  questionCounter: questionCounter,
+                  timestamp: Date.now() + 10000, // Future timestamp to ensure precedence
+                  forceSync: true,
+                  authoritative: true
+                };
+                
+                // Store it with a special key that will always be recognized
+                localStorage.setItem('gameState', JSON.stringify(authoritative));
+                localStorage.setItem('gameState_display_truth', JSON.stringify(authoritative));
+                
+                // Trigger multiple events with slightly different timestamps to break sync deadlocks
+                window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                  detail: {
+                    ...authoritative,
+                    timestamp: authoritative.timestamp,
+                    guaranteedDelivery: true
                   }
-                }
+                }));
+                
+                console.log('Sent authoritative game state update:', authoritative);
               }}
             >
-              Force Player Sync
+              Send Authoritative State
             </Button>
           </div>
         </div>

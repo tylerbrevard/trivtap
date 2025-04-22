@@ -7,6 +7,7 @@ import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
 import { baseStaticQuestions, getAllAvailableQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion } from '@/utils/staticQuestions';
+import { recoverFromDisplayTruth } from '@/utils/gameStateUtils';
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -39,7 +40,6 @@ const PlayerGame = () => {
       try {
         setLoading(true);
         
-        // Get the same set of questions that the display is using
         const allQuestions = await getAllAvailableQuestions();
         const formattedQuestions = formatQuestionsForGame(allQuestions, gameSettings.questionDuration);
         
@@ -47,23 +47,19 @@ const PlayerGame = () => {
           console.log(`Loaded ${formattedQuestions.length} questions from all sources for player view`);
           setQuestions(formattedQuestions);
           
-          // Get the current game state from localStorage
           const gameState = localStorage.getItem('gameState');
           if (gameState) {
             const parsedState = JSON.parse(gameState);
             console.log('Found stored game state:', parsedState);
             
-            // Make sure we're syncing to the exact question index the display is showing
             const initialQuestionIndex = parsedState.questionIndex || 0;
             setQuestionIndex(initialQuestionIndex);
             
-            // Ensure we're showing the correct question based on that index
             if (formattedQuestions[initialQuestionIndex]) {
               setCurrentQuestion(formattedQuestions[initialQuestionIndex]);
               console.log('Set current question to:', formattedQuestions[initialQuestionIndex].text);
             } else {
               console.error('Question index out of bounds:', initialQuestionIndex, 'max:', formattedQuestions.length - 1);
-              // Fallback to first question if index is invalid
               setCurrentQuestion(formattedQuestions[0]);
             }
             
@@ -180,6 +176,31 @@ const PlayerGame = () => {
           const parsedState = JSON.parse(storedGameState);
           console.log('Checking game state:', parsedState);
           
+          if (parsedState.authoritative || parsedState.recovered || parsedState.guaranteedDelivery) {
+            console.log('Processing authoritative game state:', parsedState);
+            
+            setLastGameStateTimestamp(parsedState.timestamp);
+            setCurrentGameState(parsedState.state);
+            setQuestionIndex(parsedState.questionIndex);
+            setTimeLeft(parsedState.state === 'question' ? parsedState.timeLeft : 0);
+            
+            if (questions.length > 0 && parsedState.questionIndex >= 0 && parsedState.questionIndex < questions.length) {
+              setCurrentQuestion(questions[parsedState.questionIndex]);
+              console.log('Updated current question to:', questions[parsedState.questionIndex]?.text);
+            }
+            
+            setSelectedAnswer(null);
+            setHasSelectedAnswer(false);
+            setAnsweredCorrectly(null);
+            setIsAnswerRevealed(parsedState.state === 'answer');
+            setPendingPoints(0);
+            setPendingCorrect(false);
+            setShowTimeUp(false);
+            setFailedSyncAttempts(0);
+            
+            return;
+          }
+          
           if (!parsedState.timestamp || parsedState.timestamp <= lastGameStateTimestamp) {
             if (lastGameStateTimestamp > 0) {
               console.log('Game state is not newer, ignoring');
@@ -206,7 +227,6 @@ const PlayerGame = () => {
             
             if (questions.length > 0) {
               const newQuestionIndex = parsedState.questionIndex;
-              // Ensure the question index is within bounds
               if (newQuestionIndex >= 0 && newQuestionIndex < questions.length) {
                 const newQuestion = questions[newQuestionIndex];
                 setCurrentQuestion(newQuestion);
@@ -308,9 +328,19 @@ const PlayerGame = () => {
       }
     };
     
-    // Check game state more frequently to ensure better sync
     const intervalId = setInterval(checkGameState, 200);
-    return () => clearInterval(intervalId);
+    
+    const forceSyncIntervalId = setInterval(() => {
+      if (currentGameState === 'intermission' && failedSyncAttempts > 5) {
+        console.log('Periodic sync check - attempting recovery');
+        recoverFromDisplayTruth();
+      }
+    }, 5000);
+    
+    return () => {
+      clearInterval(intervalId);
+      clearInterval(forceSyncIntervalId);
+    };
   }, [questionIndex, isAnswerRevealed, lastGameStateTimestamp, failedSyncAttempts, questions, currentGameState, answeredCorrectly, pendingPoints, pendingCorrect, hasSelectedAnswer, score, playerName, gameId, isRegistered, correctAnswers, toast]);
   
   useEffect(() => {
@@ -326,7 +356,6 @@ const PlayerGame = () => {
           
           if (questions.length > 0) {
             const newIndex = gameState.questionIndex;
-            // Ensure index is valid
             if (newIndex >= 0 && newIndex < questions.length) {
               setCurrentQuestion(questions[newIndex]);
               console.log('Custom event updated question to:', questions[newIndex]?.text);
@@ -468,12 +497,12 @@ const PlayerGame = () => {
   };
   
   const handleForceSync = () => {
-    // Enhanced force sync that reloads questions
+    console.log('Manual force sync requested');
+    recoverFromDisplayTruth();
     setLastGameStateTimestamp(0);
     setFailedSyncAttempts(0);
     setShowTimeUp(false);
     
-    // Force reload questions to ensure we have the same questions as the display
     const reloadQuestions = async () => {
       try {
         const allQuestions = await getAllAvailableQuestions();
@@ -482,7 +511,6 @@ const PlayerGame = () => {
         if (formattedQuestions.length > 0) {
           setQuestions(formattedQuestions);
           
-          // Get the current game state
           const gameState = localStorage.getItem('gameState');
           if (gameState) {
             const parsedState = JSON.parse(gameState);
@@ -500,7 +528,7 @@ const PlayerGame = () => {
     
     toast({
       title: "Syncing",
-      description: "Forced sync with game state and reloaded questions",
+      description: "Recovering game state and reloading questions",
     });
   };
   
