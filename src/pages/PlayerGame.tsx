@@ -858,3 +858,16 @@ const PlayerGame = () => {
       {isAnswerRevealed && answeredCorrectly === true && (
         <div className="text-center mt-4 text-green-500 font-bold">
           Correct
+        </div>
+      )}
+      
+      {isAnswerRevealed && answeredCorrectly === false && (
+        <div className="text-center mt-4 text-red-500 font-bold">
+          Incorrect
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PlayerGame;
