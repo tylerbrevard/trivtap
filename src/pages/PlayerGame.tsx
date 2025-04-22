@@ -1,15 +1,14 @@
+
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import { Trophy, Clock, AlertTriangle } from 'lucide-react';
 import { gameSettings } from '@/utils/gameSettings';
 import { supabase } from "@/integrations/supabase/client";
 import { listenForGameStateChanges } from '@/utils/gameStateUtils';
-import { getAllAvailableQuestions, formatQuestionsForGame } from '@/utils/staticQuestions';
+import { baseStaticQuestions, getAllAvailableQuestions, getRandomQuestions, formatQuestionsForGame, StaticQuestion } from '@/utils/staticQuestions';
 import { recoverFromDisplayTruth } from '@/utils/gameStateUtils';
-import PlayerGameHeader from "@/components/player/PlayerGameHeader";
-import PlayerGameMain from "@/components/player/PlayerGameMain";
-import PlayerGameStatus from "@/components/player/PlayerGameStatus";
-import PlayerSyncManager from "@/components/player/PlayerSyncManager";
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -243,7 +242,7 @@ const PlayerGame = () => {
               console.log('Game state is not newer, ignoring');
               setFailedSyncAttempts(prev => prev + 1);
               
-              if (failedSyncAttempts > 5) { // Reduced from 10 to make synchronization more aggressive
+              if (failedSyncAttempts > 10) {
                 console.log('Multiple sync failures detected, resetting timestamp to accept any state');
                 setLastGameStateTimestamp(0);
                 setFailedSyncAttempts(0);
@@ -284,11 +283,10 @@ const PlayerGame = () => {
             setShowTimeUp(false);
           } 
           else if (newGameState === 'question') {
-            // Always update time when in question state to keep in sync with display
             setTimeLeft(parsedState.timeLeft);
             
             if (parsedState.timeLeft > 0) {
-              // Only reset answer state if time is still running
+              setAnsweredCorrectly(null);
               setShowTimeUp(false);
             } else if (parsedState.timeLeft === 0 && !isAnswerRevealed) {
               setShowTimeUp(true);
@@ -366,8 +364,7 @@ const PlayerGame = () => {
       }
     };
     
-    // Increase check frequency for more responsive updates
-    const intervalId = setInterval(checkGameState, 100); // Reduced from 200ms to 100ms
+    const intervalId = setInterval(checkGameState, 200);
     
     // More aggressive recovery for intermission states
     const forceSyncIntervalId = setInterval(() => {
@@ -746,54 +743,9 @@ const PlayerGame = () => {
   }, [currentGameState, isRegistered, registeredPlayerId, gameId, score, correctAnswers, questions.length, playerName]);
   
   const handleSelectAnswer = (answer: string) => {
-    console.log('PlayerGame handleSelectAnswer called with:', answer);
-    console.log('Current state:', {
-      selectedAnswer,
-      isAnswerRevealed,
-      timeLeft,
-      currentGameState
-    });
-    
-    // Only allow selection if no answer is already selected, answer not revealed, 
-    // time is still running, and we're in question state
-    if (selectedAnswer === null && 
-        !isAnswerRevealed && 
-        timeLeft > 0 && 
-        currentGameState === 'question') {
-      
+    if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
       console.log('Selected answer:', answer);
       setSelectedAnswer(answer);
-      setHasSelectedAnswer(true);
-      
-      // Check if answer is correct and calculate points immediately
-      if (currentQuestion && answer === currentQuestion.correctAnswer) {
-        const pointsEarned = 100 + (timeLeft * 10);
-        setPendingPoints(pointsEarned);
-        setPendingCorrect(true);
-        console.log('Stored pending points:', pointsEarned);
-      }
-      
-      // Broadcast selection for debugging and tracking
-      window.dispatchEvent(new CustomEvent('playerSelectedAnswer', { 
-        detail: { 
-          player: playerName,
-          answer,
-          timestamp: Date.now(),
-          question: currentQuestion?.text,
-          questionIndex,
-          timeLeft
-        }
-      }));
-      
-      // Force a call to onSync in case the question has changed
-      handleForceSync();
-    } else {
-      console.log('Answer selection ignored:', {
-        reason: selectedAnswer !== null ? 'Already selected' : 
-               isAnswerRevealed ? 'Answer revealed' : 
-               timeLeft <= 0 ? 'Time up' : 
-               currentGameState !== 'question' ? 'Not in question state' : 'Unknown'
-      });
     }
   };
   
@@ -825,23 +777,9 @@ const PlayerGame = () => {
         detail: {
           playerName,
           gameId,
-          timestamp: Date.now(),
-          urgent: true
+          timestamp: Date.now()
         }
       }));
-      
-      // Retry after a delay in case the first request fails
-      setTimeout(() => {
-        window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
-          detail: {
-            playerName,
-            gameId,
-            timestamp: Date.now(),
-            urgent: true,
-            retry: true
-          }
-        }));
-      }, 500);
     }
     
     // Reload questions
@@ -870,71 +808,181 @@ const PlayerGame = () => {
     
     toast({
       title: "Syncing",
-      description: "Recovering game state...",
+      description: "Recovering game state and reloading questions",
     });
   };
   
   if (loading) {
     return (
-      <PlayerGameStatus state="loading" score={score} isRegistered={isRegistered} />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="card-trivia p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold mb-4">Loading Game...</h2>
+          <p className="text-lg mb-6">Please wait while we load your trivia game.</p>
+        </div>
+      </div>
     );
   }
-
-  if (currentGameState === "intermission" || currentGameState === "leaderboard") {
+  
+  if (currentGameState === 'intermission' || currentGameState === 'leaderboard') {
     return (
-      <PlayerGameStatus
-        state={currentGameState}
-        score={score}
-        isRegistered={isRegistered}
-        onForceSync={handleForceSync}
-      />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="card-trivia p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold mb-4">
+            {currentGameState === 'intermission' ? 'Intermission' : 'Leaderboard'}
+          </h2>
+          <p className="text-lg mb-6">The next question will appear shortly...</p>
+          <div className="bg-muted p-4 rounded-md">
+            <p className="text-md font-medium">Your Score</p>
+            <p className="text-2xl font-bold text-primary">{score}</p>
+            {isRegistered && (
+              <p className="text-sm text-muted-foreground mt-2">
+                Your score will be saved to your account
+              </p>
+            )}
+          </div>
+          
+          {process.env.NODE_ENV === 'development' && (
+            <Button variant="outline" size="sm" onClick={handleForceSync} className="mt-4">
+              Force Sync
+            </Button>
+          )}
+        </div>
+      </div>
     );
   }
-
+  
   if (!currentQuestion) {
     return (
-      <PlayerGameStatus
-        state="waiting"
-        score={score}
-        isRegistered={isRegistered}
-        onForceSync={handleForceSync}
-      />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="card-trivia p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold mb-4">Waiting for Game...</h2>
+          <p className="text-lg mb-6">The host will start the game shortly.</p>
+          
+          {process.env.NODE_ENV === 'development' && (
+            <Button variant="outline" size="sm" onClick={handleForceSync} className="mt-4">
+              Force Sync
+            </Button>
+          )}
+        </div>
+      </div>
     );
   }
-
-  if (showTimeUp && timeLeft === 0 && !isAnswerRevealed && currentGameState === "question") {
+  
+  if (showTimeUp && timeLeft === 0 && !isAnswerRevealed && currentGameState === 'question') {
     return (
-      <PlayerGameStatus state="timeup" score={score} isRegistered={isRegistered} />
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-4">
+        <div className="card-trivia p-8 max-w-md w-full text-center">
+          <h2 className="text-2xl font-bold mb-4">Time's Up!</h2>
+          <p className="text-lg mb-6">The next question will appear shortly...</p>
+          <div className="bg-muted p-4 rounded-md">
+            <p className="text-md font-medium">Your Score</p>
+            <p className="text-2xl font-bold text-primary">{score}</p>
+          </div>
+        </div>
+      </div>
     );
   }
-
+  
   return (
     <div className="min-h-screen flex flex-col bg-background">
-      <PlayerSyncManager 
-        playerName={playerName}
-        gameId={gameId}
-        onSync={handleForceSync}
-      />
-      <PlayerGameHeader
-        questionIndex={questionIndex}
-        score={score}
-        timeLeft={timeLeft}
-      />
-      <PlayerGameMain
-        currentQuestion={currentQuestion}
-        selectedAnswer={selectedAnswer}
-        isAnswerRevealed={isAnswerRevealed}
-        answeredCorrectly={answeredCorrectly}
-        pendingPoints={pendingPoints}
-        score={score}
-        timeLeft={timeLeft}
-        handleSelectAnswer={handleSelectAnswer}
-        hasDevTools={process.env.NODE_ENV === "development"}
-        handleForceSync={handleForceSync}
-        currentGameState={currentGameState}
-      />
+      <header className="p-4 border-b border-border">
+        <div className="flex justify-between items-center">
+          <h1 className="text-xl font-bold text-primary">Question {questionIndex + 1}</h1>
+          <div className="flex items-center gap-2">
+            <div className="bg-primary/10 text-primary px-3 py-1 rounded-full">
+              <span className="font-medium">Score: {score}</span>
+            </div>
+            <div className="flex items-center gap-1 text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span>{timeLeft || 0}s</span>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <main className="flex-1 p-4 overflow-auto">
+        <div className="card-trivia p-6 mb-6">
+          <h2 className="text-xl font-medium mb-4">{currentQuestion.text}</h2>
+          
+          <div className="grid grid-cols-1 gap-3 mt-4">
+            {currentQuestion.options && currentQuestion.options.map((option: string, index: number) => (
+              <button
+                key={index}
+                onClick={() => handleSelectAnswer(option)}
+                disabled={selectedAnswer !== null || timeLeft === 0 || isAnswerRevealed}
+                className={`p-4 rounded-lg text-left transition ${
+                  selectedAnswer === option 
+                    ? isAnswerRevealed
+                      ? option === currentQuestion.correctAnswer
+                        ? 'bg-green-100 border-green-500 border-2'
+                        : 'bg-red-100 border-red-500 border-2'
+                      : 'bg-primary/20 border-primary border-2'
+                    : isAnswerRevealed && option === currentQuestion.correctAnswer
+                      ? 'bg-green-100 border-green-500 border-2'
+                      : 'bg-card hover:bg-primary/10 border border-border'
+                } ${
+                  timeLeft === 0 || isAnswerRevealed ? 'cursor-default' : 'cursor-pointer'
+                }`}
+              >
+                <div className="flex items-start">
+                  <span className="mr-3 text-muted-foreground">{String.fromCharCode(65 + index)}.</span>
+                  <span>{option}</span>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+        
+        {isAnswerRevealed && (
+          <div className={`p-4 rounded-lg mb-4 ${
+            answeredCorrectly ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
+            <div className="flex items-start">
+              <div className="mr-3">
+                {answeredCorrectly ? (
+                  <Trophy className="h-6 w-6" />
+                ) : (
+                  <AlertTriangle className="h-6 w-6" />
+                )}
+              </div>
+              <div>
+                <p className="font-medium">
+                  {answeredCorrectly ? 'Correct!' : 'Incorrect'}
+                </p>
+                <p className="text-sm">
+                  {answeredCorrectly 
+                    ? `You earned ${pendingPoints > 0 ? pendingPoints : score - (score - pendingPoints)} points!` 
+                    : `The correct answer was: ${currentQuestion.correctAnswer}`
+                  }
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+        
+        {process.env.NODE_ENV === 'development' && (
+          <div className="mt-4 border border-dashed border-gray-300 p-3 rounded-md">
+            <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm" onClick={handleForceSync}>
+                Force Sync
+              </Button>
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  localStorage.removeItem('gameState');
+                  window.location.reload();
+                }}
+              >
+                Reset Game
+              </Button>
+            </div>
+          </div>
+        )}
+      </main>
     </div>
   );
 };
 
-export default PlayerGame
+export default PlayerGame;

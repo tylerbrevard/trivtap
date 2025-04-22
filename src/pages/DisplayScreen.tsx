@@ -12,9 +12,6 @@ import { QuestionDisplay } from '@/components/display/QuestionDisplay';
 import { AnswerDisplay } from '@/components/display/AnswerDisplay';
 import { LeaderboardDisplay } from '@/components/display/LeaderboardDisplay';
 import { IntermissionDisplay } from '@/components/display/IntermissionDisplay';
-import { DisplayHeader } from "@/components/display/DisplayHeader";
-import { DisplayFooter } from "@/components/display/DisplayFooter";
-import { DisplayMainContent } from "@/components/display/DisplayMainContent";
 
 const DisplayScreen = () => {
   const { id } = useParams();
@@ -770,37 +767,52 @@ const DisplayScreen = () => {
   
   return (
     <div className="min-h-screen bg-background flex flex-col">
-      <DisplayHeader
-        id={id}
-        uniquePlayersCount={uniquePlayers.length}
-        displayedQuestionCount={displayedQuestionCount}
-        forceSync={forceSync}
-        toast={toast}
-      />
-
+      <header className="p-4 border-b border-border">
+        <div className="flex justify-between items-center">
+          <h1 className="text-2xl font-bold text-primary">TrivTap</h1>
+          <div className="flex items-center gap-4">
+            <div className="bg-primary/20 text-primary px-3 py-1 rounded-full">
+              Display {id && id !== 'default' ? `#${id}` : ''}
+            </div>
+            <div className="bg-green-500/20 text-green-500 px-3 py-1 rounded-full">
+              Players: {uniquePlayers.length}
+            </div>
+            <div className="bg-blue-500/20 text-blue-500 px-3 py-1 rounded-full">
+              Questions: {displayedQuestionCount}
+            </div>
+            {process.env.NODE_ENV === 'development' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => {
+                  forceSync();
+                  toast({
+                    title: "Force Sync",
+                    description: "Forcing synchronization of game state",
+                  });
+                }}
+              >
+                Force Sync
+              </Button>
+            )}
+          </div>
+        </div>
+      </header>
+      
       <main className="flex-1 p-6">
-        <DisplayMainContent
-          hasGameStarted={hasGameStarted}
-          currentState={currentState}
-          gameCode={gameCode}
-          uniquePlayers={uniquePlayers}
-          handleStartGameNow={handleStartGameNow}
-          handleManualNextQuestion={handleManualNextQuestion}
-          forcePause={forcePause}
-          togglePause={togglePause}
-          getCurrentQuestion={getCurrentQuestion}
-          timeLeft={timeLeft}
-          questionCounter={questionCounter}
-          roundWinners={roundWinners}
-          gameSettings={gameSettings}
-          intermissionSlides={intermissionSlides}
-          currentSlideIndex={currentSlideIndex}
-          getCurrentIntermissionSlide={getCurrentIntermissionSlide}
-          sortedPlayers={sortedPlayers}
-        />
+        {renderContent()}
       </main>
-
-      <DisplayFooter currentState={currentState} gameCode={gameCode} />
+      
+      <footer className="p-4 border-t border-border text-center text-sm text-muted-foreground">
+        {currentState !== 'join' && (
+          <div className="flex justify-center mb-2">
+            <div className="bg-card px-4 py-2 rounded-full">
+              Join code: <span className="font-bold text-primary">{gameCode}</span>
+            </div>
+          </div>
+        )}
+        <p>Powered by TrivTap</p>
+      </footer>
     </div>
   );
 };

@@ -46,16 +46,6 @@ export const useGameSync = ({
     setTimeLeft(time);
     setQuestionCounter(qCounter);
     setTimerActivity(Date.now());
-    
-    // Set display truth immediately to ensure players can sync correctly
-    localStorage.setItem('gameState_display_truth', JSON.stringify({
-      state,
-      questionIndex: qIndex,
-      timeLeft: time,
-      questionCounter: qCounter,
-      timestamp: timestamp + 1,
-      definitiveTruth: true
-    }));
   }, []);
 
   // Move to next question handler
@@ -480,65 +470,6 @@ export const useGameSync = ({
     }, 200);
   }, [currentState, questionIndex, questionCounter, slidesIndex]);
 
-  // Add a dedicated player sync handler
-  const syncWithPlayers = useCallback(() => {
-    console.log('Forcing sync with all players');
-    
-    const highPriorityState = {
-      state: currentState,
-      questionIndex: questionIndex,
-      timeLeft: currentState === 'question' ? timeLeft : 0,
-      questionCounter: questionCounter,
-      timestamp: Date.now() + 10000, // Far-future timestamp for priority
-      slidesIndex: slidesIndex,
-      definitiveTruth: true,
-      guaranteedDelivery: true,
-      forceSync: true,
-      displayInitiated: true
-    };
-    
-    // Store state with high-priority flags
-    localStorage.setItem('gameState', JSON.stringify(highPriorityState));
-    localStorage.setItem('gameState_display_truth', JSON.stringify({
-      ...highPriorityState,
-      timestamp: highPriorityState.timestamp + 1 // Even higher priority
-    }));
-    
-    // Dispatch the event
-    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-      detail: highPriorityState
-    }));
-    
-    // Schedule repeated events
-    for (let i = 1; i <= 3; i++) {
-      setTimeout(() => {
-        const repeatedState = {
-          ...highPriorityState,
-          timestamp: highPriorityState.timestamp + i,
-          attempt: i
-        };
-        
-        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-          detail: repeatedState
-        }));
-      }, i * 200);
-    }
-  }, [currentState, questionIndex, timeLeft, questionCounter, slidesIndex]);
-
-  // Listen for player sync requests
-  useEffect(() => {
-    const handlePlayerNeedsSync = (e: Event) => {
-      console.log('Player requested sync:', (e as CustomEvent).detail);
-      syncWithPlayers();
-    };
-    
-    window.addEventListener('playerNeedsSync', handlePlayerNeedsSync);
-    
-    return () => {
-      window.removeEventListener('playerNeedsSync', handlePlayerNeedsSync);
-    };
-  }, [syncWithPlayers]);
-
   return {
     currentState,
     questionIndex,
@@ -559,7 +490,6 @@ export const useGameSync = ({
     setTimeLeft,
     slideTimer,
     lastSlideRotation,
-    timerActivity,
-    syncWithPlayers, // Add the new function to the return values
+    timerActivity
   };
 };
