@@ -27,6 +27,16 @@ export const QuestionDisplay = ({
     return 'bg-red-500';
   };
 
+  // Log the current question for debugging purposes
+  React.useEffect(() => {
+    console.log('Display showing question:', {
+      text: currentQuestion.text,
+      index: questionCounter - 1,
+      options: currentQuestion.options,
+      correctAnswer: currentQuestion.correctAnswer
+    });
+  }, [currentQuestion, questionCounter]);
+
   return (
     <div className="flex flex-col h-full">
       <div className="mb-6">
@@ -70,12 +80,23 @@ export const QuestionDisplay = ({
       {process.env.NODE_ENV === 'development' && (
         <div className="mt-4 border border-dashed border-gray-300 p-4 rounded-md">
           <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <Button variant="outline" size="sm" onClick={onManualNext}>
               Force Next Question
             </Button>
             <Button variant="outline" size="sm" onClick={togglePause}>
               {forcePause ? 'Resume Game' : 'Pause Game'}
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => {
+                const gameState = localStorage.getItem('gameState');
+                console.log('Current game state:', gameState ? JSON.parse(gameState) : 'Not found');
+                console.log('Current question:', currentQuestion);
+              }}
+            >
+              Log Debug Info
             </Button>
           </div>
         </div>
