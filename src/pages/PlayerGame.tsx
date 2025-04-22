@@ -9,6 +9,7 @@ import { recoverFromDisplayTruth } from '@/utils/gameStateUtils';
 import PlayerGameHeader from "@/components/player/PlayerGameHeader";
 import PlayerGameMain from "@/components/player/PlayerGameMain";
 import PlayerGameStatus from "@/components/player/PlayerGameStatus";
+import PlayerSyncManager from "@/components/player/PlayerSyncManager";
 
 const PlayerGame = () => {
   const [playerName, setPlayerName] = useState<string | null>(null);
@@ -753,8 +754,13 @@ const PlayerGame = () => {
       currentGameState
     });
     
-    // Only allow selection if no answer is already selected, answer not revealed, and time is still running
-    if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0 && currentGameState === 'question') {
+    // Only allow selection if no answer is already selected, answer not revealed, 
+    // time is still running, and we're in question state
+    if (selectedAnswer === null && 
+        !isAnswerRevealed && 
+        timeLeft > 0 && 
+        currentGameState === 'question') {
+      
       console.log('Selected answer:', answer);
       setSelectedAnswer(answer);
       setHasSelectedAnswer(true);
@@ -767,14 +773,20 @@ const PlayerGame = () => {
         console.log('Stored pending points:', pointsEarned);
       }
       
-      // Broadcast selection for debugging
+      // Broadcast selection for debugging and tracking
       window.dispatchEvent(new CustomEvent('playerSelectedAnswer', { 
         detail: { 
           player: playerName,
           answer,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          question: currentQuestion?.text,
+          questionIndex,
+          timeLeft
         }
       }));
+      
+      // Force a call to onSync in case the question has changed
+      handleForceSync();
     } else {
       console.log('Answer selection ignored:', {
         reason: selectedAnswer !== null ? 'Already selected' : 
@@ -813,9 +825,23 @@ const PlayerGame = () => {
         detail: {
           playerName,
           gameId,
-          timestamp: Date.now()
+          timestamp: Date.now(),
+          urgent: true
         }
       }));
+      
+      // Retry after a delay in case the first request fails
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
+          detail: {
+            playerName,
+            gameId,
+            timestamp: Date.now(),
+            urgent: true,
+            retry: true
+          }
+        }));
+      }, 500);
     }
     
     // Reload questions
@@ -844,7 +870,7 @@ const PlayerGame = () => {
     
     toast({
       title: "Syncing",
-      description: "Recovering game state and reloading questions",
+      description: "Recovering game state...",
     });
   };
   
@@ -884,6 +910,11 @@ const PlayerGame = () => {
 
   return (
     <div className="min-h-screen flex flex-col bg-background">
+      <PlayerSyncManager 
+        playerName={playerName}
+        gameId={gameId}
+        onSync={handleForceSync}
+      />
       <PlayerGameHeader
         questionIndex={questionIndex}
         score={score}
@@ -900,6 +931,7 @@ const PlayerGame = () => {
         handleSelectAnswer={handleSelectAnswer}
         hasDevTools={process.env.NODE_ENV === "development"}
         handleForceSync={handleForceSync}
+        currentGameState={currentGameState}
       />
     </div>
   );

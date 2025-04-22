@@ -1,4 +1,3 @@
-
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -17,23 +16,29 @@ export const updateGameState = (
   // Calculate slidesIndex only for intermission state transitions
   const slidesIndex = nextState === 'intermission' ? getNextSlideIndex() : 0;
   
+  const timestamp = Date.now();
+  
   const gameState = {
     state: nextState,
     questionIndex: currentQuestionIndex,
     timeLeft: timeLeft,
     questionCounter: questionCounter,
-    timestamp: Date.now(),
+    timestamp: timestamp,
     slidesIndex: slidesIndex,
     authoritative: true // Mark as authoritative source
   };
   
   console.log('Updating game state:', gameState);
-  localStorage.setItem('gameState', JSON.stringify(gameState));
   
-  // Also store as display truth for persistent reference
-  if (nextState === 'question') {
-    localStorage.setItem('gameState_display_truth', JSON.stringify(gameState));
-  }
+  // Always store as display truth for persistent reference - this helps players sync
+  localStorage.setItem('gameState_display_truth', JSON.stringify({
+    ...gameState,
+    definitiveTruth: true,
+    timestamp: timestamp + 1 // Slightly newer timestamp for priority
+  }));
+  
+  // Now set the active game state
+  localStorage.setItem('gameState', JSON.stringify(gameState));
   
   // Trigger a custom event to notify other windows about the state change
   try {
@@ -55,6 +60,19 @@ export const updateGameState = (
       window.dispatchEvent(backupEvent);
       console.log('Dispatched backup state event');
     }, 200);
+    
+    // Send a third high-priority event after a longer delay to catch any stragglers
+    setTimeout(() => {
+      const guaranteedEvent = new CustomEvent('triviaStateChange', { 
+        detail: {
+          ...gameState,
+          timestamp: gameState.timestamp + 2, // Even newer
+          guaranteedDelivery: true // High priority flag
+        }
+      });
+      window.dispatchEvent(guaranteedEvent);
+      console.log('Dispatched guaranteed delivery state event');
+    }, 500);
   } catch (error) {
     console.error('Error dispatching state change event:', error);
   }
@@ -177,37 +195,57 @@ export const moveToNextQuestion = (
   
   console.log(`Updated game state for next question with timestamp: ${timestamp}`);
   
-  // Force a second event dispatch with slight delay to ensure all clients receive it
-  setTimeout(() => {
-    const gameState = {
-      state: 'question',
-      questionIndex: nextQuestionIndex,
-      timeLeft: questionDuration,
-      questionCounter: questionCounter + 1,
-      timestamp: Date.now(),
-      slidesIndex: 0,
-      authoritative: true,
-      forceSync: true
-    };
-    
-    localStorage.setItem('gameState', JSON.stringify(gameState));
-    
-    // Trigger another custom event as a backup
-    try {
-      const stateChangeEvent = new CustomEvent('triviaStateChange', { 
-        detail: gameState 
-      });
-      window.dispatchEvent(stateChangeEvent);
-      console.log('Sent backup state change event for question change');
-    } catch (error) {
-      console.error('Error sending backup state change event:', error);
-    }
-  }, 250);
+  // Force a broadcast with higher priority
+  broadcast_high_priority_state({
+    state: 'question', 
+    questionIndex: nextQuestionIndex,
+    timeLeft: questionDuration,
+    questionCounter: questionCounter + 1,
+    timestamp: Date.now() + 5000, // Future timestamp for priority
+    slidesIndex: 0,
+    definitiveTruth: true
+  });
   
   return {
     newQuestionIndex: nextQuestionIndex,
     newQuestionCounter: questionCounter + 1
   };
+};
+
+/**
+ * Helper function to broadcast high-priority state changes
+ * This ensures all clients receive critical updates
+ */
+const broadcast_high_priority_state = (state: any) => {
+  // Store the high-priority state
+  localStorage.setItem('gameState', JSON.stringify(state));
+  localStorage.setItem('gameState_display_truth', JSON.stringify({
+    ...state,
+    timestamp: state.timestamp + 1 // Even higher priority
+  }));
+  
+  // Dispatch main event
+  window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+    detail: state
+  }));
+  
+  // Schedule repeated events to ensure delivery
+  for (let i = 1; i <= 3; i++) {
+    setTimeout(() => {
+      const repeatedState = {
+        ...state,
+        timestamp: state.timestamp + i,
+        guaranteedDelivery: true,
+        attempt: i
+      };
+      
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: repeatedState
+      }));
+      
+      console.log(`Sent repeated high-priority event ${i}`);
+    }, i * 250); // Stagger the events
+  }
 };
 
 /**
@@ -608,7 +646,7 @@ export const recoverFromDisplayTruth = () => {
       }));
       
       // Send additional events to ensure delivery
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 5; i++) {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('triviaStateChange', { 
             detail: {
