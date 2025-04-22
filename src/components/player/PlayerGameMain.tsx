@@ -232,7 +232,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
         <p>Debug: Last Click: {debugMsg || 'None'}</p>
         <p>Selected: {selectedAnswer || 'None'} | Local: {lastClickedOption || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        <p>Click Count: {directClickCount} | Processing: {false} | Force Update: {forceUpdate}</p>
+        <p>Click Count: {directClickCount} | Processing: {String(false)} | Force Update: {forceUpdate}</p>
         <p>Element IDs: {elementIds.join(', ')}</p>
       </div>
       
@@ -251,8 +251,9 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         />
       )}
       
-      {/* Add CSS for better visual states */}
-      <style jsx>{`
+      {/* CSS for styling the component */}
+      <style>
+        {`
         .selectable-answer:active {
           transform: scale(0.98);
           box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
@@ -270,7 +271,8 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         .unselected-answer {
           opacity: 0.8;
         }
-      `}</style>
+        `}
+      </style>
     </main>
   );
 };
