@@ -17,6 +17,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         variant="outline" 
         size="sm" 
         onClick={(e) => {
+          e.stopPropagation(); // Prevent event bubbling
           e.preventDefault();
           console.log("Force sync button clicked");
           handleForceSync();
@@ -30,6 +31,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         variant="outline"
         size="sm"
         onClick={(e) => {
+          e.stopPropagation(); // Prevent event bubbling
           e.preventDefault();
           console.log("Reset game button clicked");
           localStorage.removeItem("gameState");

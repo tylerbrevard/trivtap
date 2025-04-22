@@ -1,5 +1,5 @@
 
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { Trophy, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import PlayerGameDevTools from "./PlayerGameDevTools";
@@ -29,6 +29,9 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   hasDevTools,
   handleForceSync,
 }) => {
+  // Track button clicks for debugging
+  const [lastClickTime, setLastClickTime] = useState<number>(0);
+  
   // Debug log to verify props being received
   useEffect(() => {
     console.log("PlayerGameMain props:", { 
@@ -39,12 +42,19 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     });
   }, [currentQuestion, selectedAnswer, isAnswerRevealed, timeLeft]);
 
-  // Function to handle click on answer buttons
+  // Function to handle click on answer buttons - completely rewritten
   const onAnswerClick = (option: string) => {
-    console.log("Answer clicked:", option, "Time left:", timeLeft, "Selected:", selectedAnswer, "Revealed:", isAnswerRevealed);
+    // Record click time and log details
+    const now = Date.now();
+    setLastClickTime(now);
+    console.log(`CLICK EVENT: Answer ${option} clicked at ${now}. Time left: ${timeLeft}, Selected: ${selectedAnswer}, Revealed: ${isAnswerRevealed}`);
+    
     // Only allow answer selection if no answer is already selected, answer is not revealed, and there's time left
     if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
+      console.log(`ATTEMPTING TO SELECT ANSWER: ${option}`);
       handleSelectAnswer(option);
+    } else {
+      console.log(`ANSWER SELECTION BLOCKED. Reason: ${selectedAnswer !== null ? 'Already answered' : isAnswerRevealed ? 'Answer revealed' : 'No time left'}`);
     }
   };
 
@@ -61,7 +71,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
             // Determine the button class based on selection and answer state
-            let buttonClass = "p-5 rounded-lg text-left transition-all transform hover:scale-[1.02] ";
+            let buttonClass = "p-5 rounded-lg text-left transition-all cursor-pointer ";
             
             // Base style for all buttons - brighter and more engaging
             buttonClass += "bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg ";
@@ -71,23 +81,40 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
               if (isAnswerRevealed) {
                 // Revealed and selected
                 buttonClass = option === currentQuestion.correctAnswer
-                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md"
-                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+                  ? "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md cursor-default"
+                  : "p-5 rounded-lg text-left bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md cursor-default";
               } else {
                 // Selected but not revealed
-                buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md";
+                buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md cursor-default";
               }
             } else if (isAnswerRevealed && option === currentQuestion.correctAnswer) {
               // Correct answer when revealed
-              buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
+              buttonClass = "p-5 rounded-lg text-left bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md cursor-default";
+            }
+            
+            // Add active state for better feedback
+            if (selectedAnswer === null && !isAnswerRevealed && timeLeft > 0) {
+              buttonClass += " active:scale-[0.98] active:bg-[#8B5CF6]";
+            } else {
+              buttonClass += " opacity-90 pointer-events-auto"; // Still allow clicks for better UX but style differently
             }
             
             return (
               <button
                 key={index}
-                onClick={() => onAnswerClick(option)}
+                onClick={(e) => {
+                  // Stop any potential event propagation issues
+                  e.stopPropagation();
+                  onAnswerClick(option);
+                }}
                 className={buttonClass}
-                type="button"
+                // Important: Changed from type="button" to role="button" for better accessibility
+                role="button"
+                aria-pressed={selectedAnswer === option}
+                // Using data attributes for debugging
+                data-option={option}
+                data-index={index}
+                data-testid={`answer-option-${index}`}
               >
                 <div className="flex items-center">
                   <span className="mr-4 text-white font-bold flex items-center justify-center h-10 w-10 rounded-full bg-[#8B5CF6]/50 shadow-inner">
@@ -129,6 +156,15 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
           </div>
         </div>
       )}
+      
+      {/* Debugging info displayed only in development mode */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
+          <p>Debug: Last Click: {lastClickTime > 0 ? new Date(lastClickTime).toLocaleTimeString() : 'None'}</p>
+          <p>Selected: {selectedAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
+        </div>
+      )}
+      
       {hasDevTools && handleForceSync && (
         <PlayerGameDevTools handleForceSync={handleForceSync} />
       )}

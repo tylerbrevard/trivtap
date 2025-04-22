@@ -21,7 +21,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   };
 
   return (
-    <header className="p-4 border-b border-indigo-500/30 bg-gradient-to-r from-[#2B2464] to-[#1A1740] backdrop-blur-sm">
+    <header className="p-4 border-b border-indigo-500/30 bg-gradient-to-r from-[#2B2464] to-[#1A1740] backdrop-blur-sm sticky top-0 z-10">
       <div className="flex justify-between items-center">
         <h1 className="text-xl font-bold bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">
           Question {questionIndex + 1}
