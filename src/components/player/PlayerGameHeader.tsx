@@ -16,16 +16,56 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   // Local state for smooth timer display with proper synchronization
   const [displayTime, setDisplayTime] = useState(timeLeft);
   const lastTimeRef = useRef(timeLeft);
+  const timerRef = useRef<number | null>(null);
   
   // Update local timer whenever the prop changes
   useEffect(() => {
     // Force immediate update when time changes
-    if (timeLeft !== lastTimeRef.current) {
-      setDisplayTime(timeLeft);
-      lastTimeRef.current = timeLeft;
-      console.log(`Timer synchronized to ${timeLeft}s`);
+    setDisplayTime(timeLeft);
+    lastTimeRef.current = timeLeft;
+    
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearTimeout(timerRef.current);
+      timerRef.current = null;
     }
+    
+    // Create a new active timer for smooth countdown if time is running
+    if (timeLeft > 0) {
+      console.log(`Timer synchronized to ${timeLeft}s - starting countdown`);
+      
+      // Set up visual countdown that doesn't affect game state
+      const startCountdown = () => {
+        timerRef.current = window.setTimeout(() => {
+          const newTime = displayTime - 1;
+          
+          if (newTime >= 0 && newTime < lastTimeRef.current) {
+            setDisplayTime(newTime);
+            startCountdown(); // Continue countdown
+          }
+        }, 1000);
+      };
+      
+      startCountdown();
+    } else {
+      console.log('Timer stopped at 0s');
+    }
+    
+    return () => {
+      if (timerRef.current) {
+        clearTimeout(timerRef.current);
+      }
+    };
   }, [timeLeft]);
+  
+  // Reset timer if displayTime gets out of sync
+  useEffect(() => {
+    // If display time gets significantly out of sync with the actual time
+    if (Math.abs(displayTime - timeLeft) > 2 && timeLeft > 0) {
+      console.log(`Timer desynchronized by ${displayTime - timeLeft}s - correcting`);
+      setDisplayTime(timeLeft);
+    }
+  }, [displayTime, timeLeft]);
   
   // Function to determine time color based on remaining time
   const getTimeColor = () => {

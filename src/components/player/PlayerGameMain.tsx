@@ -41,20 +41,20 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   
   // Reset selection state when question changes
   useEffect(() => {
-    setLocalAnswer(null);
+    setLocalAnswer(selectedAnswer);
     setClickCount(0);
     setIsProcessing(false);
     setClickDebugMsg("");
-    console.log("New question loaded, reset selection state");
-  }, [currentQuestion?.text]);
+    console.log("New question loaded, reset selection state. Selected answer:", selectedAnswer);
+  }, [currentQuestion?.text, selectedAnswer]);
   
   // Sync with parent component selection
   useEffect(() => {
-    if (selectedAnswer && selectedAnswer !== localAnswer) {
+    if (selectedAnswer !== localAnswer) {
       setLocalAnswer(selectedAnswer);
       console.log("Synchronized with parent selection:", selectedAnswer);
     }
-  }, [selectedAnswer, localAnswer]);
+  }, [selectedAnswer]);
 
   // Option click handler with improved feedback
   const handleOptionClick = (option: string) => {
@@ -104,8 +104,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       if (optionElement) {
         const option = optionElement.getAttribute('data-option');
         if (option) {
-          e.preventDefault();
-          e.stopPropagation();
+          console.log("Direct DOM click handler activated for option:", option);
           
           // Use the same handler for consistency
           const clickTime = new Date().toISOString();
@@ -119,10 +118,10 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       }
     };
     
-    container.addEventListener('click', directClickHandler, { capture: true });
+    container.addEventListener('click', directClickHandler);
     
     return () => {
-      container.removeEventListener('click', directClickHandler, { capture: true });
+      container.removeEventListener('click', directClickHandler);
     };
   }, [isAnswerRevealed, timeLeft, localAnswer, handleSelectAnswer]);
   
@@ -143,7 +142,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
             // Determine if this option is selected
-            const isSelected = option === localAnswer || option === selectedAnswer;
+            const isSelected = option === localAnswer;
             
             // Define button classes based on state with improved visual feedback
             let buttonClasses = "p-5 rounded-lg text-left transition-all duration-300 relative";
@@ -151,18 +150,18 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             if (isAnswerRevealed) {
               // Answer revealed state
               if (option === currentQuestion.correctAnswer) {
-                buttonClasses += " correct-answer bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-lg";
+                buttonClasses += " bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-lg";
               } else if (isSelected) {
-                buttonClasses += " incorrect-answer bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-lg";
+                buttonClasses += " bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-lg";
               } else {
-                buttonClasses += " unselected-answer bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
+                buttonClasses += " bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
               }
             } else {
               // Question state
               if (isSelected) {
-                buttonClasses += " selected-answer bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
+                buttonClasses += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md";
               } else {
-                buttonClasses += " selectable-answer bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow hover:shadow-lg cursor-pointer";
+                buttonClasses += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow hover:shadow-lg cursor-pointer";
               }
             }
             
@@ -274,7 +273,6 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         />
       )}
       
-      {/* CSS styles for animations */}
       <style>
         {`
         .selectable-answer:active {

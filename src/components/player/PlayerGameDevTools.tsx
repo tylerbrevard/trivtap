@@ -34,10 +34,11 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
       state: 'question',
       questionIndex: 0, 
       timeLeft: 30,
-      timestamp: Date.now() + 20000,
+      timestamp: Date.now() + 50000, // Use a future timestamp for high priority
       definitiveTruth: true,
       forceSync: true,
-      emergencyReset: true
+      emergencyReset: true,
+      supercedeAllStates: true
     };
     
     // Apply the reset
@@ -46,7 +47,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
       detail: resetState
     }));
     
-    console.log('EMERGENCY RESET applied');
+    console.log('⚠️ EMERGENCY RESET applied with high priority timestamp');
     
     // Force page reload after a brief delay
     setTimeout(() => {
@@ -72,7 +73,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         <Button 
           variant="outline" 
           size="sm" 
-          className="bg-indigo-800/30"
+          className="bg-indigo-800/30 hover:bg-indigo-700/40"
           onClick={handleForceSync}
         >
           Force Sync
@@ -82,7 +83,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
           <Button 
             variant="outline" 
             size="sm" 
-            className="bg-indigo-800/30"
+            className="bg-indigo-800/30 hover:bg-indigo-700/40"
             onClick={onForceTimer}
           >
             Reset Timer
@@ -92,7 +93,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         <Button 
           variant="outline" 
           size="sm" 
-          className="bg-indigo-800/30"
+          className="bg-indigo-800/30 hover:bg-indigo-700/40"
           onClick={handleLogGameState}
         >
           Log State
@@ -101,11 +102,17 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         <Button 
           variant="outline" 
           size="sm" 
-          className="bg-indigo-800/30"
+          className="bg-indigo-800/30 hover:bg-indigo-700/40"
           onClick={() => {
             localStorage.removeItem('gameState');
             localStorage.removeItem('gameState_display_truth');
             console.log('Cleared all game state');
+            window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
+              detail: {
+                timestamp: Date.now(),
+                forceClear: true
+              }
+            }));
           }}
         >
           Clear State
@@ -127,6 +134,9 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
           <div className="bg-indigo-900/40 p-2 rounded text-xs text-indigo-100 font-mono">
             <div>State: {debugInfo.currentState || "unknown"} | Time: {debugInfo.timeLeft}s | Revealed: {debugInfo.isAnswerRevealed ? 'Yes' : 'No'}</div>
             <div>Selected: {debugInfo.selectedAnswer || 'None'} | Clicks: {debugInfo.clicksRegistered || 0}</div>
+            {debugInfo.lastSyncAttempt && (
+              <div>Last Sync: {new Date(debugInfo.lastSyncAttempt).toLocaleTimeString()}</div>
+            )}
           </div>
         </div>
       )}
