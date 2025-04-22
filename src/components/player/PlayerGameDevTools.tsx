@@ -5,22 +5,36 @@ import { Zap, RefreshCw, Bug } from "lucide-react";
 
 interface PlayerGameDevToolsProps {
   handleForceSync: () => void;
+  debugInfo?: {
+    selectedAnswer: string | null;
+    timeLeft: number;
+    isAnswerRevealed: boolean;
+    clicksRegistered: number;
+    currentState: string;
+  };
 }
 
 const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
   handleForceSync,
+  debugInfo
 }) => {
   return (
     <div className="mt-4 p-4 border border-dashed border-purple-500/30 rounded bg-purple-900/10">
       <h3 className="text-purple-300 font-bold mb-2 flex items-center">
         <Zap className="h-4 w-4 mr-1" /> Dev Tools
       </h3>
+      
+      {debugInfo && (
+        <div className="mb-3 p-2 bg-black/20 rounded text-xs font-mono text-purple-200">
+          <p>State: {debugInfo.currentState} | Time: {debugInfo.timeLeft}s | Revealed: {debugInfo.isAnswerRevealed ? 'Yes' : 'No'}</p>
+          <p>Selected: {debugInfo.selectedAnswer || 'None'} | Clicks: {debugInfo.clicksRegistered}</p>
+        </div>
+      )}
+      
       <div className="flex flex-wrap gap-2">
         <Button 
           variant="outline" 
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
+          onClick={() => {
             console.log("Force sync button clicked");
             handleForceSync();
           }}
@@ -32,9 +46,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         </Button>
         <Button
           variant="outline"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
+          onClick={() => {
             localStorage.removeItem('gameState');
             console.log('Cleared gameState from localStorage');
             setTimeout(() => window.location.reload(), 300);
@@ -47,9 +59,7 @@ const PlayerGameDevTools: React.FC<PlayerGameDevToolsProps> = ({
         </Button>
         <Button
           variant="outline"
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
+          onClick={() => {
             console.log('Current localStorage:', {
               gameState: JSON.parse(localStorage.getItem('gameState') || '{}'),
               displayTruth: JSON.parse(localStorage.getItem('gameState_display_truth') || '{}'),

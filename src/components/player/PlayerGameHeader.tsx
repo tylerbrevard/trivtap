@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Clock } from "lucide-react";
 
 interface PlayerGameHeaderProps {
@@ -13,15 +13,6 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   score,
   timeLeft,
 }) => {
-  // Local state to track time for smooth animations
-  const [animatedTimeLeft, setAnimatedTimeLeft] = useState(timeLeft);
-  
-  // Update the animated time whenever the actual time changes
-  useEffect(() => {
-    console.log("Header received timeLeft update:", timeLeft);
-    setAnimatedTimeLeft(timeLeft);
-  }, [timeLeft]);
-  
   // Function to determine time color based on remaining time
   const getTimeColor = () => {
     if (timeLeft > 20) return "text-green-400";
@@ -49,7 +40,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
       {timeLeft > 0 && (
         <div className="w-full h-2 bg-indigo-900/50 rounded-full mt-3 overflow-hidden shadow-inner">
           <div 
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all"
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-linear"
             style={{ width: `${(timeLeft / 30) * 100}%` }}
           ></div>
         </div>

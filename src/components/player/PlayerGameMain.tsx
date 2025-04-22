@@ -1,7 +1,6 @@
 
-import React, { useEffect, useState, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import { Trophy, AlertTriangle, Check } from "lucide-react";
-import { Button } from "@/components/ui/button";
 import PlayerGameDevTools from "./PlayerGameDevTools";
 
 interface PlayerGameMainProps {
@@ -15,6 +14,7 @@ interface PlayerGameMainProps {
   handleSelectAnswer: (answer: string) => void;
   hasDevTools?: boolean;
   handleForceSync?: () => void;
+  currentGameState?: string;
 }
 
 const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
@@ -28,116 +28,121 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   handleSelectAnswer,
   hasDevTools,
   handleForceSync,
+  currentGameState = "question"
 }) => {
-  // Simplified approach with direct state management
-  const [internalSelected, setInternalSelected] = useState<string | null>(null);
-  const [debugInfo, setDebugInfo] = useState<string>("");
-  const [buttonClicked, setButtonClicked] = useState<number | null>(null);
+  // Track the locally selected answer for immediate feedback
+  const [localSelectedAnswer, setLocalSelectedAnswer] = useState<string | null>(null);
+  // Track if we're currently processing a click to prevent double-clicks
+  const [isProcessingClick, setIsProcessingClick] = useState(false);
+  // Debug information
+  const [debugMsg, setDebugMsg] = useState("");
+  // Track number of clicks for debugging
+  const [clickCount, setClickCount] = useState(0);
   
-  // Force update on props change
+  // Reset local selection when the question or global selection changes
   useEffect(() => {
-    setInternalSelected(selectedAnswer);
-  }, [selectedAnswer]);
+    setLocalSelectedAnswer(selectedAnswer);
+  }, [selectedAnswer, currentQuestion?.text]);
   
-  // Reset when question changes
-  useEffect(() => {
-    if (currentQuestion) {
-      console.log("New question detected, resetting internal state");
-      setInternalSelected(null);
-      setButtonClicked(null);
-      setDebugInfo("");
+  // Handle clicking an answer option
+  const handleAnswerClick = (answer: string) => {
+    console.log(`Answer clicked: ${answer}, timeLeft: ${timeLeft}, isAnswerRevealed: ${isAnswerRevealed}`);
+    
+    // Increment click counter for debugging
+    setClickCount(prev => prev + 1);
+    
+    // Don't process if time's up or answer is revealed
+    if (timeLeft <= 0 || isAnswerRevealed) {
+      console.log("Click ignored: time's up or answer already revealed");
+      setDebugMsg(`Click ignored: ${timeLeft <= 0 ? "time's up" : "answer revealed"}`);
+      return;
     }
-  }, [currentQuestion?.text]);
-  
-  // Direct click handler with immediate visual feedback
-  const handleDirectClick = (option: string, index: number) => {
-    // Log the click event for debugging
-    const clickTime = new Date().toLocaleTimeString();
-    const logMessage = `CLICK: Answer ${option} (index: ${index}) at ${clickTime}. Time left: ${timeLeft}s, Selected: ${selectedAnswer || 'None'}`;
-    console.log(logMessage);
-    setDebugInfo(logMessage);
     
-    // Set internal selection for immediate feedback
-    setInternalSelected(option);
-    setButtonClicked(index);
+    // Don't process if we already have a selection (either local or global)
+    if (localSelectedAnswer || selectedAnswer) {
+      console.log("Click ignored: answer already selected");
+      setDebugMsg("Click ignored: already selected an answer");
+      return;
+    }
     
-    // Dispatch a custom event to aid debugging
-    document.dispatchEvent(new CustomEvent('answerClicked', { 
-      detail: { option, index, timestamp: Date.now() }
-    }));
+    // Set processing flag to prevent double-clicks
+    setIsProcessingClick(true);
+    
+    // Update local state immediately for visual feedback
+    setLocalSelectedAnswer(answer);
+    
+    // Log click for debugging
+    setDebugMsg(`Selected: ${answer} at ${new Date().toLocaleTimeString()}`);
     
     // Call the parent handler
-    handleSelectAnswer(option);
+    handleSelectAnswer(answer);
     
-    // Update the UI to show the selection visually
+    // Reset processing flag after a short delay
     setTimeout(() => {
-      const buttons = document.querySelectorAll('[data-testid^="answer-option-"]');
-      buttons.forEach((btn, i) => {
-        if (i === index) {
-          btn.classList.add('answer-selected');
-        }
-      });
-    }, 50);
+      setIsProcessingClick(false);
+    }, 300);
   };
 
-  // Ensure we have a valid question object
+  // Ensure we have a valid question
   if (!currentQuestion || !currentQuestion.options) {
-    return <div className="p-4">Loading question...</div>;
+    return <div className="p-4 text-center">Loading question...</div>;
   }
 
   return (
     <main className="flex-1 p-4 overflow-auto bg-gradient-to-b from-[#2B2464] to-[#1A1740]">
       <div className="card-trivia p-6 mb-6 shadow-lg rounded-xl bg-gradient-to-r from-indigo-600/30 to-purple-600/30 border border-indigo-500/40">
         <h2 className="text-xl font-bold mb-4 text-white">{currentQuestion.text}</h2>
+        
         <div className="grid grid-cols-1 gap-4 mt-6">
           {currentQuestion.options.map((option: string, index: number) => {
-            // Determine button appearance based on state
-            let buttonClass = "p-5 rounded-lg text-left transition-all duration-200";
+            // Base button classes
+            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-200 relative";
             
+            // Determine if this option is selected (either locally or globally)
+            const isSelected = option === localSelectedAnswer || option === selectedAnswer;
+            
+            // Determine button appearance based on game state
             if (isAnswerRevealed) {
-              // Answer is revealed - show correct/incorrect states
+              // Answer reveal state
               if (option === currentQuestion.correctAnswer) {
-                buttonClass += " bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
-              } else if (option === internalSelected || option === selectedAnswer) {
-                buttonClass += " bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
+                // Correct answer
+                buttonClasses += " bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-md";
+              } else if (isSelected) {
+                // Selected but incorrect
+                buttonClasses += " bg-gradient-to-r from-red-500 to-red-400 border-2 border-red-300 text-white shadow-md";
               } else {
-                buttonClass += " bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
+                // Not selected and not correct
+                buttonClasses += " bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
               }
             } else {
-              // Answer not revealed - show selection state
-              if ((option === internalSelected || option === selectedAnswer) || buttonClicked === index) {
-                buttonClass += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
+              // Question state
+              if (isSelected) {
+                // Selected option
+                buttonClasses += " bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
               } else {
-                buttonClass += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg cursor-pointer";
+                // Unselected option
+                buttonClasses += " bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow-lg cursor-pointer";
               }
             }
             
-            // Add active state and transform for tactile feedback
-            buttonClass += " active:scale-[0.98] active:shadow-inner";
+            // Add active state for tactile feedback
+            buttonClasses += " active:scale-[0.98] active:shadow-inner";
             
-            const isDisabled = isAnswerRevealed || timeLeft <= 0;
+            // Determine if button should be disabled
+            const isDisabled = isAnswerRevealed || timeLeft <= 0 || isProcessingClick || isSelected;
             
             return (
               <button
                 key={index}
-                className={buttonClass}
-                onClick={(e) => {
-                  e.preventDefault();
-                  e.stopPropagation();
-                  
-                  if (!isAnswerRevealed && timeLeft > 0) {
-                    handleDirectClick(option, index);
-                  } else {
-                    console.log("Click ignored - answer revealed or time up");
-                  }
-                }}
-                type="button"
-                data-option={option}
-                data-index={index}
-                data-testid={`answer-option-${index}`}
-                data-clickable={!isDisabled ? "true" : "false"}
-                data-selected={option === internalSelected || option === selectedAnswer ? "true" : "false"}
+                className={buttonClasses}
+                onClick={() => handleAnswerClick(option)}
                 disabled={isDisabled}
+                type="button"
+                data-testid={`answer-option-${index}`}
+                data-option={option}
+                data-clickable={!isDisabled ? "true" : "false"}
+                data-selected={isSelected ? "true" : "false"}
+                data-index={index}
               >
                 <div className="flex items-center">
                   <span className="mr-4 text-white font-bold flex items-center justify-center h-10 w-10 rounded-full bg-[#8B5CF6]/50 shadow-inner">
@@ -146,7 +151,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                   <span className="text-white font-medium text-lg">{option}</span>
                   
                   {/* Selection indicator */}
-                  {((option === internalSelected || option === selectedAnswer) || buttonClicked === index) && (
+                  {isSelected && (
                     <span className="ml-auto">
                       <Check className="h-6 w-6 text-white" />
                     </span>
@@ -158,6 +163,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         </div>
       </div>
       
+      {/* Answer result notification */}
       {isAnswerRevealed && (
         <div
           className={`p-5 rounded-lg mb-4 shadow-lg ${
@@ -180,7 +186,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
               </p>
               <p className="text-md">
                 {answeredCorrectly
-                  ? `You earned ${pendingPoints > 0 ? pendingPoints : score - (score - pendingPoints)} points!`
+                  ? `You earned ${pendingPoints} points!`
                   : `The correct answer was: ${currentQuestion.correctAnswer}`}
               </p>
             </div>
@@ -188,15 +194,25 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         </div>
       )}
       
-      {/* Simplified debug info */}
+      {/* Debug information */}
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
-        <p>Status: {internalSelected ? `Selected "${internalSelected}"` : 'No selection'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        {buttonClicked !== null && <p>Button clicked: Option {String.fromCharCode(65 + buttonClicked)}</p>}
-        {debugInfo && <p className="text-orange-200">{debugInfo}</p>}
+        <p>Debug: Last Click: {debugMsg || 'None'}</p>
+        <p>Selected: {selectedAnswer || 'None'} | Local: {localSelectedAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
+        <p>Click Count: {clickCount} | Processing: {isProcessingClick ? 'Yes' : 'No'}</p>
       </div>
       
+      {/* Dev tools */}
       {hasDevTools && handleForceSync && (
-        <PlayerGameDevTools handleForceSync={handleForceSync} />
+        <PlayerGameDevTools 
+          handleForceSync={handleForceSync} 
+          debugInfo={{
+            selectedAnswer,
+            timeLeft,
+            isAnswerRevealed,
+            clicksRegistered: clickCount,
+            currentState: currentGameState || "question"
+          }}
+        />
       )}
     </main>
   );
