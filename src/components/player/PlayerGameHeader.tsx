@@ -13,63 +13,44 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   score,
   timeLeft,
 }) => {
-  // Local state for smooth timer display with proper synchronization
+  // Local state for smooth timer display
   const [displayTime, setDisplayTime] = useState(timeLeft);
-  const [timerActive, setTimerActive] = useState(timeLeft > 0);
-  const lastTimeRef = useRef(timeLeft);
   const timerRef = useRef<number | null>(null);
   
-  // Force timer update when timeLeft changes from parent
+  // Update display time when parent timeLeft changes
   useEffect(() => {
-    // Immediately update display time to match parent timeLeft
-    setDisplayTime(timeLeft);
-    lastTimeRef.current = timeLeft;
-    setTimerActive(timeLeft > 0);
-    
-    // Clear any existing countdown
+    // Clear any existing interval
     if (timerRef.current) {
-      clearTimeout(timerRef.current);
+      clearInterval(timerRef.current);
       timerRef.current = null;
     }
     
-    // Only start countdown if time is running
+    // Immediately update displayTime to match parent
+    setDisplayTime(timeLeft);
+    
     if (timeLeft > 0) {
-      console.log(`Timer synchronized to ${timeLeft}s - starting visual countdown`);
-      
-      // Store start time for accurate countdown
+      // Set up interval for smooth countdown
       const startTime = Date.now();
-      const startValue = timeLeft;
+      const initialValue = timeLeft;
       
-      // Visual countdown function (doesn't affect game state)
-      const updateCountdown = () => {
-        // Calculate elapsed time since we started this timer
-        const timeElapsed = Math.floor((Date.now() - startTime) / 1000);
-        const calculatedTime = Math.max(0, startValue - timeElapsed);
+      const tickInterval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000;
+        const newTime = Math.max(0, Math.floor(initialValue - elapsed));
         
-        if (calculatedTime < lastTimeRef.current) {
-          setDisplayTime(calculatedTime);
-          lastTimeRef.current = calculatedTime;
-          
-          // Continue countdown if time remains
-          if (calculatedTime > 0) {
-            timerRef.current = window.setTimeout(updateCountdown, 250);
-          } else {
-            setTimerActive(false);
-          }
+        setDisplayTime(newTime);
+        
+        // Stop interval when time reaches 0
+        if (newTime <= 0) {
+          clearInterval(tickInterval);
         }
-      };
+      }, 200);
       
-      // Start the countdown immediately
-      timerRef.current = window.setTimeout(updateCountdown, 250);
-    } else {
-      console.log('Timer stopped at 0s');
-      setDisplayTime(0);
-      setTimerActive(false);
+      timerRef.current = tickInterval;
     }
     
     return () => {
       if (timerRef.current) {
-        clearTimeout(timerRef.current);
+        clearInterval(timerRef.current);
       }
     };
   }, [timeLeft]);

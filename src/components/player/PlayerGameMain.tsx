@@ -29,7 +29,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   handleForceSync,
   currentGameState = "question"
 }) => {
-  // Local state to track answer selection and interaction states
+  // Local state for answer selection
   const [localAnswer, setLocalAnswer] = useState<string | null>(null);
   const [clicking, setClicking] = useState(false);
   const [processingClick, setProcessingClick] = useState(false);
