@@ -30,47 +30,54 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   handleForceSync,
   currentGameState = "question"
 }) => {
-  // Local state to track selection
+  // Local state to track answer selection
   const [localAnswer, setLocalAnswer] = useState<string | null>(null);
-  const [clickCount, setClickCount] = useState(0);
   const [clickDebugMsg, setClickDebugMsg] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [clickCount, setClickCount] = useState(0);
   
-  // Refs for the container and processing state
+  // Container reference for direct DOM event handling
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Reset local state when question changes
+  // Reset selection state when question changes
   useEffect(() => {
     setLocalAnswer(null);
     setClickCount(0);
-    setClickDebugMsg("");
     setIsProcessing(false);
-    console.log("New question loaded, resetting selection state");
+    setClickDebugMsg("");
+    console.log("New question loaded, reset selection state");
   }, [currentQuestion?.text]);
   
-  // Sync with parent component's selected answer
+  // Sync with parent component selection
   useEffect(() => {
     if (selectedAnswer && selectedAnswer !== localAnswer) {
       setLocalAnswer(selectedAnswer);
-      console.log("Synced with parent's selected answer:", selectedAnswer);
+      console.log("Synchronized with parent selection:", selectedAnswer);
     }
-  }, [selectedAnswer]);
+  }, [selectedAnswer, localAnswer]);
 
-  // The main click handler for option selection
+  // Option click handler - primary approach
   const handleOptionClick = (option: string) => {
-    console.log("Click detected on option:", option, {
+    // Capture click timestamp for debugging
+    const clickTime = new Date().toISOString();
+    setClickCount(prev => prev + 1);
+    console.log(`Click detected on "${option}" at ${clickTime}`, {
       isProcessing,
       isAnswerRevealed,
       timeLeft,
-      localAnswer
+      currentAnswer: localAnswer
     });
     
-    // Don't process if already selected or answer revealed or time is up
+    // Don't process clicks if:
+    // - Already processing a click
+    // - Answer has been revealed
+    // - Time is up
+    // - Already selected an answer
     if (isProcessing || isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) {
       console.log("Click ignored:", {
         reason: isProcessing ? "Already processing" : 
                isAnswerRevealed ? "Answer revealed" : 
-               timeLeft <= 0 ? "Time up" : 
+               timeLeft <= 0 ? "Time is up" : 
                localAnswer !== null ? "Already selected" : "Unknown"
       });
       return;
@@ -78,28 +85,29 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     
     // Set processing flag to prevent double-clicks
     setIsProcessing(true);
-    setClickCount(prev => prev + 1);
     
     // Update local state immediately for responsive UI
     setLocalAnswer(option);
-    setClickDebugMsg(`Clicked: ${option} at ${new Date().toLocaleTimeString()}`);
+    setClickDebugMsg(`Clicked: ${option} at ${clickTime}`);
     
     console.log("Processing answer selection:", option);
     
     // Call the parent handler
     handleSelectAnswer(option);
     
-    // Reset processing flag after a delay
+    // Reset processing flag after a short delay
     setTimeout(() => {
       setIsProcessing(false);
     }, 500);
   };
   
-  // Direct DOM click handler as a backup strategy
+  // Backup approach: direct DOM event listener
   useEffect(() => {
-    if (!containerRef.current) return;
+    const container = containerRef.current;
+    if (!container) return;
     
-    const handleClickCapture = (e: MouseEvent) => {
+    // Use event capturing for higher priority
+    const directClickHandler = (e: MouseEvent) => {
       if (isProcessing || isAnswerRevealed || timeLeft <= 0 || localAnswer !== null) return;
       
       const target = e.target as HTMLElement;
@@ -108,9 +116,11 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       if (optionElement) {
         const option = optionElement.getAttribute('data-option');
         if (option) {
-          console.log("Direct DOM click captured on:", option);
+          // Prevent normal event propagation
           e.preventDefault();
           e.stopPropagation();
+          
+          console.log("Direct DOM click captured on:", option);
           
           // Use the same handler for consistency
           handleOptionClick(option);
@@ -118,15 +128,12 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       }
     };
     
-    // Use capturing phase to get events before React
-    containerRef.current.addEventListener('click', handleClickCapture, { capture: true });
+    container.addEventListener('click', directClickHandler, { capture: true });
     
     return () => {
-      if (containerRef.current) {
-        containerRef.current.removeEventListener('click', handleClickCapture, { capture: true });
-      }
+      container.removeEventListener('click', directClickHandler, { capture: true });
     };
-  }, [isProcessing, isAnswerRevealed, timeLeft, localAnswer]);
+  }, [isProcessing, isAnswerRevealed, timeLeft, localAnswer, handleOptionClick]);
   
   // Ensure we have a valid question
   if (!currentQuestion || !currentQuestion.options) {
@@ -148,9 +155,10 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             const isSelected = option === localAnswer || option === selectedAnswer;
             
             // Define button classes based on state
-            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-300 relative cursor-pointer";
+            let buttonClasses = "p-5 rounded-lg text-left transition-all duration-300 relative";
             
             if (isAnswerRevealed) {
+              // Answer revealed state
               if (option === currentQuestion.correctAnswer) {
                 buttonClasses += " correct-answer bg-gradient-to-r from-green-500 to-green-400 border-2 border-green-300 text-white shadow-lg";
               } else if (isSelected) {
@@ -159,10 +167,11 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                 buttonClasses += " unselected-answer bg-gradient-to-r from-[#7E69AB]/70 to-[#9B87F5]/70 border border-[#D6BCFA]/50 text-white/80";
               }
             } else {
+              // Question state
               if (isSelected) {
                 buttonClasses += " selected-answer bg-gradient-to-r from-[#8B5CF6] to-[#7C3AED] border-2 border-[#D6BCFA] text-white shadow-md animate-pulse";
               } else {
-                buttonClasses += " selectable-answer bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow hover:shadow-lg";
+                buttonClasses += " selectable-answer bg-gradient-to-r from-[#7E69AB]/90 to-[#9B87F5]/90 hover:from-[#7E69AB] hover:to-[#9B87F5] border border-[#D6BCFA]/70 text-white shadow hover:shadow-lg cursor-pointer";
               }
             }
             
@@ -274,8 +283,8 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         />
       )}
       
-      {/* CSS styles for animations and transitions */}
-      <style dangerouslySetInnerHTML={{ __html: `
+      {/* CSS styles for animations */}
+      <style jsx>{`
         .selectable-answer:active {
           transform: scale(0.98);
           box-shadow: inset 0 2px 4px rgba(0,0,0,0.2);
@@ -293,7 +302,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
         .unselected-answer {
           opacity: 0.8;
         }
-      `}} />
+      `}</style>
     </main>
   );
 };

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useRef } from "react";
-import { Clock } from "lucide-react";
+import { Timer, Trophy } from "lucide-react";
 
 interface PlayerGameHeaderProps {
   questionIndex: number;
@@ -13,16 +13,21 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
   score,
   timeLeft,
 }) => {
-  // Local state for smooth timer display
+  // Local state for smooth timer display with proper synchronization
   const [displayTime, setDisplayTime] = useState(timeLeft);
-  const lastTimeRef = useRef(timeLeft);
+  const timeChangeRef = useRef<number | null>(null);
   
-  // Sync with incoming timeLeft prop with improved handling
+  // Update local timer whenever the prop changes
   useEffect(() => {
-    // Always update display time whenever timeLeft changes
+    // Cancel any existing animation
+    if (timeChangeRef.current !== null) {
+      window.cancelAnimationFrame(timeChangeRef.current);
+      timeChangeRef.current = null;
+    }
+    
+    // Update immediately for accurate timing
     setDisplayTime(timeLeft);
-    lastTimeRef.current = timeLeft;
-    console.log(`Timer updated to ${timeLeft}s`);
+    console.log(`Timer synchronized to ${timeLeft}s`);
   }, [timeLeft]);
   
   // Function to determine time color based on remaining time
@@ -39,18 +44,19 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
           Question {questionIndex + 1}
         </h1>
         <div className="flex items-center gap-4">
-          <div className="bg-gradient-to-r from-indigo-600/40 to-purple-600/40 border border-indigo-500/40 text-white px-4 py-1.5 rounded-full shadow-md">
+          <div className="flex items-center bg-gradient-to-r from-indigo-600/40 to-purple-600/40 border border-indigo-500/40 text-white px-4 py-1.5 rounded-full shadow-md">
+            <Trophy className="h-4 w-4 mr-1 text-yellow-300" />
             <span className="font-bold">{score}</span>
             <span className="text-indigo-200 ml-1">pts</span>
           </div>
           <div className={`flex items-center gap-1 ${getTimeColor()}`}>
-            <Clock className="h-5 w-5" />
+            <Timer className="h-5 w-5" />
             <span 
               className="font-bold" 
               data-time-value={displayTime}
               data-testid="timer-display"
             >
-              {displayTime || 0}s
+              {displayTime}s
             </span>
           </div>
         </div>
@@ -58,7 +64,7 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
       {displayTime > 0 && (
         <div className="w-full h-2 bg-indigo-900/50 rounded-full mt-3 overflow-hidden shadow-inner">
           <div 
-            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-300 ease-linear"
+            className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full transition-all duration-1000 ease-linear"
             style={{ width: `${(displayTime / 30) * 100}%` }}
             data-testid="timer-progress"
           ></div>
