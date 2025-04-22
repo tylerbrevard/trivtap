@@ -544,29 +544,46 @@ export const listenForPlayersJoining = (callback: (playerData: any) => void) => 
  * This function can be called by players who are out of sync
  */
 export const recoverFromDisplayTruth = () => {
+  // First clear any existing game state to avoid circular references
+  localStorage.removeItem('gameState');
+  
+  // Then get the display truth
   const displayTruth = localStorage.getItem('gameState_display_truth');
   if (displayTruth) {
     try {
       const truthState = JSON.parse(displayTruth);
       console.log('Recovering from display truth:', truthState);
       
-      // Update the regular game state
-      localStorage.setItem('gameState', JSON.stringify({
+      // Create a new state with special override flags
+      const recoveryState = {
         ...truthState,
-        timestamp: Date.now(), // Fresh timestamp
-        recovered: true
+        timestamp: Date.now() + 20000, // Future timestamp to ensure acceptance
+        recovered: true,
+        guaranteedDelivery: true,
+        overrideIntermission: true,
+        supercedeAllStates: true
+      };
+      
+      // Update the regular game state
+      localStorage.setItem('gameState', JSON.stringify(recoveryState));
+      
+      // Trigger multiple events to ensure delivery
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: recoveryState
       }));
       
-      // Trigger an event
-      const recoveryEvent = new CustomEvent('triviaStateChange', { 
-        detail: {
-          ...truthState,
-          timestamp: Date.now(),
-          recovered: true,
-          guaranteedDelivery: true
-        }
-      });
-      window.dispatchEvent(recoveryEvent);
+      // Send additional events to ensure delivery
+      for (let i = 1; i <= 3; i++) {
+        setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+            detail: {
+              ...recoveryState,
+              timestamp: recoveryState.timestamp + i,
+              redundancyLevel: i
+            }
+          }));
+        }, i * 100);
+      }
       
       return true;
     } catch (error) {

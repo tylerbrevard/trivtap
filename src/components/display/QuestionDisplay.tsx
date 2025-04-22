@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -27,7 +26,7 @@ export const QuestionDisplay = ({
     return 'bg-red-500';
   };
 
-  // Log the current question and ensure game state is synchronized
+  // Force question state to all players and ensure it overrides any previous state
   React.useEffect(() => {
     console.log('Display showing question:', {
       text: currentQuestion.text,
@@ -37,48 +36,71 @@ export const QuestionDisplay = ({
     });
     
     // Create a definitive game state that players MUST accept
-    // Use current timestamp + 10000 to ensure it's in the future compared to any existing state
-    const definitiveTruth = {
+    // Use future timestamp to ensure it's always newer than any existing state
+    const futureTimestamp = Date.now() + 30000; // 30 seconds in the future to guarantee precedence
+    
+    const definitiveQuestionState = {
       state: 'question',
       questionIndex: questionCounter - 1,
       timeLeft: timeLeft,
       questionCounter: questionCounter,
-      timestamp: Date.now() + 10000, // Future timestamp to guarantee acceptance
-      guaranteedDelivery: true,      // Flag that forces players to accept this state
-      definitiveTruth: true,         // Additional flag that overrides normal sync checks
-      forceSync: true                // Force player sync immediately
+      timestamp: futureTimestamp,
+      guaranteedDelivery: true,
+      definitiveTruth: true,
+      forceSync: true,
+      overrideIntermission: true, // Special flag to force overriding intermission state
+      supercedeAllStates: true    // Special flag to supercede all other states
     };
     
-    // Store the definitive truth in localStorage
-    localStorage.setItem('gameState', JSON.stringify(definitiveTruth));
-    localStorage.setItem('gameState_display_truth', JSON.stringify(definitiveTruth));
+    // Clear any possible existing game state first
+    localStorage.removeItem('gameState');
     
-    // Broadcast to all players with multiple events for redundancy
+    // Now set the definitive truth state
+    localStorage.setItem('gameState', JSON.stringify(definitiveQuestionState));
+    localStorage.setItem('gameState_display_truth', JSON.stringify(definitiveQuestionState));
+    
+    // Dispatch multiple events with slight delays to ensure receipt
     window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-      detail: definitiveTruth
+      detail: definitiveQuestionState
     }));
     
-    // Send a second event with a slight delay
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-        detail: {
-          ...definitiveTruth,
-          timestamp: definitiveTruth.timestamp + 1 // Slightly newer
-        }
-      }));
-    }, 100);
+    // Send additional events to ensure delivery
+    for (let i = 1; i <= 5; i++) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: {
+            ...definitiveQuestionState,
+            timestamp: definitiveQuestionState.timestamp + i, // Slightly newer
+            redundancyLevel: i
+          }
+        }));
+        console.log(`Dispatched redundant question state event #${i}`);
+      }, i * 100); // Stagger by 100ms each
+    }
     
-    // And a third event with a longer delay
-    setTimeout(() => {
-      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-        detail: {
-          ...definitiveTruth,
-          timestamp: definitiveTruth.timestamp + 2 // Even newer
-        }
-      }));
-    }, 300);
+    console.log('Broadcast definitive question state with future timestamp:', definitiveQuestionState);
     
-    console.log('Broadcast definitive question state:', definitiveTruth);
+    // Set an interval to keep broadcasting the state
+    const broadcastInterval = setInterval(() => {
+      const refreshedState = {
+        ...definitiveQuestionState,
+        timestamp: Date.now() + 30000, // Refresh the future timestamp
+        periodicBroadcast: true
+      };
+      
+      localStorage.setItem('gameState', JSON.stringify(refreshedState));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(refreshedState));
+      
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: refreshedState
+      }));
+      
+      console.log('Periodic broadcast of question state:', refreshedState);
+    }, 2000); // Broadcast every 2 seconds
+    
+    return () => {
+      clearInterval(broadcastInterval);
+    };
   }, [currentQuestion, questionCounter, timeLeft]);
 
   return (
@@ -146,34 +168,53 @@ export const QuestionDisplay = ({
               variant="outline"
               size="sm"
               onClick={() => {
-                // Create a fresh, authoritative game state update
-                const authoritative = {
-                  state: 'question',
-                  questionIndex: questionCounter - 1,
-                  timeLeft: timeLeft,
-                  questionCounter: questionCounter,
-                  timestamp: Date.now() + 10000, // Future timestamp to ensure precedence
-                  forceSync: true,
-                  authoritative: true
-                };
+                // Create a fresh, authoritative game state update with clean localStorage
+                localStorage.removeItem('gameState');
                 
-                // Store it with a special key that will always be recognized
-                localStorage.setItem('gameState', JSON.stringify(authoritative));
-                localStorage.setItem('gameState_display_truth', JSON.stringify(authoritative));
-                
-                // Trigger multiple events with slightly different timestamps to break sync deadlocks
-                window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-                  detail: {
-                    ...authoritative,
-                    timestamp: authoritative.timestamp,
-                    guaranteedDelivery: true
+                // Add a slight delay to ensure clean slate
+                setTimeout(() => {
+                  const futureTimestamp = Date.now() + 30000;
+                  const authoritative = {
+                    state: 'question',
+                    questionIndex: questionCounter - 1,
+                    timeLeft: timeLeft,
+                    questionCounter: questionCounter,
+                    timestamp: futureTimestamp,
+                    forceSync: true,
+                    authoritative: true,
+                    definitiveTruth: true,
+                    guaranteedDelivery: true,
+                    overrideIntermission: true,
+                    supercedeAllStates: true
+                  };
+                  
+                  // Store it with a special key that will always be recognized
+                  localStorage.setItem('gameState', JSON.stringify(authoritative));
+                  localStorage.setItem('gameState_display_truth', JSON.stringify(authoritative));
+                  
+                  // Trigger multiple events with slightly different timestamps to break sync deadlocks
+                  window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                    detail: authoritative
+                  }));
+                  
+                  // Send additional events to ensure delivery
+                  for (let i = 1; i <= 5; i++) {
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                        detail: {
+                          ...authoritative,
+                          timestamp: authoritative.timestamp + i,
+                          redundancyLevel: i
+                        }
+                      }));
+                    }, i * 100);
                   }
-                }));
-                
-                console.log('Sent authoritative game state update:', authoritative);
+                  
+                  console.log('Sent authoritative game state update with reset mechanism:', authoritative);
+                }, 200);
               }}
             >
-              Send Authoritative State
+              Reset and Force Sync All Players
             </Button>
           </div>
         </div>

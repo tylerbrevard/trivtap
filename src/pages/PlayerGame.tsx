@@ -176,6 +176,38 @@ const PlayerGame = () => {
           const parsedState = JSON.parse(storedGameState);
           console.log('Checking game state:', parsedState);
           
+          // Special handling for question state that should override intermission
+          if (parsedState.state === 'question' && 
+              (parsedState.overrideIntermission || parsedState.supercedeAllStates ||
+               parsedState.definitiveTruth || parsedState.guaranteedDelivery)) {
+            
+            console.log('Processing highest-priority question state override:', parsedState);
+            
+            setLastGameStateTimestamp(parsedState.timestamp);
+            setCurrentGameState('question'); // Force question state
+            setQuestionIndex(parsedState.questionIndex);
+            setTimeLeft(parsedState.timeLeft);
+            
+            if (questions.length > 0 && parsedState.questionIndex >= 0 && parsedState.questionIndex < questions.length) {
+              setCurrentQuestion(questions[parsedState.questionIndex]);
+              console.log('RESET current question to:', questions[parsedState.questionIndex]?.text);
+            }
+            
+            setSelectedAnswer(null);
+            setHasSelectedAnswer(false);
+            setAnsweredCorrectly(null);
+            setIsAnswerRevealed(false); // Ensure answer state is correct
+            setPendingPoints(0);
+            setPendingCorrect(false);
+            setShowTimeUp(false);
+            setFailedSyncAttempts(0);
+            
+            // Also store a flag that we've processed this override, to avoid circular state issues
+            sessionStorage.setItem('last_override_processed', String(parsedState.timestamp));
+            
+            return; // Skip the rest of the state handling for this priority override
+          }
+          
           // Always accept definitive truth, regardless of timestamp
           if (parsedState.definitiveTruth || parsedState.guaranteedDelivery || parsedState.forceSync) {
             console.log('Processing definitive game state:', parsedState);
@@ -334,8 +366,14 @@ const PlayerGame = () => {
     
     // More aggressive recovery for intermission states
     const forceSyncIntervalId = setInterval(() => {
+      // If in intermission for too long, try to recover display truth
       if (currentGameState === 'intermission' && failedSyncAttempts > 3) {
-        console.log('Periodic sync check - attempting recovery');
+        console.log('Periodic sync check - attempting recovery from intermission');
+        
+        // Clear existing state to avoid circular references
+        localStorage.removeItem('gameState');
+        
+        // Then try to recover from display truth
         recoverFromDisplayTruth();
       }
     }, 3000); // Check more frequently
@@ -349,6 +387,37 @@ const PlayerGame = () => {
   useEffect(() => {
     const cleanupListener = listenForGameStateChanges((gameState) => {
       console.log('Received game state change event in player:', gameState);
+      
+      // Special override handling for intermission escape
+      if (gameState.state === 'question' && 
+          (gameState.overrideIntermission || gameState.supercedeAllStates)) {
+        console.log('Processing override state change to escape intermission:', gameState);
+        
+        // Force to question state immediately
+        setCurrentGameState('question');
+        setQuestionIndex(gameState.questionIndex);
+        setTimeLeft(gameState.timeLeft);
+        setLastGameStateTimestamp(gameState.timestamp);
+        
+        if (questions.length > 0) {
+          const newIndex = gameState.questionIndex;
+          if (newIndex >= 0 && newIndex < questions.length) {
+            setCurrentQuestion(questions[newIndex]);
+            console.log('Override updated question to:', questions[newIndex]?.text);
+          }
+        }
+        
+        setSelectedAnswer(null);
+        setHasSelectedAnswer(false);
+        setAnsweredCorrectly(null);
+        setIsAnswerRevealed(false);
+        setPendingPoints(0);
+        setPendingCorrect(false);
+        setShowTimeUp(false);
+        setFailedSyncAttempts(0);
+        
+        return; // Skip other state handling for this override
+      }
       
       // Always accept definitive truth updates
       if (gameState.definitiveTruth || gameState.guaranteedDelivery || gameState.forceSync) {
@@ -467,6 +536,70 @@ const PlayerGame = () => {
     
     return cleanupListener;
   }, [lastGameStateTimestamp, questionIndex, questions, currentGameState, answeredCorrectly, isAnswerRevealed, pendingPoints, pendingCorrect, hasSelectedAnswer, score, playerName, gameId, isRegistered, correctAnswers, toast]);
+
+  // Add a more direct fix for intermission state
+  useEffect(() => {
+    // Special check focused on fixing stuck intermission state
+    const fixIntermissionLoop = () => {
+      // If we're stuck in intermission
+      if (currentGameState === 'intermission') {
+        console.log('Running special intermission state check...');
+        
+        // Try to retrieve display truth which may have question state
+        const displayTruth = localStorage.getItem('gameState_display_truth');
+        if (displayTruth) {
+          try {
+            const truthState = JSON.parse(displayTruth);
+            
+            // If display is showing a question but we're in intermission, force question state
+            if (truthState.state === 'question') {
+              console.log('Found display truth showing question while player is in intermission! Fixing.');
+              
+              setCurrentGameState('question');
+              setQuestionIndex(truthState.questionIndex);
+              setTimeLeft(truthState.timeLeft);
+              setLastGameStateTimestamp(truthState.timestamp);
+              
+              if (questions.length > 0 && truthState.questionIndex >= 0 && truthState.questionIndex < questions.length) {
+                setCurrentQuestion(questions[truthState.questionIndex]);
+                console.log('Emergency fix updated question to:', questions[truthState.questionIndex]?.text);
+              }
+              
+              setSelectedAnswer(null);
+              setHasSelectedAnswer(false);
+              setAnsweredCorrectly(null);
+              setIsAnswerRevealed(false);
+              setPendingPoints(0);
+              setPendingCorrect(false);
+              setShowTimeUp(false);
+              setFailedSyncAttempts(0);
+              
+              // Also broadcast that we're fixing this issue
+              window.dispatchEvent(new CustomEvent('playerStateFixed', { 
+                detail: {
+                  player: playerName,
+                  fixedFrom: 'intermission',
+                  fixedTo: 'question'
+                }
+              }));
+            }
+          } catch (error) {
+            console.error('Error checking display truth for intermission fix:', error);
+          }
+        }
+      }
+    };
+    
+    // Run this check immediately
+    fixIntermissionLoop();
+    
+    // And setup an interval to keep checking
+    const intermissionFixInterval = setInterval(fixIntermissionLoop, 3000);
+    
+    return () => {
+      clearInterval(intermissionFixInterval);
+    };
+  }, [currentGameState, playerName, questionIndex, questions, lastGameStateTimestamp]);
   
   useEffect(() => {
     if (selectedAnswer !== null && !isAnswerRevealed && timeLeft > 0 && currentQuestion) {
@@ -540,6 +673,9 @@ const PlayerGame = () => {
     setLastGameStateTimestamp(0);
     setFailedSyncAttempts(0);
     setShowTimeUp(false);
+    
+    // Clear localStorage game state to avoid circular references
+    localStorage.removeItem('gameState');
     
     // Try to recover from display truth
     const recovered = recoverFromDisplayTruth();
@@ -721,38 +857,4 @@ const PlayerGame = () => {
       
       {isAnswerRevealed && answeredCorrectly === true && (
         <div className="text-center mt-4 text-green-500 font-bold">
-          Correct Answer!
-        </div>
-      )}
-      
-      {isAnswerRevealed && answeredCorrectly === false && (
-        <div className="text-center mt-4 text-red-500 font-bold">
-          Incorrect. The correct answer is {currentQuestion.correctAnswer}.
-        </div>
-      )}
-      
-      {process.env.NODE_ENV === 'development' && (
-        <div className="mt-4 p-3 border border-dashed border-gray-300 rounded-md">
-          <p className="text-sm text-muted-foreground mb-2">Development Controls</p>
-          <Button variant="outline" size="sm" onClick={handleForceSync} className="mr-2">
-            Force Sync
-          </Button>
-          <div className="mt-2 text-xs text-muted-foreground">
-            <p>Game State: {currentGameState}</p>
-            <p>Question Index: {questionIndex}</p>
-            <p>Current Time Left: {timeLeft}</p>
-            <p>Show Time's Up: {showTimeUp.toString()}</p>
-            <p>Last Sync: {new Date(lastGameStateTimestamp).toLocaleTimeString()}</p>
-            <p>Questions loaded: {questions.length}</p>
-            <p>Failed sync attempts: {failedSyncAttempts}</p>
-            <p>Registered player: {isRegistered ? 'Yes' : 'No'}</p>
-            <p>Pending points: {pendingPoints}</p>
-            <p>Has selected answer: {hasSelectedAnswer ? 'Yes' : 'No'}</p>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-export default PlayerGame;
+          Correct
