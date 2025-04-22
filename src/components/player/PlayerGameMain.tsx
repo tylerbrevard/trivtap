@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef } from "react";
 import { Trophy, AlertTriangle, Check } from "lucide-react";
 import PlayerGameDevTools from "./PlayerGameDevTools";
@@ -30,8 +29,10 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
   handleForceSync,
   currentGameState = "question"
 }) => {
-  // Local state to track answer selection
+  // Local state to track answer selection and interaction states
   const [localAnswer, setLocalAnswer] = useState<string | null>(null);
+  const [clicking, setClicking] = useState(false);
+  const [processingClick, setProcessingClick] = useState(false);
   const [clickDebugMsg, setClickDebugMsg] = useState("");
   const [clickCount, setClickCount] = useState(0);
   
@@ -43,6 +44,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     setLocalAnswer(selectedAnswer);
     setClickCount(0);
     setClickDebugMsg("");
+    setProcessingClick(false);
     console.log("New question loaded, reset selection state. Selected answer:", selectedAnswer);
   }, [currentQuestion?.text, selectedAnswer]);
   
@@ -54,16 +56,25 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     }
   }, [selectedAnswer]);
 
-  // Option click handler with improved feedback
+  // Improved click handler with debouncing and visual feedback
   const handleOptionClick = (option: string) => {
+    // Prevent multiple rapid clicks
+    if (processingClick) {
+      console.log("Click ignored - already processing a click");
+      return;
+    }
+    
     // Capture click timestamp for debugging
     const clickTime = new Date().toISOString();
     setClickCount(prev => prev + 1);
+    setClicking(true);
+    
     console.log(`Click detected on "${option}" at ${clickTime}`, {
       isAnswerRevealed,
       timeLeft,
       currentAnswer: localAnswer,
-      selectedAnswer
+      selectedAnswer,
+      processingClick
     });
     
     // Don't process clicks if:
@@ -76,8 +87,12 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
                timeLeft <= 0 ? "Time is up" : 
                localAnswer !== null ? "Already selected" : "Unknown"
       });
+      setClicking(false);
       return;
     }
+    
+    // Set processing flag to prevent multiple selections
+    setProcessingClick(true);
     
     // Update local state immediately for responsive UI
     setLocalAnswer(option);
@@ -87,25 +102,53 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
     // Call the parent handler with a small delay to ensure local UI updates first
     setTimeout(() => {
       handleSelectAnswer(option);
+      // Keep processing flag on to prevent additional clicks until next question
+      console.log("Answer selection processed and sent to parent component");
+      
+      // Reset clicking state for visual feedback
+      setClicking(false);
     }, 50);
   };
   
-  // Direct DOM event listener for more reliable click handling
+  // Completely reworked direct DOM event handler for more reliable click handling
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
     
-    const directClickHandler = (e: MouseEvent) => {
+    const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
       const optionElement = target.closest('[data-option]');
       
       if (optionElement) {
         const option = optionElement.getAttribute('data-option');
         if (option) {
-          console.log("Direct DOM click handler activated for option:", option);
+          console.log("DOM mousedown handler activated for option:", option);
+          
+          // Flag that we're handling a click
+          setClicking(true);
+        }
+      }
+    };
+    
+    const handleMouseUp = (e: MouseEvent) => {
+      // Only process if we're currently clicking
+      if (!clicking) return;
+      
+      const target = e.target as HTMLElement;
+      const optionElement = target.closest('[data-option]');
+      
+      if (optionElement) {
+        const option = optionElement.getAttribute('data-option');
+        if (option) {
+          console.log("DOM click completed for option:", option);
           
           // Only process if we haven't selected an answer yet
-          if (localAnswer === null && !isAnswerRevealed && timeLeft > 0) {
+          if (localAnswer === null && !isAnswerRevealed && timeLeft > 0 && !processingClick) {
+            console.log("Processing click via DOM event handler");
+            
+            // Prevent multiple rapid clicks
+            setProcessingClick(true);
+            
             // Update local UI immediately
             setLocalAnswer(option);
             setClickCount(prev => prev + 1);
@@ -116,21 +159,36 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
             // Call the parent handler with a small delay
             setTimeout(() => {
               handleSelectAnswer(option);
+              console.log("Answer selection processed via DOM handler");
             }, 50);
           } else {
-            console.log("DOM click ignored - answer already selected or revealed");
+            console.log("DOM click ignored - conditions not met", {
+              localAnswer,
+              isAnswerRevealed,
+              timeLeft,
+              processingClick
+            });
           }
         }
       }
+      
+      // Reset clicking state
+      setClicking(false);
     };
     
-    // Use mousedown for faster response
-    container.addEventListener('mousedown', directClickHandler);
+    // Add event listeners
+    container.addEventListener('mousedown', handleMouseDown);
+    container.addEventListener('mouseup', handleMouseUp);
+    container.addEventListener('touchstart', handleMouseDown as EventListener);
+    container.addEventListener('touchend', handleMouseUp as EventListener);
     
     return () => {
-      container.removeEventListener('mousedown', directClickHandler);
+      container.removeEventListener('mousedown', handleMouseDown);
+      container.removeEventListener('mouseup', handleMouseUp);
+      container.removeEventListener('touchstart', handleMouseDown as EventListener);
+      container.removeEventListener('touchend', handleMouseUp as EventListener);
     };
-  }, [isAnswerRevealed, timeLeft, localAnswer, handleSelectAnswer]);
+  }, [clicking, localAnswer, isAnswerRevealed, timeLeft, processingClick, handleSelectAnswer]);
   
   // Ensure we have a valid question
   if (!currentQuestion || !currentQuestion.options) {
@@ -238,7 +296,7 @@ const PlayerGameMain: React.FC<PlayerGameMainProps> = ({
       <div className="mt-4 p-3 border border-dashed border-yellow-500/30 rounded bg-yellow-900/10 text-yellow-200 text-xs">
         <p>Debug: Last Click: {clickDebugMsg || 'None'}</p>
         <p>Selected: {selectedAnswer || 'None'} | Local: {localAnswer || 'None'} | Time: {timeLeft}s | Revealed: {isAnswerRevealed ? 'Yes' : 'No'}</p>
-        <p>Click Count: {clickCount} | State: {currentGameState}</p>
+        <p>Click Count: {clickCount} | Processing: {processingClick ? 'true' : 'false'} | State: {currentGameState}</p>
       </div>
       
       {/* Dev tools */}
