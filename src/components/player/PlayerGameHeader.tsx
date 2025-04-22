@@ -30,4 +30,3 @@ const PlayerGameHeader: React.FC<PlayerGameHeaderProps> = ({
 );
 
 export default PlayerGameHeader;
-

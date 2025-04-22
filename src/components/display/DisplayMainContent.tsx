@@ -46,7 +46,6 @@ export const DisplayMainContent = ({
   getCurrentIntermissionSlide,
   sortedPlayers,
 }: DisplayMainContentProps) => {
-
   // Winner Slide is inlined here so refactor doesn't lose code
   const renderWinnerSlide = () => (
     <div className="flex flex-col items-center justify-center h-full text-center">
