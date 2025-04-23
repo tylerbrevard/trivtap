@@ -1,4 +1,3 @@
-
 // Game state utility functions for synchronizing game state across screens
 
 /**
@@ -644,7 +643,8 @@ export const recoverFromDisplayTruth = () => {
         overrideIntermission: true,
         supercedeAllStates: true,
         forceSync: true,
-        playerRecovery: true
+        playerRecovery: true,
+        definitiveTruth: true
       };
       
       // Update the regular game state
@@ -656,12 +656,12 @@ export const recoverFromDisplayTruth = () => {
       }));
       
       // Send additional events to ensure delivery
-      for (let i = 1; i <= 3; i++) {
+      for (let i = 1; i <= 5; i++) {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('triviaStateChange', { 
             detail: {
               ...recoveryState,
-              timestamp: recoveryState.timestamp + i,
+              timestamp: recoveryState.timestamp + i * 100,
               redundancyLevel: i
             }
           }));
@@ -692,6 +692,10 @@ export const requestSyncFromDisplay = (playerName: string) => {
     
     console.log('Player requesting sync from display:', syncRequest);
     
+    // Store the request in localStorage as a backup
+    localStorage.setItem('playerSyncRequest', JSON.stringify(syncRequest));
+    
+    // Dispatch the event
     window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
       detail: syncRequest
     }));
@@ -699,12 +703,14 @@ export const requestSyncFromDisplay = (playerName: string) => {
     // Send multiple sync requests to ensure delivery
     for (let i = 1; i <= 3; i++) {
       setTimeout(() => {
+        const redundantRequest = {
+          ...syncRequest,
+          timestamp: syncRequest.timestamp + i * 100,
+          redundancyLevel: i
+        };
+        
         window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
-          detail: {
-            ...syncRequest,
-            timestamp: syncRequest.timestamp + i,
-            redundancyLevel: i
-          }
+          detail: redundantRequest
         }));
       }, i * 300);
     }
