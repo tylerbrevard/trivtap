@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 
@@ -15,92 +14,87 @@ export const AnswerDisplay = ({
 }: AnswerDisplayProps) => {
   // Add effect to broadcast the answer state
   useEffect(() => {
-    // Clear any previous state
-    localStorage.removeItem('gameState');
-    
-    // Set a minimal delay to ensure clean state
-    setTimeout(() => {
-      // Create authoritative answer state
-      const definedState = {
-        state: 'answer',
-        questionIndex: questionCounter - 1,
-        timeLeft: 0,
-        questionCounter: questionCounter,
-        timestamp: Date.now() + 20000, // Future timestamp for high priority
-        forceAnswerState: true,
-        definitiveTruth: true,
-        guaranteedDelivery: true,
-        displayInit: true,
-        forceSync: true,
-        questionText: currentQuestion.text,
-        correctAnswer: currentQuestion.correctAnswer,
-        broadcastTime: new Date().toISOString()
-      };
-      
-      // Store the state
-      localStorage.setItem('gameState', JSON.stringify(definedState));
-      localStorage.setItem('gameState_display_truth', JSON.stringify(definedState));
-      
-      // Dispatch the event to notify all listeners
-      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-        detail: definedState
-      }));
-      
-      console.log('Answer display initialized with authoritative state:', definedState);
-      
-      // Send redundant events to ensure delivery
-      for (let i = 1; i <= 5; i++) {
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-            detail: {
-              ...definedState,
-              timestamp: definedState.timestamp + i,
-              redundancyLevel: i
-            }
-          }));
-        }, i * 200);
-      }
-    }, 100);
-  }, [currentQuestion, questionCounter]);
-
-  // Listen for special sync requests from players
-  useEffect(() => {
-    const handlePlayerSyncRequest = (e: CustomEvent) => {
-      console.log('Received sync request from player while in answer state:', e.detail);
-      
-      // Create a special high-priority sync message targeted at this player
-      const targetedSync = {
-        state: 'answer',
-        questionIndex: questionCounter - 1,
-        timeLeft: 0,
-        questionCounter: questionCounter,
-        timestamp: Date.now() + 30000, // Very high priority
-        forceAnswerState: true,
-        definitiveTruth: true,
-        guaranteedDelivery: true,
-        forcedSyncResponse: true,
-        targetPlayer: e.detail.playerName,
-        questionText: currentQuestion.text,
-        correctAnswer: currentQuestion.correctAnswer,
-        broadcastTime: new Date().toISOString()
-      };
-      
-      // Store and broadcast
-      localStorage.setItem('gameState', JSON.stringify(targetedSync));
-      localStorage.setItem('gameState_display_truth', JSON.stringify(targetedSync));
-      
-      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-        detail: targetedSync
-      }));
-      
-      console.log('Sent targeted answer sync response to player:', e.detail.playerName);
+    // Create authoritative answer state
+    const definedState = {
+      state: 'answer',
+      questionIndex: questionCounter - 1,
+      timeLeft: 0,
+      questionCounter: questionCounter,
+      timestamp: Date.now(),
+      displayInit: true,
+      questionText: currentQuestion.text,
+      correctAnswer: currentQuestion.correctAnswer,
+      gameId: localStorage.getItem('currentGameId') || sessionStorage.getItem('currentGameId')
     };
     
-    // Add event listener for player sync requests
-    window.addEventListener('playerNeedsSync', handlePlayerSyncRequest as EventListener);
+    // Store the state
+    localStorage.setItem('gameState', JSON.stringify(definedState));
+    
+    // Dispatch standard event
+    window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+      detail: definedState
+    }));
+    
+    // Also broadcast using BroadcastChannel API
+    try {
+      const bc = new BroadcastChannel('trivia_game_state');
+      bc.postMessage(definedState);
+      
+      // Keep channel open to handle sync requests
+      const handleSyncRequest = (event: MessageEvent) => {
+        if (event.data && event.data.type === 'REQUEST_STATE' || event.data.type === 'FORCE_SYNC') {
+          console.log('Received sync request via BroadcastChannel:', event.data);
+          bc.postMessage({
+            ...definedState,
+            timestamp: Date.now(),
+            syncResponse: true
+          });
+        }
+      };
+      
+      bc.onmessage = handleSyncRequest;
+      
+      // Close channel on cleanup
+      return () => {
+        bc.close();
+      };
+    } catch (error) {
+      console.log('BroadcastChannel not supported, using only events');
+    }
+  }, [currentQuestion, questionCounter]);
+  
+  // Listen for sync requests from players
+  useEffect(() => {
+    const handleSyncRequest = (e: CustomEvent) => {
+      console.log('Received sync request from player:', e.detail);
+      
+      // Create state update
+      const syncResponse = {
+        state: 'answer',
+        questionIndex: questionCounter - 1,
+        timeLeft: 0,
+        questionCounter: questionCounter,
+        timestamp: Date.now(),
+        questionText: currentQuestion.text,
+        correctAnswer: currentQuestion.correctAnswer,
+        syncResponse: true,
+        targetPlayer: e.detail.playerName,
+        gameId: localStorage.getItem('currentGameId') || sessionStorage.getItem('currentGameId')
+      };
+      
+      // Send response
+      window.dispatchEvent(new CustomEvent('gameStateUpdate', { 
+        detail: syncResponse
+      }));
+      
+      console.log('Sent sync response to player:', e.detail.playerName);
+    };
+    
+    // Listen for sync requests
+    window.addEventListener('requestGameState', handleSyncRequest as EventListener);
     
     return () => {
-      window.removeEventListener('playerNeedsSync', handlePlayerSyncRequest as EventListener);
+      window.removeEventListener('requestGameState', handleSyncRequest as EventListener);
     };
   }, [currentQuestion, questionCounter]);
 
@@ -153,63 +147,49 @@ export const AnswerDisplay = ({
               variant="outline" 
               size="sm" 
               onClick={() => {
-                const gameState = localStorage.getItem('gameState');
-                console.log('Current game state:', gameState ? JSON.parse(gameState) : 'Not found');
-                console.log('Current question:', currentQuestion);
+                // Manually broadcast state
+                const syncResponse = {
+                  state: 'answer',
+                  questionIndex: questionCounter - 1,
+                  timeLeft: 0,
+                  questionCounter: questionCounter,
+                  timestamp: Date.now(),
+                  questionText: currentQuestion.text,
+                  correctAnswer: currentQuestion.correctAnswer,
+                  manualSync: true,
+                  gameId: localStorage.getItem('currentGameId') || sessionStorage.getItem('currentGameId')
+                };
+                
+                // Broadcast via events
+                window.dispatchEvent(new CustomEvent('gameStateUpdate', { 
+                  detail: syncResponse
+                }));
+                window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+                  detail: syncResponse
+                }));
+                
+                // Also via BroadcastChannel
+                try {
+                  const bc = new BroadcastChannel('trivia_game_state');
+                  bc.postMessage(syncResponse);
+                  setTimeout(() => bc.close(), 500);
+                } catch (error) {
+                  console.log('BroadcastChannel not supported');
+                }
+                
+                console.log('Manually broadcast state to all players');
               }}
             >
-              Log Debug Info
+              Sync All Players
             </Button>
             <Button
               variant="outline"
               size="sm"
               onClick={() => {
-                // Force resync with clean state
-                localStorage.removeItem('gameState');
-                localStorage.removeItem('gameState_display_truth');
-                
-                setTimeout(() => {
-                  const freshState = {
-                    state: 'answer',
-                    questionIndex: questionCounter - 1,
-                    timeLeft: 0,
-                    questionCounter: questionCounter,
-                    timestamp: Date.now() + 30000,
-                    forceAnswerState: true,
-                    definitiveTruth: true,
-                    guaranteedDelivery: true,
-                    forceSync: true,
-                    manualSync: true,
-                    questionText: currentQuestion.text,
-                    correctAnswer: currentQuestion.correctAnswer,
-                    broadcastTime: new Date().toISOString()
-                  };
-                  
-                  localStorage.setItem('gameState', JSON.stringify(freshState));
-                  localStorage.setItem('gameState_display_truth', JSON.stringify(freshState));
-                  
-                  window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-                    detail: freshState
-                  }));
-                  
-                  console.log('Forced complete resync of answer state:', freshState);
-                  
-                  // Send multiple broadcasts to ensure delivery
-                  for (let i = 1; i <= 5; i++) {
-                    setTimeout(() => {
-                      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-                        detail: {
-                          ...freshState,
-                          timestamp: freshState.timestamp + i,
-                          redundancyLevel: i
-                        }
-                      }));
-                    }, i * 200);
-                  }
-                }, 100);
+                console.log('Current question:', currentQuestion);
               }}
             >
-              Reset and Force Sync All Players
+              Log Debug Info
             </Button>
           </div>
         </div>

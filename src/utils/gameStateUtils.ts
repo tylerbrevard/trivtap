@@ -16,6 +16,9 @@ export const updateGameState = (
   // Calculate slidesIndex only for intermission state transitions
   const slidesIndex = nextState === 'intermission' ? getNextSlideIndex() : 0;
   
+  // Get the game ID
+  const gameId = localStorage.getItem('currentGameId') || sessionStorage.getItem('currentGameId');
+  
   const gameState = {
     state: nextState,
     questionIndex: currentQuestionIndex,
@@ -23,7 +26,8 @@ export const updateGameState = (
     questionCounter: questionCounter,
     timestamp: Date.now(),
     slidesIndex: slidesIndex,
-    authoritative: true // Mark as authoritative source
+    authoritative: true, // Mark as authoritative source
+    gameId // Include game ID for identification
   };
   
   console.log('Updating game state:', gameState);
@@ -42,18 +46,18 @@ export const updateGameState = (
     window.dispatchEvent(stateChangeEvent);
     console.log('Dispatched state change event:', gameState.state);
     
-    // Send a second event after a small delay as a backup
-    setTimeout(() => {
-      const backupEvent = new CustomEvent('triviaStateChange', { 
-        detail: {
-          ...gameState,
-          timestamp: gameState.timestamp + 1, // Slightly newer
-          backupSync: true
-        }
-      });
-      window.dispatchEvent(backupEvent);
-      console.log('Dispatched backup state event');
-    }, 200);
+    // Also try to use BroadcastChannel API for cross-tab communication
+    try {
+      const bc = new BroadcastChannel('trivia_game_state');
+      bc.postMessage(gameState);
+      
+      // Keep the channel open for a bit to handle potential requests
+      setTimeout(() => {
+        bc.close();
+      }, 1000);
+    } catch (error) {
+      console.log('BroadcastChannel not supported, using only events');
+    }
   } catch (error) {
     console.error('Error dispatching state change event:', error);
   }

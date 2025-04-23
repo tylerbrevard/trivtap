@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { gameSettings } from '@/utils/gameSettings';
@@ -25,47 +25,30 @@ export const PlayerQuestionDisplay = ({
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const prevQuestionCounterRef = useRef(questionCounter);
-  const prevQuestionIndexRef = useRef(questionIndex);
-  const submissionAttempted = useRef(false);
   const { toast } = useToast();
   
-  // Reset state when question changes
+  // Check for previous submission when question changes
   useEffect(() => {
-    console.log('Question counter/index check:', 
-      questionCounter, prevQuestionCounterRef.current, 
-      questionIndex, prevQuestionIndexRef.current);
+    console.log('Question changed to:', questionCounter);
     
-    // Only reset when question counter or index actually changes
-    if (questionCounter !== prevQuestionCounterRef.current || questionIndex !== prevQuestionIndexRef.current) {
-      console.log('Question index or counter changed to:', questionIndex, questionCounter);
-      
-      // Update refs
-      prevQuestionCounterRef.current = questionCounter;
-      prevQuestionIndexRef.current = questionIndex;
-      
-      // Reset the submission attempt tracker
-      submissionAttempted.current = false;
-      
-      // Check if we've already submitted an answer for this question
-      const submitted = hasSubmittedAnswer(playerName, questionCounter);
-      setHasSubmitted(submitted);
-      
-      if (submitted) {
-        const answerData = getSubmittedAnswer(playerName, questionCounter);
-        if (answerData) {
-          setSelectedAnswer(answerData.answer);
-          console.log('Found previously submitted answer:', answerData.answer);
-        }
-      } else {
-        setSelectedAnswer(null);
+    // Check if we've already submitted an answer
+    const submitted = hasSubmittedAnswer(playerName, questionCounter);
+    setHasSubmitted(submitted);
+    
+    if (submitted) {
+      const answerData = getSubmittedAnswer(playerName, questionCounter);
+      if (answerData) {
+        setSelectedAnswer(answerData.answer);
+        console.log('Found previously submitted answer:', answerData.answer);
       }
-      
-      setIsLoading(false);
+    } else {
+      setSelectedAnswer(null);
     }
+    
+    setIsLoading(false);
   }, [questionIndex, questionCounter, playerName]);
   
-  // Handle answer selection and submission
+  // Handle answer selection
   const handleSelectAnswer = (answer: string) => {
     if (hasSubmitted || isLoading || timeLeft <= 0) {
       console.log('Cannot select answer: already submitted, loading, or time expired');
@@ -75,9 +58,8 @@ export const PlayerQuestionDisplay = ({
     console.log('Selected answer:', answer);
     setSelectedAnswer(answer);
     setIsLoading(true);
-    submissionAttempted.current = true;
     
-    // Submit the answer
+    // Submit answer
     const success = submitPlayerAnswer(
       playerName,
       gameId,
@@ -89,19 +71,12 @@ export const PlayerQuestionDisplay = ({
     if (success) {
       setHasSubmitted(true);
       
-      // Store in session storage that we've submitted this answer
-      try {
-        sessionStorage.setItem(`answerSubmitted_${questionCounter}`, 'true');
-      } catch (error) {
-        console.error('Error storing submission status:', error);
-      }
-      
       toast({
         title: "Answer submitted",
         description: "Your answer has been recorded."
       });
       
-      // Dispatch an event to notify other components
+      // Notify other components
       window.dispatchEvent(new CustomEvent('playerAnswerSelected', {
         detail: {
           playerName,
@@ -117,44 +92,16 @@ export const PlayerQuestionDisplay = ({
         description: "Failed to submit answer. Please try again.",
         variant: "destructive"
       });
-      
-      // Try once more after a short delay
-      setTimeout(() => {
-        const retrySuccess = submitPlayerAnswer(
-          playerName,
-          gameId,
-          answer,
-          questionIndex,
-          questionCounter
-        );
-        
-        if (retrySuccess) {
-          setHasSubmitted(true);
-          toast({
-            title: "Answer submitted",
-            description: "Your answer has been recorded on retry."
-          });
-        } else {
-          toast({
-            title: "Submission failure",
-            description: "Please check your connection and try again.",
-            variant: "destructive"
-          });
-        }
-        
-        setIsLoading(false);
-      }, 500);
     }
     
     setIsLoading(false);
   };
   
-  // Auto-submit when time expires if an answer is selected but not submitted
+  // Auto-submit when time expires if answer is selected but not submitted
   useEffect(() => {
-    if (timeLeft <= 0 && selectedAnswer && !hasSubmitted && !isLoading && submissionAttempted.current) {
+    if (timeLeft <= 0 && selectedAnswer && !hasSubmitted && !isLoading) {
       console.log('Time expired, auto-submitting selected answer:', selectedAnswer);
       
-      // Submit the answer
       const success = submitPlayerAnswer(
         playerName,
         gameId,
@@ -165,9 +112,6 @@ export const PlayerQuestionDisplay = ({
       
       if (success) {
         setHasSubmitted(true);
-        console.log('Auto-submitted answer successfully');
-      } else {
-        console.error('Failed to auto-submit answer');
       }
     }
   }, [timeLeft, selectedAnswer, hasSubmitted, isLoading, playerName, gameId, questionIndex, questionCounter]);
@@ -177,14 +121,14 @@ export const PlayerQuestionDisplay = ({
     ? (timeLeft / (gameSettings.questionDuration || 20)) * 100 
     : 0;
   
-  // Render timer color
+  // Get timer color based on time left
   const getTimerColor = () => {
     if (timeLeft > (gameSettings.questionDuration || 20) * 0.6) return 'bg-green-500';
     if (timeLeft > (gameSettings.questionDuration || 20) * 0.3) return 'bg-yellow-500';
     return 'bg-red-500';
   };
   
-  // Loading state if question is not available
+  // Loading state
   if (!question || !question.text) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
