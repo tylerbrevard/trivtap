@@ -1,7 +1,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
-import { forcePlayerGameSync, storePlayerGameState, getPlayerGameState } from '@/utils/playerAnswerUtils';
+import { submitPlayerAnswer, storeGameState, getGameState } from '@/utils/playerAnswerUtils';
 
 /**
  * Custom hook for player-display synchronization
@@ -40,7 +40,7 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
       console.error('Error storing active game info:', error);
     }
     
-    const storedState = getPlayerGameState();
+    const storedState = getGameState();
     if (storedState) {
       console.log('Found stored player game state on mount:', storedState);
       if (storedState.state) setCurrentState(storedState.state);
@@ -124,7 +124,7 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
       playerReceived: now
     };
     
-    storePlayerGameState(stateToStore);
+    storeGameState(stateToStore);
     
     // If we've reconnected after being disconnected, show a notification
     if (disconnected) {
@@ -151,7 +151,7 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
         });
         
         // Try to force sync
-        forcePlayerGameSync(playerName, gameId);
+        forceSync();
         
         // Also dispatch a force sync request event
         window.dispatchEvent(new CustomEvent('forceSyncRequest', { 
@@ -176,7 +176,7 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
         console.log(`Setting reconnect timeout for ${delay}ms (attempt ${reconnectAttempts})`);
         
         reconnectTimeoutRef.current = setTimeout(() => {
-          forcePlayerGameSync(playerName, gameId);
+          forceSync();
           
           window.dispatchEvent(new CustomEvent('forceSyncRequest', { 
             detail: {
@@ -383,8 +383,20 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
     localStorage.removeItem('gameState');
     sessionStorage.removeItem('gameState');
     
-    // Force a sync through multiple channels
-    forcePlayerGameSync(playerName, gameId);
+    // Force a sync through multiple channels using BroadcastChannel
+    try {
+      const bc = new BroadcastChannel('trivia_game_state');
+      bc.postMessage({
+        type: 'FORCE_SYNC',
+        playerName,
+        gameId,
+        timestamp: Date.now(),
+        userInitiated: true
+      });
+      setTimeout(() => bc.close(), 500);
+    } catch (error) {
+      console.log('BroadcastChannel not supported, using events');
+    }
     
     // Also dispatch an event for other components to respond to
     window.dispatchEvent(new CustomEvent('forceSyncRequest', { 
@@ -409,7 +421,20 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
     setTimeout(() => {
       if (sessionStorage.getItem('awaitingSync') === 'true') {
         // Try one more forceful sync
-        forcePlayerGameSync(playerName, gameId);
+        try {
+          const bc = new BroadcastChannel('trivia_game_state');
+          bc.postMessage({
+            type: 'FORCE_SYNC',
+            playerName,
+            gameId,
+            timestamp: Date.now(),
+            userInitiated: true,
+            backup: true
+          });
+          setTimeout(() => bc.close(), 500);
+        } catch (error) {
+          console.log('BroadcastChannel not supported, using events');
+        }
         
         window.dispatchEvent(new CustomEvent('forceSyncRequest', { 
           detail: {
@@ -452,3 +477,4 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
     forceSync
   };
 };
+
