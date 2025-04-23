@@ -71,13 +71,44 @@ export const PlayerGameSync = ({
   
   // Emergency fallback for complete lack of state
   useEffect(() => {
-    if (localStorage.getItem('gameState') === null) {
-      // If there's no game state at all, try to recover immediately
-      console.log('EMERGENCY: No game state found, attempting recovery');
-      recoverFromDisplayTruth();
-      requestSyncFromDisplay(playerName);
-    }
-  }, [playerName]);
+    const checkAndRecoverFromDisplayTruth = () => {
+      console.log('Checking for display truth');
+      if (localStorage.getItem('gameState') === null) {
+        // If there's no game state at all, try to recover immediately
+        console.log('EMERGENCY: No game state found, attempting recovery');
+        const recovered = recoverFromDisplayTruth();
+        
+        if (recovered) {
+          console.log('Successfully recovered from display truth');
+          // Get the recovered state and process it
+          const recoveredState = localStorage.getItem('gameState');
+          if (recoveredState) {
+            try {
+              const parsedState = JSON.parse(recoveredState);
+              onStateChange(parsedState);
+              onSync();
+              setSyncAttempts(0);
+            } catch (error) {
+              console.error('Error processing recovered state:', error);
+            }
+          }
+        } else {
+          console.log('Recovery failed, requesting sync');
+          requestSyncFromDisplay(playerName);
+        }
+      }
+    };
+    
+    // Check immediately upon mounting
+    checkAndRecoverFromDisplayTruth();
+    
+    // And set a periodic check
+    const emergencyRecoveryInterval = setInterval(checkAndRecoverFromDisplayTruth, 2000);
+    
+    return () => {
+      clearInterval(emergencyRecoveryInterval);
+    };
+  }, [playerName, onStateChange, onSync]);
   
   // Periodically check game state and request sync if needed
   useEffect(() => {

@@ -692,6 +692,38 @@ export const requestSyncFromDisplay = (playerName: string) => {
     
     console.log('Player requesting sync from display:', syncRequest);
     
+    // First check if we can self-recover from display truth
+    const displayTruth = localStorage.getItem('gameState_display_truth');
+    if (displayTruth) {
+      try {
+        const parsedTruth = JSON.parse(displayTruth);
+        console.log('Found display truth for direct sync:', parsedTruth);
+        
+        // Create a high-priority sync event
+        const syncEvent = {
+          ...parsedTruth,
+          timestamp: Date.now() + 10000, // Future timestamp for priority
+          forceSync: true,
+          definitiveTruth: true,
+          targetPlayer: playerName,
+          forcedSyncResponse: true
+        };
+        
+        // Store in localStorage
+        localStorage.setItem('gameState', JSON.stringify(syncEvent));
+        
+        // Dispatch event to notify all components
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: syncEvent
+        }));
+        
+        console.log('Self-recovered from display truth');
+        return true;
+      } catch (error) {
+        console.error('Error recovering from display truth during request sync:', error);
+      }
+    }
+    
     // Store the request in localStorage as a backup
     localStorage.setItem('playerSyncRequest', JSON.stringify(syncRequest));
     

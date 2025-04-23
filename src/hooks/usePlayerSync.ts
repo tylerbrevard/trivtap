@@ -13,6 +13,38 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
   const [questionIndex, setQuestionIndex] = useState(0);
   const [timeLeft, setTimeLeft] = useState(0);
   const [questionCounter, setQuestionCounter] = useState(1);
+  const [localTimeLeft, setLocalTimeLeft] = useState(0);
+  
+  // Set up local timer
+  useEffect(() => {
+    // Initialize local timer when time is updated from props
+    setLocalTimeLeft(timeLeft);
+    
+    let timerId: number | undefined;
+    
+    // Create local timer countdown only when in question state
+    if (currentState === 'question' && timeLeft > 0) {
+      timerId = window.setInterval(() => {
+        setLocalTimeLeft((prev) => {
+          if (prev <= 0) {
+            // Clear timer when we reach zero
+            if (timerId) {
+              window.clearInterval(timerId);
+            }
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
+    
+    // Cleanup
+    return () => {
+      if (timerId) {
+        window.clearInterval(timerId);
+      }
+    };
+  }, [timeLeft, currentState]);
   
   // Handle game state changes from events
   const handleGameStateChange = useCallback((gameState: any) => {
@@ -66,6 +98,21 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
       }
     }
     
+    // Emergency fallback for complete lack of state
+    const displayTruth = localStorage.getItem('gameState_display_truth');
+    if (displayTruth) {
+      try {
+        const parsedTruth = JSON.parse(displayTruth);
+        console.log('Found display truth during initial load:', parsedTruth);
+        handleGameStateChange({
+          ...parsedTruth,
+          definitiveTruth: true
+        });
+      } catch (error) {
+        console.error('Error parsing display truth:', error);
+      }
+    }
+    
     // Set up periodic sync check
     const syncInterval = setInterval(() => {
       if (!hasInitialState || syncAttempts < 3) {
@@ -98,7 +145,7 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
   return {
     currentState,
     questionIndex,
-    timeLeft,
+    timeLeft: localTimeLeft, // Return the local time instead of the server time
     questionCounter,
     hasInitialState,
     forceSync

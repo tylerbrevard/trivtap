@@ -32,6 +32,8 @@ export const PlayerQuestionDisplay = ({
   
   // Initialize local timer when question changes or time is updated from props
   useEffect(() => {
+    console.log("Time left updated: " + timeLeft);
+    
     // Clear any existing timer
     if (timerRef.current) {
       window.clearInterval(timerRef.current);
@@ -43,24 +45,31 @@ export const PlayerQuestionDisplay = ({
     
     // Create local timer countdown
     if (timeLeft > 0) {
+      console.log("Starting local timer with: " + timeLeft + " seconds");
       timerRef.current = window.setInterval(() => {
         setLocalTimeLeft(prev => {
-          if (prev <= 0) {
+          const newTime = prev - 1;
+          console.log("Timer tick: " + newTime);
+          if (newTime <= 0) {
             // Clear timer when we reach zero
+            console.log("Timer reached zero, clearing interval");
             if (timerRef.current) {
               window.clearInterval(timerRef.current);
               timerRef.current = null;
             }
             return 0;
           }
-          return prev - 1;
+          return newTime;
         });
       }, 1000);
+      
+      console.log("Timer interval set: " + timerRef.current);
     }
     
     // Cleanup
     return () => {
       if (timerRef.current) {
+        console.log("Cleaning up timer: " + timerRef.current);
         window.clearInterval(timerRef.current);
         timerRef.current = null;
       }
@@ -84,16 +93,18 @@ export const PlayerQuestionDisplay = ({
       
       // Start a new timer
       if (timeLeft > 0) {
+        console.log("Starting new timer on question change with " + timeLeft + " seconds");
         timerRef.current = window.setInterval(() => {
           setLocalTimeLeft(prev => {
-            if (prev <= 0) {
+            const newTime = prev - 1;
+            if (newTime <= 0) {
               // Clear timer when we reach zero
               if (timerRef.current) {
                 window.clearInterval(timerRef.current);
               }
               return 0;
             }
-            return prev - 1;
+            return newTime;
           });
         }, 1000);
       }
@@ -112,29 +123,25 @@ export const PlayerQuestionDisplay = ({
   // Handle answer selection
   const handleSelectAnswer = (answer: string) => {
     console.log(`Attempting to select answer: ${answer}, hasSubmitted=${hasSubmitted}, isLoading=${isLoading}, localTimeLeft=${localTimeLeft}`);
+    
     if (!hasSubmitted && !isLoading && localTimeLeft > 0) {
       setSelectedAnswer(answer);
       console.log(`Selected answer: ${answer}`);
-    }
-  };
-  
-  // Handle answer submission
-  const handleSubmitAnswer = () => {
-    console.log(`Attempting to submit answer: ${selectedAnswer}, hasSubmitted=${hasSubmitted}, isLoading=${isLoading}, localTimeLeft=${localTimeLeft}`);
-    if (selectedAnswer && !hasSubmitted && !isLoading && localTimeLeft > 0) {
+      
+      // Auto-submit the answer
       setIsLoading(true);
       
       const success = submitPlayerAnswer(
         playerName,
         gameId,
-        selectedAnswer,
+        answer,
         questionIndex,
         questionCounter
       );
       
       if (success) {
         setHasSubmitted(true);
-        console.log(`Successfully submitted answer: ${selectedAnswer}`);
+        console.log(`Successfully submitted answer: ${answer}`);
         toast({
           title: "Answer submitted",
           description: "Your answer has been recorded.",
@@ -185,13 +192,13 @@ export const PlayerQuestionDisplay = ({
     }
   }, [question, playerName]);
   
-  // Calculate time left percentage
-  const timeLeftPercentage = (localTimeLeft / gameSettings.questionDuration) * 100;
+  // Calculate time left percentage - ensure we don't divide by zero
+  const timeLeftPercentage = ((localTimeLeft || 0) / (gameSettings.questionDuration || 20)) * 100;
 
   // Render timer color
   const getTimerColor = () => {
-    if (localTimeLeft > gameSettings.questionDuration * 0.6) return 'bg-green-500';
-    if (localTimeLeft > gameSettings.questionDuration * 0.3) return 'bg-yellow-500';
+    if (localTimeLeft > (gameSettings.questionDuration || 20) * 0.6) return 'bg-green-500';
+    if (localTimeLeft > (gameSettings.questionDuration || 20) * 0.3) return 'bg-yellow-500';
     return 'bg-red-500';
   };
   
@@ -216,6 +223,8 @@ export const PlayerQuestionDisplay = ({
       </div>
     );
   }
+  
+  console.log("Rendering question with local time left:", localTimeLeft);
   
   return (
     <div className="flex flex-col h-full p-4">
@@ -258,17 +267,6 @@ export const PlayerQuestionDisplay = ({
             <span className="block font-medium">{option}</span>
           </button>
         ))}
-      </div>
-      
-      <div className="mt-4">
-        <Button
-          onClick={handleSubmitAnswer}
-          className="w-full"
-          disabled={!selectedAnswer || hasSubmitted || isLoading || localTimeLeft <= 0}
-          variant={selectedAnswer && !hasSubmitted && localTimeLeft > 0 ? "default" : "outline"}
-        >
-          {isLoading ? "Submitting..." : hasSubmitted ? "Answer Submitted" : "Submit Answer"}
-        </Button>
       </div>
     </div>
   );
