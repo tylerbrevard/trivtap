@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { gameSettings } from '@/utils/gameSettings';
@@ -25,14 +25,25 @@ export const PlayerQuestionDisplay = ({
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const prevQuestionCounterRef = useRef(questionCounter);
+  const prevQuestionIndexRef = useRef(questionIndex);
   const { toast } = useToast();
   
   // Reset state when question changes
   useEffect(() => {
-    console.log('Question index or counter changed to:', questionIndex, questionCounter);
+    console.log('Question counter/index check:', 
+      questionCounter, prevQuestionCounterRef.current, 
+      questionIndex, prevQuestionIndexRef.current);
     
-    // Check if we've already submitted an answer for this question
-    const checkSubmittedAnswer = () => {
+    // Only reset when question counter or index actually changes
+    if (questionCounter !== prevQuestionCounterRef.current || questionIndex !== prevQuestionIndexRef.current) {
+      console.log('Question index or counter changed to:', questionIndex, questionCounter);
+      
+      // Update refs
+      prevQuestionCounterRef.current = questionCounter;
+      prevQuestionIndexRef.current = questionIndex;
+      
+      // Check if we've already submitted an answer for this question
       const submitted = hasSubmittedAnswer(playerName, questionCounter);
       setHasSubmitted(submitted);
       
@@ -45,10 +56,9 @@ export const PlayerQuestionDisplay = ({
       } else {
         setSelectedAnswer(null);
       }
-    };
-    
-    checkSubmittedAnswer();
-    setIsLoading(false);
+      
+      setIsLoading(false);
+    }
   }, [questionIndex, questionCounter, playerName]);
   
   // Handle answer selection and submission

@@ -1,7 +1,7 @@
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useToast } from "@/components/ui/use-toast";
-import { forcePlayerGameSync } from '@/utils/playerAnswerUtils';
+import { forcePlayerGameSync, storePlayerGameState, getPlayerGameState } from '@/utils/playerAnswerUtils';
 
 /**
  * Custom hook for player-display synchronization
@@ -15,7 +15,27 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
   const [hasInitialState, setHasInitialState] = useState(false);
   const [lastStateUpdate, setLastStateUpdate] = useState<number>(Date.now());
   const [disconnected, setDisconnected] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const { toast } = useToast();
+  
+  // Initialization - try to get stored game state on mount
+  useEffect(() => {
+    const storedState = getPlayerGameState();
+    if (storedState) {
+      console.log('Found stored player game state on mount:', storedState);
+      if (storedState.state) setCurrentState(storedState.state);
+      if (storedState.questionIndex !== undefined) setQuestionIndex(storedState.questionIndex);
+      if (storedState.questionCounter) setQuestionCounter(storedState.questionCounter);
+      if (storedState.timeLeft) {
+        // Adjust time left based on timestamp difference
+        const timePassed = (Date.now() - storedState.timestamp) / 1000;
+        const adjustedTimeLeft = Math.max(0, storedState.timeLeft - Math.floor(timePassed));
+        setServerTimeLeft(adjustedTimeLeft);
+        setLocalTimeLeft(adjustedTimeLeft);
+      }
+      setHasInitialState(true);
+    }
+  }, []);
   
   // Function to handle incoming game state updates
   const handleGameStateUpdate = useCallback((gameState: any) => {
@@ -26,28 +46,34 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
     setDisconnected(false);
     
     // Always update state with incoming data
-    setCurrentState(gameState.state || currentState);
-    setQuestionIndex(gameState.questionIndex !== undefined ? gameState.questionIndex : questionIndex);
-    setQuestionCounter(gameState.questionCounter || questionCounter);
+    if (gameState.state) setCurrentState(gameState.state);
+    if (gameState.questionIndex !== undefined) setQuestionIndex(gameState.questionIndex);
+    if (gameState.questionCounter) setQuestionCounter(gameState.questionCounter);
     
     // Update time only for question state
-    if (gameState.state === 'question') {
-      setServerTimeLeft(gameState.timeLeft || 0);
-      setLocalTimeLeft(gameState.timeLeft || 0);
+    if (gameState.state === 'question' && gameState.timeLeft !== undefined) {
+      // If this is an old state update, adjust the time accordingly
+      if (gameState.timestamp) {
+        const timeSinceUpdate = (now - gameState.timestamp) / 1000;
+        const adjustedTimeLeft = Math.max(0, gameState.timeLeft - Math.floor(timeSinceUpdate));
+        setServerTimeLeft(adjustedTimeLeft);
+        setLocalTimeLeft(adjustedTimeLeft);
+      } else {
+        setServerTimeLeft(gameState.timeLeft);
+        setLocalTimeLeft(gameState.timeLeft);
+      }
     }
     
     setHasInitialState(true);
     
     // Store the update as the latest known state
-    try {
-      localStorage.setItem('latestPlayerState', JSON.stringify({
-        ...gameState,
-        playerReceived: now
-      }));
-    } catch (error) {
-      console.error('Error storing latest player state:', error);
-    }
-  }, [currentState, questionIndex, questionCounter]);
+    const stateToStore = {
+      ...gameState,
+      playerReceived: now
+    };
+    
+    storePlayerGameState(stateToStore);
+  }, []);
   
   // Check for disconnection
   useEffect(() => {
@@ -55,8 +81,8 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
       const now = Date.now();
       const timeSinceLastUpdate = now - lastStateUpdate;
       
-      // If it's been more than 20 seconds since the last state update, consider disconnected
-      if (timeSinceLastUpdate > 20000 && !disconnected && hasInitialState) {
+      // If it's been more than 15 seconds since the last state update, consider disconnected
+      if (timeSinceLastUpdate > 15000 && !disconnected && hasInitialState) {
         setDisconnected(true);
         toast({
           title: "Connection issues",
@@ -66,31 +92,52 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
         
         // Try to force sync
         forcePlayerGameSync(playerName, gameId);
+        
+        // Also dispatch a force sync request event
+        window.dispatchEvent(new CustomEvent('forceSyncRequest', { 
+          detail: {
+            playerName,
+            gameId,
+            timestamp: Date.now()
+          }
+        }));
       }
-    }, 10000);
+    }, 5000); // Check every 5 seconds
     
     return () => clearInterval(disconnectionCheckInterval);
   }, [lastStateUpdate, disconnected, hasInitialState, playerName, gameId, toast]);
   
   // Set up local timer
   useEffect(() => {
+    // Clear any existing timer
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    
     // Start local timer only when in question state with time > 0
     if (currentState === 'question' && serverTimeLeft > 0) {
       console.log('Starting local timer with', serverTimeLeft, 'seconds');
       setLocalTimeLeft(serverTimeLeft);
       
-      const timerId = setInterval(() => {
+      timerRef.current = setInterval(() => {
         setLocalTimeLeft(prev => {
           if (prev <= 1) {
-            clearInterval(timerId);
+            if (timerRef.current) clearInterval(timerRef.current);
+            timerRef.current = null;
             return 0;
           }
           return prev - 1;
         });
       }, 1000);
-      
-      return () => clearInterval(timerId);
     }
+    
+    return () => {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    };
   }, [currentState, serverTimeLeft]);
   
   // Listen for game state events
@@ -103,15 +150,28 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
     window.addEventListener('triviaStateChange', handleStateChangeEvent as EventListener);
     window.addEventListener('playerSyncResponse', handleStateChangeEvent as EventListener);
     
-    // Check for stored game state on mount
+    // Check for stored game state on mount (both storage types)
     const checkStoredState = () => {
-      const storedState = localStorage.getItem('gameState');
-      if (storedState) {
+      // First check sessionStorage (more reliable during session)
+      const sessionState = sessionStorage.getItem('gameState');
+      if (sessionState) {
         try {
-          const parsedState = JSON.parse(storedState);
+          const parsedState = JSON.parse(sessionState);
           handleGameStateUpdate(parsedState);
         } catch (error) {
-          console.error('Error parsing stored game state:', error);
+          console.error('Error parsing session game state:', error);
+        }
+      }
+      // Then try localStorage
+      else {
+        const localState = localStorage.getItem('gameState');
+        if (localState) {
+          try {
+            const parsedState = JSON.parse(localState);
+            handleGameStateUpdate(parsedState);
+          } catch (error) {
+            console.error('Error parsing local game state:', error);
+          }
         }
       }
       
@@ -120,7 +180,7 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
       if (displayTruth) {
         try {
           const parsedTruth = JSON.parse(displayTruth);
-          console.log('Found display truth during initial load:', parsedTruth);
+          console.log('Found display truth during check:', parsedTruth);
           handleGameStateUpdate({
             ...parsedTruth,
             definitiveTruth: true
@@ -136,6 +196,8 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
     // Request sync initially and set up periodic requests
     const requestSync = () => {
       console.log('Player requesting sync from display');
+      
+      // Dispatch on multiple channels for higher reliability
       window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
         detail: {
           playerName,
@@ -144,13 +206,22 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
         }
       }));
       
-      checkStoredState(); // Also check local storage again
+      window.dispatchEvent(new CustomEvent('triviaPlayerNeedsSync', { 
+        detail: {
+          playerName,
+          gameId,
+          timestamp: Date.now(),
+          alternate: true
+        }
+      }));
+      
+      checkStoredState(); // Also check storage again
     };
     
     requestSync(); // Initial request
     
-    // Set up regular sync requests
-    const syncInterval = setInterval(requestSync, 5000);
+    // Set up regular sync requests with randomized intervals for better distribution
+    const syncInterval = setInterval(requestSync, 4000 + Math.random() * 2000);
     
     return () => {
       window.removeEventListener('triviaStateChange', handleStateChangeEvent as EventListener);
@@ -161,13 +232,24 @@ export const usePlayerSync = (playerName: string, gameId: string) => {
   
   // Force sync method for manual triggering
   const forceSync = useCallback(() => {
-    console.log('Force sync requested');
+    console.log('Force sync requested by user');
     
     // Clear any stored game state to avoid conflicts
     localStorage.removeItem('gameState');
+    sessionStorage.removeItem('gameState');
     
-    // Force a sync
+    // Force a sync through multiple channels
     forcePlayerGameSync(playerName, gameId);
+    
+    // Also dispatch an event for other components to respond to
+    window.dispatchEvent(new CustomEvent('forceSyncRequest', { 
+      detail: {
+        playerName,
+        gameId,
+        timestamp: Date.now(),
+        userInitiated: true
+      }
+    }));
     
     toast({
       title: "Syncing",
