@@ -1,9 +1,8 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
-import { submitPlayerAnswer, requestSyncFromDisplay } from '@/utils/gameStateUtils';
-import { gameSettings } from '@/utils/gameSettings';
 import { useToast } from "@/components/ui/use-toast";
+import { gameSettings } from '@/utils/gameSettings';
 
 interface PlayerQuestionDisplayProps {
   question: any;
@@ -25,183 +24,86 @@ export const PlayerQuestionDisplay = ({
   const [selectedAnswer, setSelectedAnswer] = useState<string | null>(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [lastQuestionCounter, setLastQuestionCounter] = useState(questionCounter);
-  const [localTimeLeft, setLocalTimeLeft] = useState(timeLeft);
-  const timerRef = useRef<number | null>(null);
   const { toast } = useToast();
-  
-  // Initialize local timer when question changes or time is updated from props
-  useEffect(() => {
-    console.log("Time left updated: " + timeLeft);
-    
-    // Clear any existing timer
-    if (timerRef.current) {
-      window.clearInterval(timerRef.current);
-      timerRef.current = null;
-    }
-    
-    // Set local time to match prop
-    setLocalTimeLeft(timeLeft);
-    
-    // Create local timer countdown
-    if (timeLeft > 0) {
-      console.log("Starting local timer with: " + timeLeft + " seconds");
-      timerRef.current = window.setInterval(() => {
-        setLocalTimeLeft(prev => {
-          const newTime = prev - 1;
-          console.log("Timer tick: " + newTime);
-          if (newTime <= 0) {
-            // Clear timer when we reach zero
-            console.log("Timer reached zero, clearing interval");
-            if (timerRef.current) {
-              window.clearInterval(timerRef.current);
-              timerRef.current = null;
-            }
-            return 0;
-          }
-          return newTime;
-        });
-      }, 1000);
-      
-      console.log("Timer interval set: " + timerRef.current);
-    }
-    
-    // Cleanup
-    return () => {
-      if (timerRef.current) {
-        console.log("Cleaning up timer: " + timerRef.current);
-        window.clearInterval(timerRef.current);
-        timerRef.current = null;
-      }
-    };
-  }, [timeLeft]);
   
   // Reset state when question changes
   useEffect(() => {
-    if (questionCounter !== lastQuestionCounter) {
-      console.log(`Player screen detected question change from ${lastQuestionCounter} to ${questionCounter}`);
-      setSelectedAnswer(null);
-      setHasSubmitted(false);
-      setIsLoading(false);
-      setLastQuestionCounter(questionCounter);
-      setLocalTimeLeft(timeLeft);
-      
-      // Clear any existing timer
-      if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-      }
-      
-      // Start a new timer
-      if (timeLeft > 0) {
-        console.log("Starting new timer on question change with " + timeLeft + " seconds");
-        timerRef.current = window.setInterval(() => {
-          setLocalTimeLeft(prev => {
-            const newTime = prev - 1;
-            if (newTime <= 0) {
-              // Clear timer when we reach zero
-              if (timerRef.current) {
-                window.clearInterval(timerRef.current);
-              }
-              return 0;
-            }
-            return newTime;
-          });
-        }, 1000);
-      }
-    }
-  }, [questionCounter, lastQuestionCounter, timeLeft]);
+    console.log('Question index or counter changed, resetting state');
+    setSelectedAnswer(null);
+    setHasSubmitted(false);
+    setIsLoading(false);
+  }, [questionIndex, questionCounter]);
   
-  // Clean up timer on unmount
-  useEffect(() => {
-    return () => {
-      if (timerRef.current) {
-        window.clearInterval(timerRef.current);
-      }
-    };
-  }, []);
-  
-  // Handle answer selection
+  // Handle answer selection and submission
   const handleSelectAnswer = (answer: string) => {
-    console.log(`Attempting to select answer: ${answer}, hasSubmitted=${hasSubmitted}, isLoading=${isLoading}, localTimeLeft=${localTimeLeft}`);
+    if (hasSubmitted || isLoading || timeLeft <= 0) {
+      console.log('Cannot select answer: already submitted, loading, or time expired');
+      return;
+    }
     
-    if (!hasSubmitted && !isLoading && localTimeLeft > 0) {
-      setSelectedAnswer(answer);
-      console.log(`Selected answer: ${answer}`);
+    console.log('Selected answer:', answer);
+    setSelectedAnswer(answer);
+    setIsLoading(true);
+    
+    // Submit the answer
+    submitAnswer(answer);
+  };
+  
+  // Submit answer to the game
+  const submitAnswer = (answer: string) => {
+    console.log('Submitting answer:', answer, 'for question index:', questionIndex);
+    
+    // Store the answer in localStorage for retrieval by game
+    const answerData = {
+      playerName,
+      gameId,
+      answer,
+      questionIndex,
+      questionCounter,
+      timestamp: Date.now(),
+      timeLeft
+    };
+    
+    try {
+      localStorage.setItem(`playerAnswer_${playerName}_${questionCounter}`, JSON.stringify(answerData));
       
-      // Auto-submit the answer
-      setIsLoading(true);
+      // Also dispatch an event with the answer
+      window.dispatchEvent(new CustomEvent('playerAnswerSubmitted', { 
+        detail: answerData
+      }));
       
-      const success = submitPlayerAnswer(
-        playerName,
-        gameId,
-        answer,
-        questionIndex,
-        questionCounter
-      );
+      setHasSubmitted(true);
       
-      if (success) {
-        setHasSubmitted(true);
-        console.log(`Successfully submitted answer: ${answer}`);
-        toast({
-          title: "Answer submitted",
-          description: "Your answer has been recorded.",
-        });
-      } else {
-        console.log('Failed to submit answer');
-        toast({
-          title: "Error",
-          description: "Failed to submit your answer. Please try again.",
-          variant: "destructive",
-        });
-      }
+      toast({
+        title: "Answer submitted",
+        description: "Your answer has been recorded."
+      });
+    } catch (error) {
+      console.error('Error submitting answer:', error);
       
+      toast({
+        title: "Error",
+        description: "Failed to submit answer. Please try again.",
+        variant: "destructive"
+      });
+    } finally {
       setIsLoading(false);
     }
   };
   
-  // Request sync if question data is missing or when component mounts
-  useEffect(() => {
-    console.log('Player question component mounted/updated with question:', question);
-    if (!question || !question.text) {
-      console.log('Player screen missing question data, requesting sync');
-      requestSyncFromDisplay(playerName);
-      
-      // Try to get the display truth directly
-      const displayTruth = localStorage.getItem('gameState_display_truth');
-      if (displayTruth) {
-        try {
-          const parsedState = JSON.parse(displayTruth);
-          console.log('Found display truth:', parsedState);
-          
-          // Create a high-priority sync event
-          const syncEvent = {
-            ...parsedState,
-            timestamp: Date.now() + 10000, // Future timestamp for priority
-            forceSync: true,
-            definitiveTruth: true
-          };
-          
-          // Dispatch this event to force a state update
-          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-            detail: syncEvent
-          }));
-        } catch (error) {
-          console.error('Error parsing display truth:', error);
-        }
-      }
-    }
-  }, [question, playerName]);
+  // Calculate time left percentage
+  const timeLeftPercentage = timeLeft > 0 
+    ? (timeLeft / (gameSettings.questionDuration || 20)) * 100 
+    : 0;
   
-  // Calculate time left percentage - ensure we don't divide by zero
-  const timeLeftPercentage = ((localTimeLeft || 0) / (gameSettings.questionDuration || 20)) * 100;
-
   // Render timer color
   const getTimerColor = () => {
-    if (localTimeLeft > (gameSettings.questionDuration || 20) * 0.6) return 'bg-green-500';
-    if (localTimeLeft > (gameSettings.questionDuration || 20) * 0.3) return 'bg-yellow-500';
+    if (timeLeft > (gameSettings.questionDuration || 20) * 0.6) return 'bg-green-500';
+    if (timeLeft > (gameSettings.questionDuration || 20) * 0.3) return 'bg-yellow-500';
     return 'bg-red-500';
   };
   
+  // Loading state if question is not available
   if (!question || !question.text) {
     return (
       <div className="flex flex-col items-center justify-center h-full p-4">
@@ -212,19 +114,22 @@ export const PlayerQuestionDisplay = ({
             <div className="h-4 bg-gray-200 rounded w-full mx-auto"></div>
             <div className="h-4 bg-gray-200 rounded w-2/3 mx-auto"></div>
           </div>
-          <Button 
-            onClick={() => requestSyncFromDisplay(playerName)} 
-            className="mt-6"
-            variant="outline"
-          >
-            Sync Manually
-          </Button>
         </div>
       </div>
     );
   }
   
-  console.log("Rendering question with local time left:", localTimeLeft);
+  // Time expired view
+  if (timeLeft <= 0 && !hasSubmitted) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full p-4">
+        <div className="card-trivia p-6 w-full max-w-md text-center">
+          <h3 className="text-xl font-semibold mb-4">Time's up!</h3>
+          <p className="mb-4">The answer will be revealed shortly.</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="flex flex-col h-full p-4">
@@ -237,7 +142,7 @@ export const PlayerQuestionDisplay = ({
             Question {questionCounter}
           </div>
           <div className="flex items-center gap-1 text-sm font-medium">
-            {localTimeLeft}s
+            {timeLeft}s
           </div>
         </div>
         <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
@@ -254,20 +159,27 @@ export const PlayerQuestionDisplay = ({
       
       <div className="grid grid-cols-1 gap-3 flex-1">
         {question.options && question.options.map((option: string, index: number) => (
-          <button
+          <Button
             key={index}
             onClick={() => handleSelectAnswer(option)}
-            className={`p-4 text-left rounded-lg transition-all ${
+            className={`p-4 text-left justify-start h-auto ${
               selectedAnswer === option 
                 ? 'bg-primary text-primary-foreground' 
                 : 'bg-card hover:bg-card/80'
             } ${hasSubmitted ? 'opacity-50' : ''}`}
-            disabled={hasSubmitted || isLoading || localTimeLeft <= 0}
+            disabled={hasSubmitted || isLoading || timeLeft <= 0}
+            variant="ghost"
           >
             <span className="block font-medium">{option}</span>
-          </button>
+          </Button>
         ))}
       </div>
+      
+      {hasSubmitted && (
+        <div className="text-center mt-4 text-primary font-medium">
+          Answer submitted! Waiting for results...
+        </div>
+      )}
     </div>
   );
 };
