@@ -39,13 +39,16 @@ export const PlayerQuestionDisplay = ({
   
   // Handle answer selection
   const handleSelectAnswer = (answer: string) => {
+    console.log(`Attempting to select answer: ${answer}, hasSubmitted=${hasSubmitted}, isLoading=${isLoading}, timeLeft=${timeLeft}`);
     if (!hasSubmitted && !isLoading && timeLeft > 0) {
       setSelectedAnswer(answer);
+      console.log(`Selected answer: ${answer}`);
     }
   };
   
   // Handle answer submission
   const handleSubmitAnswer = () => {
+    console.log(`Attempting to submit answer: ${selectedAnswer}, hasSubmitted=${hasSubmitted}, isLoading=${isLoading}, timeLeft=${timeLeft}`);
     if (selectedAnswer && !hasSubmitted && !isLoading && timeLeft > 0) {
       setIsLoading(true);
       
@@ -59,14 +62,18 @@ export const PlayerQuestionDisplay = ({
       
       if (success) {
         setHasSubmitted(true);
+        console.log(`Successfully submitted answer: ${selectedAnswer}`);
+      } else {
+        console.log('Failed to submit answer');
       }
       
       setIsLoading(false);
     }
   };
   
-  // Request sync if question data is missing
+  // Request sync if question data is missing or when component mounts
   useEffect(() => {
+    console.log('Player question component mounted/updated with question:', question);
     if (!question || !question.text) {
       console.log('Player screen missing question data, requesting sync');
       requestSyncFromDisplay(playerName);
@@ -115,7 +122,7 @@ export const PlayerQuestionDisplay = ({
         <div className="w-full bg-muted h-2 rounded-full overflow-hidden">
           <div 
             className={`h-full ${getTimerColor()} transition-all duration-300`}
-            style={{ width: `${timeLeftPercentage}%` }}
+            style={{ width: `${Math.max(0, Math.min(100, timeLeftPercentage))}%` }}
           />
         </div>
       </div>
@@ -133,7 +140,7 @@ export const PlayerQuestionDisplay = ({
               selectedAnswer === option 
                 ? 'bg-primary text-primary-foreground' 
                 : 'bg-card hover:bg-card/80'
-            } ${hasSubmitted ? 'opacity-50 cursor-default' : ''}`}
+            } ${hasSubmitted ? 'opacity-50' : ''}`}
             disabled={hasSubmitted || isLoading || timeLeft <= 0}
           >
             <span className="block font-medium">{option}</span>

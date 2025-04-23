@@ -74,25 +74,22 @@ export const PlayerGameSync = ({
       
       // Only request sync if it's been at least 5 seconds since the last request
       if (timeSinceLastSync > 5000) {
-        const gameState = localStorage.getItem('gameState');
+        // More aggressive sync request strategy
+        console.log('Player periodic sync check');
+        requestSyncFromDisplay(playerName);
+        setLastSyncRequest(now);
+        setSyncAttempts(prev => prev + 1);
         
-        if (!gameState) {
-          console.log('No game state found for player, requesting sync');
-          requestSyncFromDisplay(playerName);
-          setLastSyncRequest(now);
-          setSyncAttempts(prev => prev + 1);
+        if (syncAttempts > 3) {
+          console.log('Multiple sync attempts failed, trying to recover from display truth');
+          const recovered = recoverFromDisplayTruth();
           
-          if (syncAttempts > 3) {
-            console.log('Multiple sync attempts failed, trying to recover from display truth');
-            const recovered = recoverFromDisplayTruth();
-            
-            if (recovered) {
-              setSyncAttempts(0);
-              toast({
-                title: "Game recovered",
-                description: "Successfully recovered game state from display.",
-              });
-            }
+          if (recovered) {
+            setSyncAttempts(0);
+            toast({
+              title: "Game recovered",
+              description: "Successfully recovered game state from display.",
+            });
           }
         }
       }
