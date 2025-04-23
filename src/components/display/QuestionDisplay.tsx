@@ -1,3 +1,4 @@
+
 import React, { useEffect } from 'react';
 import { Clock } from 'lucide-react';
 import { Button } from "@/components/ui/button";
@@ -47,7 +48,13 @@ export const QuestionDisplay = ({
         displayInit: true,
         forceSync: true,
         questionText: currentQuestion.text, // Add question text for debugging
-        broadcastTime: new Date().toISOString()
+        broadcastTime: new Date().toISOString(),
+        // Add question data for player screens
+        currentQuestion: {
+          text: currentQuestion.text,
+          options: currentQuestion.options,
+          category: currentQuestion.category
+        }
       };
       
       // Store the state
@@ -96,7 +103,13 @@ export const QuestionDisplay = ({
         forcedSyncResponse: true,
         targetPlayer: e.detail.playerName,
         questionText: currentQuestion.text,
-        broadcastTime: new Date().toISOString()
+        broadcastTime: new Date().toISOString(),
+        // Add question data for player screens
+        currentQuestion: {
+          text: currentQuestion.text,
+          options: currentQuestion.options,
+          category: currentQuestion.category
+        }
       };
       
       // Store and broadcast
@@ -130,7 +143,13 @@ export const QuestionDisplay = ({
         timestamp: Date.now() + 5000, // Future timestamp
         timerUpdate: true,
         questionText: currentQuestion.text,
-        broadcastTime: new Date().toISOString()
+        broadcastTime: new Date().toISOString(),
+        // Add question data for player screens
+        currentQuestion: {
+          text: currentQuestion.text,
+          options: currentQuestion.options,
+          category: currentQuestion.category
+        }
       };
       
       localStorage.setItem('gameState', JSON.stringify(currentState));

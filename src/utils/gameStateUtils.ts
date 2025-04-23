@@ -187,7 +187,9 @@ export const moveToNextQuestion = (
       timestamp: Date.now(),
       slidesIndex: 0,
       authoritative: true,
-      forceSync: true
+      forceSync: true,
+      forceNextQuestion: true, // Flag to force players to move to next question
+      nextQuestionTimestamp: Date.now() // Timestamp for when the next question was triggered
     };
     
     localStorage.setItem('gameState', JSON.stringify(gameState));
@@ -415,23 +417,45 @@ export const autoSyncGameState = (
       
       if (shouldShowWinnerSlide) {
         console.log('Auto-syncing: Moving to leaderboard for winners');
-        updateGameState(
-          currentQuestionIndex,
-          'leaderboard',
-          0,
-          questionCounter
-        );
+        const leaderboardState = {
+          state: 'leaderboard',
+          questionIndex: currentQuestionIndex,
+          timeLeft: 0,
+          questionCounter: questionCounter,
+          timestamp: Date.now() + 1000,
+          definitiveTruth: true,
+          guaranteedDelivery: true,
+          broadcastTime: new Date().toISOString()
+        };
+        
+        localStorage.setItem('gameState', JSON.stringify(leaderboardState));
+        localStorage.setItem('gameState_display_truth', JSON.stringify(leaderboardState));
+        
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: leaderboardState
+        }));
         
         // After leaderboard, move to intermission if needed or to next question
         setTimeout(() => {
           if (shouldShowIntermission && gameSettings.showIntermission) {
             console.log('Auto-syncing: Moving to intermission after leaderboard');
-            updateGameState(
-              currentQuestionIndex,
-              'intermission',
-              0,
-              questionCounter
-            );
+            const intermissionState = {
+              state: 'intermission',
+              questionIndex: currentQuestionIndex,
+              timeLeft: 0,
+              questionCounter: questionCounter,
+              timestamp: Date.now() + 1000,
+              definitiveTruth: true,
+              guaranteedDelivery: true,
+              broadcastTime: new Date().toISOString()
+            };
+            
+            localStorage.setItem('gameState', JSON.stringify(intermissionState));
+            localStorage.setItem('gameState_display_truth', JSON.stringify(intermissionState));
+            
+            window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+              detail: intermissionState
+            }));
             
             // Start cycling through intermission slides
             setTimeout(() => {
@@ -453,12 +477,23 @@ export const autoSyncGameState = (
       }
       else if (shouldShowIntermission && gameSettings.showIntermission) {
         console.log('Auto-syncing: Moving to intermission');
-        updateGameState(
-          currentQuestionIndex,
-          'intermission',
-          0,
-          questionCounter
-        );
+        const intermissionState = {
+          state: 'intermission',
+          questionIndex: currentQuestionIndex,
+          timeLeft: 0,
+          questionCounter: questionCounter,
+          timestamp: Date.now() + 1000,
+          definitiveTruth: true,
+          guaranteedDelivery: true,
+          broadcastTime: new Date().toISOString()
+        };
+        
+        localStorage.setItem('gameState', JSON.stringify(intermissionState));
+        localStorage.setItem('gameState_display_truth', JSON.stringify(intermissionState));
+        
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: intermissionState
+        }));
         
         // Start cycling through intermission slides
         setTimeout(() => {
@@ -471,12 +506,23 @@ export const autoSyncGameState = (
       } 
       else if (shouldShowLeaderboard) {
         console.log('Auto-syncing: Moving to leaderboard');
-        updateGameState(
-          currentQuestionIndex,
-          'leaderboard',
-          0,
-          questionCounter
-        );
+        const leaderboardState = {
+          state: 'leaderboard',
+          questionIndex: currentQuestionIndex,
+          timeLeft: 0,
+          questionCounter: questionCounter,
+          timestamp: Date.now() + 1000,
+          definitiveTruth: true,
+          guaranteedDelivery: true,
+          broadcastTime: new Date().toISOString()
+        };
+        
+        localStorage.setItem('gameState', JSON.stringify(leaderboardState));
+        localStorage.setItem('gameState_display_truth', JSON.stringify(leaderboardState));
+        
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: leaderboardState
+        }));
         
         // After leaderboard, move to next question
         setTimeout(() => {
@@ -596,7 +642,9 @@ export const recoverFromDisplayTruth = () => {
         recovered: true,
         guaranteedDelivery: true,
         overrideIntermission: true,
-        supercedeAllStates: true
+        supercedeAllStates: true,
+        forceSync: true,
+        playerRecovery: true
       };
       
       // Update the regular game state
@@ -627,4 +675,84 @@ export const recoverFromDisplayTruth = () => {
     }
   }
   return false;
+};
+
+/**
+ * Player-specific function to request a state sync from the display
+ * @param playerName The name of the player requesting sync
+ */
+export const requestSyncFromDisplay = (playerName: string) => {
+  try {
+    const syncRequest = {
+      playerName: playerName,
+      timestamp: Date.now(),
+      requestType: 'sync',
+      needsCurrentQuestionData: true
+    };
+    
+    console.log('Player requesting sync from display:', syncRequest);
+    
+    window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
+      detail: syncRequest
+    }));
+    
+    // Send multiple sync requests to ensure delivery
+    for (let i = 1; i <= 3; i++) {
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent('playerNeedsSync', { 
+          detail: {
+            ...syncRequest,
+            timestamp: syncRequest.timestamp + i,
+            redundancyLevel: i
+          }
+        }));
+      }, i * 300);
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('Error requesting sync from display:', error);
+    return false;
+  }
+};
+
+/**
+ * Submit a player's answer for the current question
+ * @param playerName The name of the player
+ * @param gameId The game ID/code
+ * @param answer The selected answer
+ * @param questionIndex The current question index
+ * @param questionCounter The question counter
+ */
+export const submitPlayerAnswer = (
+  playerName: string,
+  gameId: string,
+  answer: string,
+  questionIndex: number,
+  questionCounter: number
+) => {
+  try {
+    const submissionData = {
+      playerName: playerName,
+      gameId: gameId,
+      answer: answer,
+      questionIndex: questionIndex,
+      questionCounter: questionCounter,
+      timestamp: Date.now(),
+      submissionType: 'answer'
+    };
+    
+    localStorage.setItem(`playerAnswer_${playerName}_${questionCounter}`, JSON.stringify(submissionData));
+    
+    console.log('Player submitted answer:', submissionData);
+    
+    window.dispatchEvent(new CustomEvent('playerAnswerSubmitted', { 
+      detail: submissionData
+    }));
+    
+    return true;
+  } catch (error) {
+    console.error('Error submitting player answer:', error);
+    return false;
+  }
 };

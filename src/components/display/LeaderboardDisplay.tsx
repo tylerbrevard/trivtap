@@ -11,6 +11,29 @@ export const LeaderboardDisplay = ({
   sortedPlayers,
   onManualNext
 }: LeaderboardDisplayProps) => {
+  // Force a high-priority event for leaderboard
+  React.useEffect(() => {
+    setTimeout(() => {
+      const leaderboardState = {
+        state: 'leaderboard',
+        timestamp: Date.now() + 10000, // High priority
+        forceSync: true,
+        definitiveTruth: true,
+        guaranteedDelivery: true,
+        leaderboardPlayers: sortedPlayers
+      };
+      
+      localStorage.setItem('gameState', JSON.stringify(leaderboardState));
+      localStorage.setItem('gameState_display_truth', JSON.stringify(leaderboardState));
+      
+      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+        detail: leaderboardState 
+      }));
+      
+      console.log('Dispatched high-priority leaderboard state event');
+    }, 500);
+  }, [sortedPlayers]);
+
   return (
     <div className="flex flex-col items-center justify-center h-full">
       <h1 className="text-4xl font-bold mb-8 text-primary">Leaderboard</h1>
