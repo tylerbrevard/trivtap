@@ -624,10 +624,7 @@ export const listenForPlayersJoining = (callback: (playerData: any) => void) => 
  * This function can be called by players who are out of sync
  */
 export const recoverFromDisplayTruth = () => {
-  // First clear any existing game state to avoid circular references
-  localStorage.removeItem('gameState');
-  
-  // Then get the display truth
+  // First check if we have display truth stored
   const displayTruth = localStorage.getItem('gameState_display_truth');
   if (displayTruth) {
     try {
@@ -647,16 +644,19 @@ export const recoverFromDisplayTruth = () => {
         definitiveTruth: true
       };
       
-      // Update the regular game state
+      // First clear out any existing game state to avoid conflicts
+      localStorage.removeItem('gameState');
+      
+      // Then update with our recovery state
       localStorage.setItem('gameState', JSON.stringify(recoveryState));
       
-      // Trigger multiple events to ensure delivery
+      // Trigger events to ensure delivery
       window.dispatchEvent(new CustomEvent('triviaStateChange', { 
         detail: recoveryState
       }));
       
       // Send additional events to ensure delivery
-      for (let i = 1; i <= 5; i++) {
+      for (let i = 1; i <= 3; i++) {
         setTimeout(() => {
           window.dispatchEvent(new CustomEvent('triviaStateChange', { 
             detail: {
@@ -692,36 +692,10 @@ export const requestSyncFromDisplay = (playerName: string) => {
     
     console.log('Player requesting sync from display:', syncRequest);
     
-    // First check if we can self-recover from display truth
-    const displayTruth = localStorage.getItem('gameState_display_truth');
-    if (displayTruth) {
-      try {
-        const parsedTruth = JSON.parse(displayTruth);
-        console.log('Found display truth for direct sync:', parsedTruth);
-        
-        // Create a high-priority sync event
-        const syncEvent = {
-          ...parsedTruth,
-          timestamp: Date.now() + 10000, // Future timestamp for priority
-          forceSync: true,
-          definitiveTruth: true,
-          targetPlayer: playerName,
-          forcedSyncResponse: true
-        };
-        
-        // Store in localStorage
-        localStorage.setItem('gameState', JSON.stringify(syncEvent));
-        
-        // Dispatch event to notify all components
-        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-          detail: syncEvent
-        }));
-        
-        console.log('Self-recovered from display truth');
-        return true;
-      } catch (error) {
-        console.error('Error recovering from display truth during request sync:', error);
-      }
+    // First try to recover from display truth
+    if (recoverFromDisplayTruth()) {
+      console.log('Successfully recovered from display truth');
+      return true;
     }
     
     // Store the request in localStorage as a backup
@@ -733,7 +707,7 @@ export const requestSyncFromDisplay = (playerName: string) => {
     }));
     
     // Send multiple sync requests to ensure delivery
-    for (let i = 1; i <= 3; i++) {
+    for (let i = 1; i <= 2; i++) {
       setTimeout(() => {
         const redundantRequest = {
           ...syncRequest,

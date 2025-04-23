@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
 import { gameSettings } from '@/utils/gameSettings';
+import { submitPlayerAnswer, hasSubmittedAnswer, getSubmittedAnswer } from '@/utils/playerAnswerUtils';
 
 interface PlayerQuestionDisplayProps {
   question: any;
@@ -28,11 +29,27 @@ export const PlayerQuestionDisplay = ({
   
   // Reset state when question changes
   useEffect(() => {
-    console.log('Question index or counter changed, resetting state');
-    setSelectedAnswer(null);
-    setHasSubmitted(false);
+    console.log('Question index or counter changed to:', questionIndex, questionCounter);
+    
+    // Check if we've already submitted an answer for this question
+    const checkSubmittedAnswer = () => {
+      const submitted = hasSubmittedAnswer(playerName, questionCounter);
+      setHasSubmitted(submitted);
+      
+      if (submitted) {
+        const answerData = getSubmittedAnswer(playerName, questionCounter);
+        if (answerData) {
+          setSelectedAnswer(answerData.answer);
+          console.log('Found previously submitted answer:', answerData.answer);
+        }
+      } else {
+        setSelectedAnswer(null);
+      }
+    };
+    
+    checkSubmittedAnswer();
     setIsLoading(false);
-  }, [questionIndex, questionCounter]);
+  }, [questionIndex, questionCounter, playerName]);
   
   // Handle answer selection and submission
   const handleSelectAnswer = (answer: string) => {
@@ -46,49 +63,30 @@ export const PlayerQuestionDisplay = ({
     setIsLoading(true);
     
     // Submit the answer
-    submitAnswer(answer);
-  };
-  
-  // Submit answer to the game
-  const submitAnswer = (answer: string) => {
-    console.log('Submitting answer:', answer, 'for question index:', questionIndex);
-    
-    // Store the answer in localStorage for retrieval by game
-    const answerData = {
+    const success = submitPlayerAnswer(
       playerName,
       gameId,
       answer,
       questionIndex,
-      questionCounter,
-      timestamp: Date.now(),
-      timeLeft
-    };
+      questionCounter
+    );
     
-    try {
-      localStorage.setItem(`playerAnswer_${playerName}_${questionCounter}`, JSON.stringify(answerData));
-      
-      // Also dispatch an event with the answer
-      window.dispatchEvent(new CustomEvent('playerAnswerSubmitted', { 
-        detail: answerData
-      }));
-      
+    if (success) {
       setHasSubmitted(true);
       
       toast({
         title: "Answer submitted",
         description: "Your answer has been recorded."
       });
-    } catch (error) {
-      console.error('Error submitting answer:', error);
-      
+    } else {
       toast({
         title: "Error",
         description: "Failed to submit answer. Please try again.",
         variant: "destructive"
       });
-    } finally {
-      setIsLoading(false);
     }
+    
+    setIsLoading(false);
   };
   
   // Calculate time left percentage
