@@ -27,6 +27,7 @@ export const PlayerQuestionDisplay = ({
   const [isLoading, setIsLoading] = useState(false);
   const prevQuestionCounterRef = useRef(questionCounter);
   const prevQuestionIndexRef = useRef(questionIndex);
+  const submissionAttempted = useRef(false);
   const { toast } = useToast();
   
   // Reset state when question changes
@@ -42,6 +43,9 @@ export const PlayerQuestionDisplay = ({
       // Update refs
       prevQuestionCounterRef.current = questionCounter;
       prevQuestionIndexRef.current = questionIndex;
+      
+      // Reset the submission attempt tracker
+      submissionAttempted.current = false;
       
       // Check if we've already submitted an answer for this question
       const submitted = hasSubmittedAnswer(playerName, questionCounter);
@@ -71,6 +75,7 @@ export const PlayerQuestionDisplay = ({
     console.log('Selected answer:', answer);
     setSelectedAnswer(answer);
     setIsLoading(true);
+    submissionAttempted.current = true;
     
     // Submit the answer
     const success = submitPlayerAnswer(
@@ -84,20 +89,88 @@ export const PlayerQuestionDisplay = ({
     if (success) {
       setHasSubmitted(true);
       
+      // Store in session storage that we've submitted this answer
+      try {
+        sessionStorage.setItem(`answerSubmitted_${questionCounter}`, 'true');
+      } catch (error) {
+        console.error('Error storing submission status:', error);
+      }
+      
       toast({
         title: "Answer submitted",
         description: "Your answer has been recorded."
       });
+      
+      // Dispatch an event to notify other components
+      window.dispatchEvent(new CustomEvent('playerAnswerSelected', {
+        detail: {
+          playerName,
+          gameId,
+          questionCounter,
+          answer,
+          timestamp: Date.now()
+        }
+      }));
     } else {
       toast({
         title: "Error",
         description: "Failed to submit answer. Please try again.",
         variant: "destructive"
       });
+      
+      // Try once more after a short delay
+      setTimeout(() => {
+        const retrySuccess = submitPlayerAnswer(
+          playerName,
+          gameId,
+          answer,
+          questionIndex,
+          questionCounter
+        );
+        
+        if (retrySuccess) {
+          setHasSubmitted(true);
+          toast({
+            title: "Answer submitted",
+            description: "Your answer has been recorded on retry."
+          });
+        } else {
+          toast({
+            title: "Submission failure",
+            description: "Please check your connection and try again.",
+            variant: "destructive"
+          });
+        }
+        
+        setIsLoading(false);
+      }, 500);
     }
     
     setIsLoading(false);
   };
+  
+  // Auto-submit when time expires if an answer is selected but not submitted
+  useEffect(() => {
+    if (timeLeft <= 0 && selectedAnswer && !hasSubmitted && !isLoading && submissionAttempted.current) {
+      console.log('Time expired, auto-submitting selected answer:', selectedAnswer);
+      
+      // Submit the answer
+      const success = submitPlayerAnswer(
+        playerName,
+        gameId,
+        selectedAnswer,
+        questionIndex,
+        questionCounter
+      );
+      
+      if (success) {
+        setHasSubmitted(true);
+        console.log('Auto-submitted answer successfully');
+      } else {
+        console.error('Failed to auto-submit answer');
+      }
+    }
+  }, [timeLeft, selectedAnswer, hasSubmitted, isLoading, playerName, gameId, questionIndex, questionCounter]);
   
   // Calculate time left percentage
   const timeLeftPercentage = timeLeft > 0 
@@ -186,6 +259,12 @@ export const PlayerQuestionDisplay = ({
       {hasSubmitted && (
         <div className="text-center mt-4 text-primary font-medium">
           Answer submitted! Waiting for results...
+        </div>
+      )}
+      
+      {isLoading && (
+        <div className="text-center mt-4 text-amber-600 font-medium">
+          Submitting your answer...
         </div>
       )}
     </div>

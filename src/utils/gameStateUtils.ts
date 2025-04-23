@@ -631,49 +631,102 @@ export const recoverFromDisplayTruth = () => {
       const truthState = JSON.parse(displayTruth);
       console.log('Recovering from display truth:', truthState);
       
-      // Create a new state with special override flags
-      const recoveryState = {
-        ...truthState,
-        timestamp: Date.now() + 20000, // Future timestamp to ensure acceptance
-        recovered: true,
-        guaranteedDelivery: true,
-        overrideIntermission: true,
-        supercedeAllStates: true,
-        forceSync: true,
-        playerRecovery: true,
-        definitiveTruth: true
-      };
+      // Check if the truth is recent enough to be reliable
+      const truthAge = Date.now() - (truthState.timestamp || 0);
+      console.log('Display truth age:', truthAge/1000, 'seconds');
       
-      // First clear out any existing game state to avoid conflicts
-      localStorage.removeItem('gameState');
-      
-      // Then update with our recovery state
-      localStorage.setItem('gameState', JSON.stringify(recoveryState));
-      
-      // Trigger events to ensure delivery
-      window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-        detail: recoveryState
-      }));
-      
-      // Send additional events to ensure delivery
-      for (let i = 1; i <= 3; i++) {
-        setTimeout(() => {
-          window.dispatchEvent(new CustomEvent('triviaStateChange', { 
-            detail: {
-              ...recoveryState,
-              timestamp: recoveryState.timestamp + i * 100,
-              redundancyLevel: i
-            }
-          }));
-        }, i * 100);
+      // Only use truth if it's not too old
+      if (truthAge < 120000) { // 2 minutes
+        // Create a new state with special override flags
+        const recoveryState = {
+          ...truthState,
+          timestamp: Date.now() + 20000, // Future timestamp to ensure acceptance
+          recovered: true,
+          guaranteedDelivery: true,
+          overrideIntermission: true,
+          supercedeAllStates: true,
+          forceSync: true,
+          playerRecovery: true,
+          definitiveTruth: true,
+          lastReceived: Date.now()
+        };
+        
+        // First clear out any existing game state to avoid conflicts
+        localStorage.removeItem('gameState');
+        
+        // Then update with our recovery state
+        localStorage.setItem('gameState', JSON.stringify(recoveryState));
+        sessionStorage.setItem('gameState', JSON.stringify(recoveryState));
+        
+        // Trigger events to ensure delivery
+        window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+          detail: recoveryState
+        }));
+        
+        // Send additional events to ensure delivery
+        window.dispatchEvent(new CustomEvent('gameStateUpdate', { 
+          detail: recoveryState 
+        }));
+        
+        // Send a few backup events with slight delays
+        for (let i = 1; i <= 3; i++) {
+          setTimeout(() => {
+            window.dispatchEvent(new CustomEvent('triviaStateChange', { 
+              detail: {
+                ...recoveryState,
+                timestamp: recoveryState.timestamp + i * 100,
+                redundancyLevel: i
+              }
+            }));
+          }, i * 200);
+        }
+        
+        return true;
+      } else {
+        console.log('Display truth too old to use for recovery');
       }
-      
-      return true;
     } catch (error) {
       console.error('Error recovering from display truth:', error);
-      return false;
+    }
+  } else {
+    console.log('No display truth found for recovery');
+  }
+  
+  // Try to use regular game state as fallback
+  const gameState = localStorage.getItem('gameState');
+  if (gameState) {
+    try {
+      const parsedState = JSON.parse(gameState);
+      const stateAge = Date.now() - (parsedState.timestamp || parsedState.lastReceived || 0);
+      console.log('Game state age:', stateAge/1000, 'seconds');
+      
+      if (stateAge < 60000) { // 1 minute
+        console.log('Using recent game state for recovery');
+        
+        // Create recovery state
+        const recoveryState = {
+          ...parsedState,
+          timestamp: Date.now(),
+          recovered: true,
+          lastReceived: Date.now()
+        };
+        
+        // Update storage
+        localStorage.setItem('gameState', JSON.stringify(recoveryState));
+        sessionStorage.setItem('gameState', JSON.stringify(recoveryState));
+        
+        // Dispatch event
+        window.dispatchEvent(new CustomEvent('gameStateUpdate', { 
+          detail: recoveryState
+        }));
+        
+        return true;
+      }
+    } catch (error) {
+      console.error('Error using game state for recovery:', error);
     }
   }
+  
   return false;
 };
 

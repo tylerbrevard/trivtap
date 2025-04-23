@@ -22,6 +22,7 @@ export const PlayerGameSync = ({
   const [syncAttempts, setSyncAttempts] = useState(0);
   const syncIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const connectionVerified = useRef(false);
+  const syncTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Listen for game state changes
   useEffect(() => {
@@ -30,21 +31,55 @@ export const PlayerGameSync = ({
     // Verify game connection
     connectionVerified.current = verifyGameConnection(playerName, gameId);
     
+    // Store connection info in session storage for reliability
+    try {
+      sessionStorage.setItem('playerConnection', JSON.stringify({
+        playerName,
+        gameId,
+        timestamp: Date.now(),
+        connected: true
+      }));
+    } catch (error) {
+      console.error('Error storing connection info:', error);
+    }
+    
     const handleStateChange = (e: CustomEvent) => {
       console.log('PlayerGameSync received state change event:', e.detail);
       
+      // Validate that this event is for our game
+      if (e.detail.gameId && e.detail.gameId !== gameId) {
+        console.log('Ignoring state change for different game ID:', e.detail.gameId);
+        return;
+      }
+      
       // Store received game state in localStorage for reliable reference
       try {
-        localStorage.setItem('gameState', JSON.stringify(e.detail));
+        localStorage.setItem('gameState', JSON.stringify({
+          ...e.detail,
+          lastReceived: Date.now()
+        }));
+        
         // Also store in sessionStorage for more reliability
-        sessionStorage.setItem('gameState', JSON.stringify(e.detail));
+        sessionStorage.setItem('gameState', JSON.stringify({
+          ...e.detail,
+          lastReceived: Date.now()
+        }));
       } catch (error) {
         console.error('Error storing game state in storage:', error);
       }
       
+      // Reset sync attempts counter on successful sync
+      setSyncAttempts(0);
+      
+      // Clear any pending sync timeout
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+        syncTimeoutRef.current = null;
+      }
+      
+      // Process the state change
       onStateChange(e.detail);
       onSync();
-      setSyncAttempts(0); // Reset sync attempts counter on successful sync
     };
     
     // Listen for targeted sync responses
@@ -52,22 +87,44 @@ export const PlayerGameSync = ({
       // Accept sync if it's targeted at this player or it's a broadcast
       if (e.detail?.targetPlayer === playerName || !e.detail?.targetPlayer) {
         console.log('Received targeted or broadcast sync:', e.detail);
-        onStateChange(e.detail);
-        onSync();
         
+        // Validate that this event is for our game
+        if (e.detail.gameId && e.detail.gameId !== gameId) {
+          console.log('Ignoring sync for different game ID:', e.detail.gameId);
+          return;
+        }
+        
+        // Store the sync data
         try {
-          localStorage.setItem('gameState', JSON.stringify(e.detail));
-          sessionStorage.setItem('gameState', JSON.stringify(e.detail));
+          localStorage.setItem('gameState', JSON.stringify({
+            ...e.detail,
+            lastReceived: Date.now()
+          }));
+          sessionStorage.setItem('gameState', JSON.stringify({
+            ...e.detail,
+            lastReceived: Date.now()
+          }));
         } catch (error) {
           console.error('Error storing sync response in storage:', error);
         }
+        
+        // Process the sync
+        onStateChange(e.detail);
+        onSync();
         
         toast({
           title: "Game synchronized",
           description: "Your game has been synchronized with the display."
         });
         
-        setSyncAttempts(0); // Reset sync attempts counter
+        // Reset sync attempts counter
+        setSyncAttempts(0);
+        
+        // Clear any pending sync timeout
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+          syncTimeoutRef.current = null;
+        }
       }
     };
     
@@ -77,9 +134,11 @@ export const PlayerGameSync = ({
       requestInitialSync(true);
     };
     
+    // Add event listeners
     window.addEventListener('triviaStateChange', handleStateChange as EventListener);
     window.addEventListener('playerSyncResponse', handleTargetedSync as EventListener);
     window.addEventListener('forceSyncRequest', handleForceSyncRequest as EventListener);
+    window.addEventListener('gameStateUpdate', handleStateChange as EventListener);
     
     // Announce player presence
     const announcePlayer = () => {
@@ -90,11 +149,21 @@ export const PlayerGameSync = ({
           timestamp: Date.now() 
         }
       }));
+      
+      // Also announce as active player
+      window.dispatchEvent(new CustomEvent('activePlayerPresence', {
+        detail: {
+          name: playerName,
+          gameId: gameId,
+          timestamp: Date.now(),
+          status: 'active'
+        }
+      }));
     };
     
     // Announce on mount and periodically
     announcePlayer();
-    const announceInterval = setInterval(announcePlayer, 5000);
+    const announceInterval = setInterval(announcePlayer, 3000);
     
     // Request initial sync
     requestInitialSync();
@@ -102,19 +171,36 @@ export const PlayerGameSync = ({
     // Setup periodic sync check to ensure we're still connected
     syncIntervalRef.current = setInterval(() => {
       const now = Date.now();
-      if (now - lastSyncAttempt > 10000) { // 10 seconds since last sync attempt
+      if (now - lastSyncAttempt > 8000) { // 8 seconds since last sync attempt
         requestInitialSync();
         setLastSyncAttempt(now);
       }
-    }, 10000);
+    }, 8000);
     
     return () => {
       window.removeEventListener('triviaStateChange', handleStateChange as EventListener);
       window.removeEventListener('playerSyncResponse', handleTargetedSync as EventListener);
       window.removeEventListener('forceSyncRequest', handleForceSyncRequest as EventListener);
+      window.removeEventListener('gameStateUpdate', handleStateChange as EventListener);
       clearInterval(announceInterval);
       if (syncIntervalRef.current) {
         clearInterval(syncIntervalRef.current);
+      }
+      if (syncTimeoutRef.current) {
+        clearTimeout(syncTimeoutRef.current);
+      }
+      
+      // Announce player disconnection
+      try {
+        window.dispatchEvent(new CustomEvent('playerDisconnected', {
+          detail: {
+            name: playerName,
+            gameId: gameId,
+            timestamp: Date.now()
+          }
+        }));
+      } catch (error) {
+        console.error('Error announcing player disconnection:', error);
       }
     };
   }, [playerName, gameId, onStateChange, onSync, toast, lastSyncAttempt]);
@@ -140,9 +226,17 @@ export const PlayerGameSync = ({
     if (sessionState) {
       try {
         const parsedState = JSON.parse(sessionState);
-        console.log('Found stored game state in sessionStorage during sync:', parsedState);
-        onStateChange(parsedState);
-        onSync();
+        const timestamp = parsedState.lastReceived || parsedState.timestamp || 0;
+        const age = Date.now() - timestamp;
+        
+        // Only use cached state if it's less than 30 seconds old
+        if (age < 30000) {
+          console.log('Found recent stored game state in sessionStorage during sync:', parsedState);
+          onStateChange(parsedState);
+          onSync();
+        } else {
+          console.log('Stored game state is too old:', age/1000, 'seconds');
+        }
       } catch (error) {
         console.error('Error parsing session stored game state:', error);
       }
@@ -153,9 +247,17 @@ export const PlayerGameSync = ({
       if (localState) {
         try {
           const parsedState = JSON.parse(localState);
-          console.log('Found stored game state in localStorage during sync:', parsedState);
-          onStateChange(parsedState);
-          onSync();
+          const timestamp = parsedState.lastReceived || parsedState.timestamp || 0;
+          const age = Date.now() - timestamp;
+          
+          // Only use cached state if it's less than 30 seconds old
+          if (age < 30000) {
+            console.log('Found recent stored game state in localStorage during sync:', parsedState);
+            onStateChange(parsedState);
+            onSync();
+          } else {
+            console.log('Stored game state is too old:', age/1000, 'seconds');
+          }
         } catch (error) {
           console.error('Error parsing local stored game state:', error);
         }
@@ -184,7 +286,7 @@ export const PlayerGameSync = ({
       gameId,
       timestamp: Date.now(),
       attempts: syncAttempts,
-      urgent: syncAttempts > 3 || force,
+      urgent: syncAttempts > 2 || force,
       forceSync: force
     };
     
@@ -201,7 +303,7 @@ export const PlayerGameSync = ({
           backup: true
         }
       }));
-    }, 300);
+    }, 200);
     
     setTimeout(() => {
       window.dispatchEvent(new CustomEvent('triviaPlayerNeedsSync', { 
@@ -212,7 +314,7 @@ export const PlayerGameSync = ({
           secondaryBackup: true
         }
       }));
-    }, 600);
+    }, 500);
     
     // Use fallback methods if we've already tried a few times
     if (syncAttempts > 2 || force) {
@@ -229,12 +331,21 @@ export const PlayerGameSync = ({
       }));
       
       // If we've tried many times, show a toast to the user
-      if ((syncAttempts % 3 === 0) || force) {
+      if ((syncAttempts % 2 === 0) || force) {
         toast({
           title: "Sync issues detected",
           description: "Trying to reconnect to the game...",
           variant: "destructive"
         });
+        
+        // Set a timeout to try again with increasing delay
+        if (syncTimeoutRef.current) {
+          clearTimeout(syncTimeoutRef.current);
+        }
+        
+        syncTimeoutRef.current = setTimeout(() => {
+          requestInitialSync(true);
+        }, Math.min(2000 + syncAttempts * 500, 8000)); // Increasing delay, max 8 seconds
       }
     }
   };
